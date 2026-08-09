@@ -1701,7 +1701,8 @@ input, textarea {
    RESPONSIVE & ANDROID OPTIMIZATIONS
    ======================================== */
 @media (max-width: 768px) {
-    .desktop-only-logout {
+    .desktop-only-logout,
+    .desktop-only-theme {
         display: none !important;
     }
 
