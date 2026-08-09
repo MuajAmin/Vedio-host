@@ -6,13 +6,20 @@ const errorHtml = error
 %>
 <%- include('layout', { pageTitle: 'Upload', body: `
 <div class="app-container">
+    <div class="ambient-background">
+        <div class="ambient-orb orb-1"></div>
+        <div class="ambient-orb orb-2"></div>
+    </div>
+
     <nav class="navbar">
         <div class="nav-left">
             <a href="/dashboard" class="nav-logo">
-                <svg viewBox="0 0 48 48" fill="none" width="28" height="28">
-                    <rect x="4" y="8" width="40" height="32" rx="4" stroke="currentColor" stroke-width="2.5"/>
-                    <polygon points="20,16 34,24 20,32" fill="currentColor"/>
-                </svg>
+                <div class="logo-icon-wrapper">
+                    <svg viewBox="0 0 48 48" fill="none" width="24" height="24">
+                        <rect x="4" y="8" width="40" height="32" rx="6" stroke="currentColor" stroke-width="2.5"/>
+                        <polygon points="20,16 34,24 20,32" fill="currentColor"/>
+                    </svg>
+                </div>
                 <span>Video<em>Host</em></span>
             </a>
         </div>
@@ -55,7 +62,7 @@ const errorHtml = error
                             </svg>
                         </div>
                         <p class="dropzone-text">Drop video here</p>
-                        <p class="dropzone-subtext">or click to select</p>
+                        <p class="dropzone-subtext">or tap to choose file</p>
                         <p class="dropzone-formats">MP4, MKV, AVI, MOV, WebM - Max ${h(process.env.MAX_FILE_SIZE_MB || 500)}MB</p>
                     </div>
                     <div class="dropzone-selected" id="dropzoneSelected" style="display:none">
@@ -86,5 +93,37 @@ const errorHtml = error
             </form>
         </div>
     </main>
+
+    <nav class="mobile-bottom-bar">
+        <a href="/dashboard" class="bottom-nav-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+                <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+                <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+                <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+            </svg>
+            <span>Library</span>
+        </a>
+        <a href="/upload" class="bottom-nav-item active bottom-nav-upload">
+            <div class="upload-fab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="22" height="22">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+            </div>
+            <span>Upload</span>
+        </a>
+        <form action="/logout" method="POST" class="bottom-nav-form">
+            <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+            <button type="submit" class="bottom-nav-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                <span>Logout</span>
+            </button>
+        </form>
+    </nav>
 </div>
 ` }) %>

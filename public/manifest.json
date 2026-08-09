@@ -1,0 +1,24 @@
+{
+  "name": "VideoHost Private Cinema",
+  "short_name": "VideoHost",
+  "description": "Private Video Hub for Muaj & Hajera",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#060609",
+  "theme_color": "#060609",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/css/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/css/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
