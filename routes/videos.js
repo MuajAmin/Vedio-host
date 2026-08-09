@@ -56,7 +56,7 @@ const upload = multer({
     limits: { fileSize: maxSize },
     fileFilter
 });
-const STREAM_HIGH_WATER_MARK = 128 * 1024;
+const STREAM_HIGH_WATER_MARK = 512 * 1024;
 
 // GET /dashboard — Video gallery
 router.get('/dashboard', isAuthenticated, (req, res) => {
@@ -173,9 +173,13 @@ function getMimeType(filename) {
         '.avi': 'video/x-msvideo',
         '.flv': 'video/x-flv',
         '.wmv': 'video/x-ms-wmv',
-        '.m4v': 'video/x-m4v'
+        '.m4v': 'video/mp4'
     };
     return mimeMap[ext] || 'video/mp4';
+}
+
+function safeHeaderFilename(filename) {
+    return path.basename(filename).replace(/["\\\r\n]/g, '_');
 }
 
 function getSafeVideoPath(filename) {
@@ -229,7 +233,9 @@ function streamFile(req, res, filePath, filename, stat) {
     const baseHeaders = {
         'Accept-Ranges': 'bytes',
         'Content-Type': mimeType,
-        'Cache-Control': 'private, max-age=3600',
+        'Content-Disposition': `inline; filename="${safeHeaderFilename(filename)}"`,
+        'Cache-Control': 'private, max-age=86400, no-transform',
+        'Last-Modified': stat.mtime.toUTCString(),
         'X-Content-Type-Options': 'nosniff'
     };
 

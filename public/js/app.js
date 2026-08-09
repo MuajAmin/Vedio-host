@@ -219,12 +219,237 @@ document.addEventListener('DOMContentLoaded', () => {
         const centerPlayIcon = centerBtn?.querySelector('.vp-play-icon');
         const centerPauseIcon = centerBtn?.querySelector('.vp-pause-icon');
 
+        // Playback status / slow network UI
+        const statusBadge = document.getElementById('vpStatusBadge');
+        const statusText = document.getElementById('vpStatusText');
+        const loadingOverlay = document.getElementById('vpLoadingOverlay');
+        const loadingTitle = document.getElementById('vpLoadingTitle');
+        const loadingDetail = document.getElementById('vpLoadingDetail');
+        const loadMeterFill = document.getElementById('vpLoadMeterFill');
+        const retryBtn = document.getElementById('vpRetryBtn');
+        const sourceEl = vid.querySelector('source');
+        const sourceType = vid.getAttribute('data-source-type') || sourceEl?.getAttribute('type') || '';
+        const unsupportedSourceType = sourceType &&
+            typeof vid.canPlayType === 'function' &&
+            vid.canPlayType(sourceType) === '';
+        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        let statusHideTimer = null;
+        let recoveryTimer = null;
+        let slowStartTimer = null;
+        let retryCount = 0;
+
         // --- Utility ---
         function fmtTime(s) {
             if (isNaN(s) || !isFinite(s)) return '0:00';
             const m = Math.floor(s / 60);
             const sec = Math.floor(s % 60);
             return m + ':' + (sec < 10 ? '0' : '') + sec;
+        }
+
+        function getBufferedEnd() {
+            if (!vid.buffered || vid.buffered.length === 0) return 0;
+
+            let end = 0;
+            for (let i = 0; i < vid.buffered.length; i++) {
+                try {
+                    end = Math.max(end, vid.buffered.end(i));
+                } catch (err) {
+                    return end;
+                }
+            }
+            return end;
+        }
+
+        function getBufferedPercent() {
+            if (!vid.duration || !isFinite(vid.duration)) return 0;
+            return Math.max(0, Math.min(100, (getBufferedEnd() / vid.duration) * 100));
+        }
+
+        function getBufferedAhead() {
+            if (!vid.buffered || vid.buffered.length === 0 || !isFinite(vid.currentTime)) return 0;
+
+            for (let i = 0; i < vid.buffered.length; i++) {
+                try {
+                    const start = vid.buffered.start(i);
+                    const end = vid.buffered.end(i);
+                    if (vid.currentTime >= start - 0.25 && vid.currentTime <= end + 0.25) {
+                        return Math.max(0, end - vid.currentTime);
+                    }
+                } catch (err) {
+                    return 0;
+                }
+            }
+            return 0;
+        }
+
+        function connectionDetail(fallback) {
+            const parts = [];
+            if (connection && connection.effectiveType) {
+                parts.push(String(connection.effectiveType).toUpperCase());
+            }
+
+            const bufferedPercent = Math.round(getBufferedPercent());
+            if (bufferedPercent > 0) {
+                parts.push('buffered ' + bufferedPercent + '%');
+            }
+
+            return parts.length ? parts.join(' - ') : fallback;
+        }
+
+        function clearPlayerStatus() {
+            if (statusHideTimer) window.clearTimeout(statusHideTimer);
+            statusHideTimer = null;
+            if (container) {
+                container.classList.remove('vp-has-status', 'vp-loading', 'vp-buffering', 'vp-error', 'vp-offline', 'vp-warning');
+            }
+            if (loadingOverlay) loadingOverlay.setAttribute('aria-hidden', 'true');
+        }
+
+        function setPlayerStatus(state, title, detail, options = {}) {
+            const showOverlay = options.showOverlay === true;
+            const persistent = options.persistent === true || showOverlay;
+
+            if (statusHideTimer) window.clearTimeout(statusHideTimer);
+            statusHideTimer = null;
+
+            if (statusBadge) {
+                statusBadge.className = 'vp-status-badge vp-status-' + state;
+            }
+            if (statusText) statusText.textContent = title;
+            if (loadingTitle) loadingTitle.textContent = title;
+            if (loadingDetail) loadingDetail.textContent = detail || '';
+            if (retryBtn) retryBtn.hidden = options.canRetry !== true;
+            if (loadingOverlay) loadingOverlay.setAttribute('aria-hidden', showOverlay ? 'false' : 'true');
+
+            if (container) {
+                container.classList.add('vp-has-status');
+                container.classList.toggle('vp-loading', showOverlay && state === 'loading');
+                container.classList.toggle('vp-buffering', showOverlay && state === 'buffering');
+                container.classList.toggle('vp-error', showOverlay && state === 'error');
+                container.classList.toggle('vp-offline', showOverlay && state === 'offline');
+                container.classList.toggle('vp-warning', showOverlay && state === 'warning');
+                container.classList.add('vp-controls-visible');
+            }
+
+            if (!persistent) {
+                statusHideTimer = window.setTimeout(clearPlayerStatus, 1800);
+            }
+        }
+
+        function clearRecoveryTimer() {
+            if (recoveryTimer) window.clearTimeout(recoveryTimer);
+            recoveryTimer = null;
+        }
+
+        function clearSlowStartTimer() {
+            if (slowStartTimer) window.clearTimeout(slowStartTimer);
+            slowStartTimer = null;
+        }
+
+        function startSlowStartTimer() {
+            clearSlowStartTimer();
+            slowStartTimer = window.setTimeout(() => {
+                if (vid.readyState >= 2 || vid.error) return;
+
+                if (unsupportedSourceType) {
+                    setPlayerStatus(
+                        'warning',
+                        'Video format may not play here',
+                        'MP4 or WebM works best on phones and weak networks.',
+                        { showOverlay: true, canRetry: true, persistent: true }
+                    );
+                    return;
+                }
+
+                setPlayerStatus(
+                    'buffering',
+                    'Still loading video',
+                    connectionDetail('The connection is slow. Trying to buffer enough video before playback.'),
+                    { showOverlay: true, canRetry: true, persistent: true }
+                );
+            }, 3500);
+        }
+
+        function videoErrorMessage() {
+            if (!vid.error) return 'The stream stopped unexpectedly. Please retry.';
+
+            switch (vid.error.code) {
+                case 1:
+                    return 'Playback was stopped before the video finished loading.';
+                case 2:
+                    return 'The network dropped while loading the video. Retry when the signal is stable.';
+                case 3:
+                    return 'The file loaded, but this browser could not decode it.';
+                case 4:
+                    return unsupportedSourceType
+                        ? 'This format is not supported here. MP4 or WebM will play best.'
+                        : 'This browser cannot play this video format.';
+                default:
+                    return 'The stream stopped unexpectedly. Please retry.';
+            }
+        }
+
+        function retryStream(autoRetry = false) {
+            const resumeAt = Number.isFinite(vid.currentTime) ? vid.currentTime : 0;
+            const shouldPlay = !vid.paused || autoRetry;
+            let restored = false;
+
+            clearRecoveryTimer();
+            clearSlowStartTimer();
+            setPlayerStatus(
+                'loading',
+                autoRetry ? 'Reconnecting stream...' : 'Retrying stream...',
+                'Keeping your current position while the stream opens again.',
+                { showOverlay: true, canRetry: false, persistent: true }
+            );
+
+            const restorePosition = () => {
+                if (restored) return;
+                restored = true;
+
+                if (resumeAt > 1 && vid.duration && resumeAt < vid.duration - 1) {
+                    try {
+                        vid.currentTime = resumeAt;
+                    } catch (err) {}
+                }
+
+                if (shouldPlay) {
+                    playVideo();
+                }
+            };
+
+            vid.addEventListener('loadedmetadata', restorePosition, { once: true });
+
+            try {
+                vid.load();
+            } catch (err) {}
+
+            startSlowStartTimer();
+            window.setTimeout(() => {
+                if (vid.readyState >= 1) restorePosition();
+            }, 350);
+        }
+
+        function queueRecovery() {
+            clearRecoveryTimer();
+            if (vid.paused || vid.ended || navigator.onLine === false) return;
+
+            recoveryTimer = window.setTimeout(() => {
+                if (vid.readyState >= 3 || getBufferedAhead() >= 1.5) return;
+
+                if (retryCount < 2) {
+                    retryCount += 1;
+                    retryStream(true);
+                    return;
+                }
+
+                setPlayerStatus(
+                    'warning',
+                    'Still buffering',
+                    'The connection is not stable enough right now. Retry when the signal improves.',
+                    { showOverlay: true, canRetry: true, persistent: true }
+                );
+            }, 10000);
         }
 
         // --- Play/Pause ---
@@ -245,7 +470,15 @@ document.addEventListener('DOMContentLoaded', () => {
         function playVideo() {
             const playPromise = vid.play();
             if (playPromise && typeof playPromise.catch === 'function') {
-                playPromise.catch(() => {});
+                playPromise.catch((err) => {
+                    if (err && err.name === 'NotAllowedError') return;
+                    setPlayerStatus(
+                        'error',
+                        'Could not start playback',
+                        'Tap play again or retry the stream.',
+                        { showOverlay: true, canRetry: true, persistent: true }
+                    );
+                });
             }
         }
 
@@ -280,21 +513,161 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function updateBuffer() {
-            if (!vid.duration || vid.buffered.length === 0) return;
-            const end = vid.buffered.end(vid.buffered.length - 1);
-            const pct = (end / vid.duration) * 100;
+            const pct = getBufferedPercent();
             if (progressBuffer) progressBuffer.style.width = pct + '%';
+            if (loadMeterFill) loadMeterFill.style.width = pct + '%';
         }
 
         vid.addEventListener('timeupdate', updateProgress);
         vid.addEventListener('progress', updateBuffer);
+        vid.addEventListener('loadstart', () => {
+            startSlowStartTimer();
+            setPlayerStatus(
+                'loading',
+                'Preparing video',
+                'Opening the private stream.',
+                { showOverlay: vid.readyState < 2, canRetry: false, persistent: true }
+            );
+        });
         vid.addEventListener('loadedmetadata', () => {
+            clearSlowStartTimer();
             if (durationEl) durationEl.textContent = fmtTime(vid.duration);
             updatePlayState();
+            updateBuffer();
         });
         vid.addEventListener('durationchange', () => {
             if (durationEl) durationEl.textContent = fmtTime(vid.duration);
         });
+        vid.addEventListener('loadeddata', () => {
+            clearSlowStartTimer();
+            updateBuffer();
+        });
+        vid.addEventListener('canplay', () => {
+            clearRecoveryTimer();
+            clearSlowStartTimer();
+            updateBuffer();
+            setPlayerStatus(
+                'ready',
+                'Ready to play',
+                connectionDetail('Enough video data is ready.'),
+                { showOverlay: false }
+            );
+        });
+        vid.addEventListener('playing', () => {
+            retryCount = 0;
+            clearRecoveryTimer();
+            clearSlowStartTimer();
+            updateBuffer();
+            setPlayerStatus(
+                'ready',
+                'Playing',
+                connectionDetail('The stream is running.'),
+                { showOverlay: false }
+            );
+        });
+        vid.addEventListener('waiting', () => {
+            if (vid.ended) return;
+            setPlayerStatus(
+                'buffering',
+                'Buffering video',
+                connectionDetail('Slow connection detected. Waiting for more video data.'),
+                { showOverlay: true, canRetry: true, persistent: true }
+            );
+            queueRecovery();
+        });
+        vid.addEventListener('stalled', () => {
+            setPlayerStatus(
+                'buffering',
+                'Connection stalled',
+                connectionDetail('The stream stopped receiving data. Retrying may help.'),
+                { showOverlay: true, canRetry: true, persistent: true }
+            );
+            queueRecovery();
+        });
+        vid.addEventListener('seeking', () => {
+            if (getBufferedAhead() < 0.5) {
+                setPlayerStatus(
+                    'buffering',
+                    'Finding that moment',
+                    'Loading video data around the new position.',
+                    { showOverlay: true, canRetry: false, persistent: true }
+                );
+            }
+        });
+        vid.addEventListener('seeked', () => {
+            updateBuffer();
+            if (vid.readyState >= 3) {
+                setPlayerStatus(
+                    'ready',
+                    'Ready',
+                    connectionDetail('Playback can continue.'),
+                    { showOverlay: false }
+                );
+            }
+        });
+        vid.addEventListener('error', () => {
+            clearRecoveryTimer();
+            clearSlowStartTimer();
+            setPlayerStatus(
+                'error',
+                'Video could not play',
+                videoErrorMessage(),
+                { showOverlay: true, canRetry: true, persistent: true }
+            );
+        });
+
+        window.addEventListener('offline', () => {
+            clearRecoveryTimer();
+            setPlayerStatus(
+                'offline',
+                'You are offline',
+                'Connect to the internet, then retry the stream.',
+                { showOverlay: true, canRetry: true, persistent: true }
+            );
+        });
+
+        window.addEventListener('online', () => {
+            setPlayerStatus(
+                'loading',
+                'Back online',
+                'Retrying the stream from the current position.',
+                { showOverlay: true, canRetry: false, persistent: true }
+            );
+            retryStream(true);
+        });
+
+        if (retryBtn) {
+            retryBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                retryCount = 0;
+                retryStream(false);
+            });
+        }
+
+        if (loadingOverlay) {
+            loadingOverlay.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+        }
+
+        if (navigator.onLine === false) {
+            setPlayerStatus(
+                'offline',
+                'You are offline',
+                'Connect to the internet, then retry the stream.',
+                { showOverlay: true, canRetry: true, persistent: true }
+            );
+        } else if (vid.readyState < 2) {
+            startSlowStartTimer();
+            setPlayerStatus(
+                'loading',
+                'Preparing video',
+                'Opening the private stream.',
+                { showOverlay: true, canRetry: false, persistent: true }
+            );
+        } else {
+            updateBuffer();
+        }
 
         // Progress bar click/drag
         function seekFromEvent(e) {
