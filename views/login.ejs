@@ -1,11 +1,21 @@
 <%
 const h = escapeHtml;
 const errorHtml = error
-    ? `<div class="login-error"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>${h(error)}</div>`
+    ? `<div class="login-error"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>${h(error)}</span></div>`
     : '';
 %>
 <%- include('layout', { pageTitle: 'Login', body: `
 <div class="login-container">
+    <div class="login-top-bar">
+        <button type="button" class="theme-switcher-btn" id="themeSwitcherBtn" title="Change Theme">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.3"/>
+            </svg>
+            <span class="theme-btn-text">Theme</span>
+        </button>
+    </div>
+
     <div class="login-bg-effects">
         <div class="glow glow-1"></div>
         <div class="glow glow-2"></div>
@@ -14,15 +24,27 @@ const errorHtml = error
     </div>
 
     <div class="login-card">
-        <div class="login-logo">
-            <div class="logo-icon">
-                <svg viewBox="0 0 48 48" fill="none">
-                    <rect x="4" y="8" width="40" height="32" rx="4" stroke="currentColor" stroke-width="2.5"/>
-                    <polygon points="20,16 34,24 20,32" fill="currentColor"/>
+        <div class="login-header">
+            <div class="vault-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                 </svg>
+                <span>Private Vault</span>
             </div>
+            
+            <div class="aperture-logo">
+                <div class="aperture-ring"></div>
+                <div class="logo-icon-inner">
+                    <svg viewBox="0 0 48 48" fill="none" width="34" height="34">
+                        <rect x="4" y="8" width="40" height="32" rx="8" stroke="currentColor" stroke-width="2.5"/>
+                        <polygon points="20,16 34,24 20,32" fill="currentColor"/>
+                    </svg>
+                </div>
+            </div>
+
             <h1 class="logo-text">Video<span>Host</span></h1>
-            <p class="logo-tagline">Private Screening Room</p>
+            <p class="logo-tagline">Muaj & Hajera Cinema Hub</p>
         </div>
 
         ${errorHtml}
@@ -30,12 +52,13 @@ const errorHtml = error
         <form action="/login" method="POST" class="login-form">
             <input type="hidden" name="_csrf" value="${h(csrfToken)}">
             <div class="input-group">
+                <label for="password" class="sr-only">Password</label>
                 <div class="input-wrapper">
                     <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                     </svg>
-                    <input type="password" name="password" id="password" placeholder="Password..." autocomplete="current-password" autofocus required>
+                    <input type="password" name="password" id="password" placeholder="Enter password to unlock..." autocomplete="current-password" autofocus required>
                     <button type="button" class="toggle-password" id="togglePassword" aria-label="Show password">
                         <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -48,8 +71,9 @@ const errorHtml = error
                     </button>
                 </div>
             </div>
+
             <button type="submit" class="login-btn">
-                <span>Enter</span>
+                <span>Enter Cinema Vault</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="5" y1="12" x2="19" y2="12"/>
                     <polyline points="12 5 19 12 12 19"/>
@@ -58,8 +82,49 @@ const errorHtml = error
         </form>
 
         <div class="login-footer">
-            <p>Muaj & Hajera Private Video Hub</p>
+            <p>🔒 256-Bit Encrypted Private Screening</p>
+        </div>
+    </div>
+</div>
+
+<!-- Theme Selector Modal / Drawer -->
+<div class="theme-modal-backdrop" id="themeModalBackdrop">
+    <div class="theme-modal">
+        <div class="theme-modal-header">
+            <h3>🎨 Choose Palette Theme</h3>
+            <button type="button" class="theme-close-btn" id="themeCloseBtn">&times;</button>
+        </div>
+        <div class="theme-options-grid">
+            <button type="button" class="theme-card-option" data-set-theme="cinematic">
+                <div class="theme-preview preview-cinematic">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>🎬 Obsidian Gold</span>
+            </button>
+            <button type="button" class="theme-card-option" data-set-theme="cyberpunk">
+                <div class="theme-preview preview-cyberpunk">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>⚡ Cyberpunk Neon</span>
+            </button>
+            <button type="button" class="theme-card-option" data-set-theme="emerald">
+                <div class="theme-preview preview-emerald">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>🌿 Emerald Luxury</span>
+            </button>
+            <button type="button" class="theme-card-option" data-set-theme="sunset">
+                <div class="theme-preview preview-sunset">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>🌅 Sunset Velvet</span>
+            </button>
         </div>
     </div>
 </div>
 ` }) %>
+

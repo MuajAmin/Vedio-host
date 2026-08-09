@@ -192,4 +192,40 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ---- Theme Switcher Modal Logic ----
+    const themeBtn = document.getElementById('themeSwitcherBtn');
+    const themeNavBtn = document.getElementById('themeSwitcherNavBtn');
+    const themeModal = document.getElementById('themeModalBackdrop');
+    const themeCloseBtn = document.getElementById('themeCloseBtn');
+    const themeOptions = document.querySelectorAll('[data-set-theme]');
+
+    function openThemeModal() {
+        if (themeModal) themeModal.classList.add('active');
+    }
+
+    function closeThemeModal() {
+        if (themeModal) themeModal.classList.remove('active');
+    }
+
+    if (themeBtn) themeBtn.addEventListener('click', openThemeModal);
+    if (themeNavBtn) themeNavBtn.addEventListener('click', openThemeModal);
+    if (themeCloseBtn) themeCloseBtn.addEventListener('click', closeThemeModal);
+
+    if (themeModal) {
+        themeModal.addEventListener('click', (e) => {
+            if (e.target === themeModal) closeThemeModal();
+        });
+    }
+
+    themeOptions.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const theme = btn.getAttribute('data-set-theme');
+            if (theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('videohosk_theme', theme);
+                closeThemeModal();
+            }
+        });
+    });
+
 });
