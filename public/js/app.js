@@ -195,6 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Theme Switcher Modal Logic ----
     const themeBtn = document.getElementById('themeSwitcherBtn');
     const themeNavBtn = document.getElementById('themeSwitcherNavBtn');
+    const themeBottomBtn = document.getElementById('themeSwitcherBottomBtn');
     const themeModal = document.getElementById('themeModalBackdrop');
     const themeCloseBtn = document.getElementById('themeCloseBtn');
     const themeOptions = document.querySelectorAll('[data-set-theme]');
@@ -209,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (themeBtn) themeBtn.addEventListener('click', openThemeModal);
     if (themeNavBtn) themeNavBtn.addEventListener('click', openThemeModal);
+    if (themeBottomBtn) themeBottomBtn.addEventListener('click', openThemeModal);
     if (themeCloseBtn) themeCloseBtn.addEventListener('click', closeThemeModal);
 
     if (themeModal) {
