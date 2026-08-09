@@ -890,11 +890,33 @@ document.addEventListener('DOMContentLoaded', () => {
                     const exitPromise = exitFullscreen.call(document);
                     if (exitPromise && typeof exitPromise.catch === 'function') exitPromise.catch(() => {});
                 }
+                // Unlock screen orientation when exiting fullscreen
+                try {
+                    if (screen.orientation && screen.orientation.unlock) {
+                        screen.orientation.unlock();
+                    }
+                } catch (e) { /* not supported or not allowed */ }
             } else {
                 const requestFullscreen = container.requestFullscreen || container.webkitRequestFullscreen;
                 if (requestFullscreen) {
                     const requestPromise = requestFullscreen.call(container);
-                    if (requestPromise && typeof requestPromise.catch === 'function') requestPromise.catch(() => {});
+                    if (requestPromise && typeof requestPromise.then === 'function') {
+                        requestPromise.then(() => {
+                            // Lock to landscape after fullscreen is granted
+                            try {
+                                if (screen.orientation && screen.orientation.lock) {
+                                    screen.orientation.lock('landscape').catch(() => {});
+                                }
+                            } catch (e) { /* not supported */ }
+                        }).catch(() => {});
+                    } else {
+                        // Fallback for browsers that don't return a promise
+                        try {
+                            if (screen.orientation && screen.orientation.lock) {
+                                screen.orientation.lock('landscape').catch(() => {});
+                            }
+                        } catch (e) { /* not supported */ }
+                    }
                 }
             }
         }
@@ -906,6 +928,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 if (iconFsEnter) iconFsEnter.style.display = '';
                 if (iconFsExit) iconFsExit.style.display = 'none';
+                // Unlock orientation on any fullscreen exit (Escape, swipe, etc.)
+                try {
+                    if (screen.orientation && screen.orientation.unlock) {
+                        screen.orientation.unlock();
+                    }
+                } catch (e) { /* not supported */ }
             }
         }
 
