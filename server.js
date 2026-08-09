@@ -4,6 +4,7 @@ const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
 const { attachLocals, requireCsrf } = require('./utils/security');
+const SQLiteSessionStore = require('./utils/sessionStore');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,7 +40,7 @@ app.use((req, res, next) => {
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader(
         'Content-Security-Policy',
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; media-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'"
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'"
     );
     next();
 });
@@ -47,16 +48,19 @@ app.use(express.urlencoded({ extended: false, limit: '32kb' }));
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static(path.join(__dirname, 'public'), {
     etag: true,
-    maxAge: isProduction ? '1d' : 0
+    immutable: isProduction,
+    maxAge: isProduction ? '7d' : 0
 }));
 
 // Session
 app.use(session({
+    store: new SQLiteSessionStore(),
     secret: process.env.SESSION_SECRET || 'dev_only_change_me',
     name: 'videohost.sid',
     resave: false,
     saveUninitialized: false,
-    rolling: true,
+    rolling: false,
+    unset: 'destroy',
     cookie: {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         httpOnly: true,

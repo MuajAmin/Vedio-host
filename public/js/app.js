@@ -3,6 +3,32 @@
 // ========================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    const storage = (() => {
+        try {
+            const testKey = 'videohost_storage_test';
+            window.localStorage.setItem(testKey, '1');
+            window.localStorage.removeItem(testKey);
+            return window.localStorage;
+        } catch (err) {
+            return {
+                getItem: () => null,
+                setItem: () => {},
+                removeItem: () => {}
+            };
+        }
+    })();
+    const prefersReducedMotion = window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    document.addEventListener('submit', (e) => {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement)) return;
+
+        const message = form.getAttribute('data-confirm');
+        if (message && !window.confirm(message)) {
+            e.preventDefault();
+        }
+    });
 
     // ---- Password Toggle ----
     const toggleBtn = document.getElementById('togglePassword');
@@ -14,11 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const eyeOpen = toggleBtn.querySelector('.eye-open');
             const eyeClosed = toggleBtn.querySelector('.eye-closed');
             if (type === 'text') {
-                eyeOpen.style.display = 'none';
-                eyeClosed.style.display = 'block';
+                if (eyeOpen) eyeOpen.style.display = 'none';
+                if (eyeClosed) eyeClosed.style.display = 'block';
             } else {
-                eyeOpen.style.display = 'block';
-                eyeClosed.style.display = 'none';
+                if (eyeOpen) eyeOpen.style.display = 'block';
+                if (eyeClosed) eyeClosed.style.display = 'none';
             }
         });
     }
@@ -51,8 +77,12 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             dropzone.classList.remove('dragover');
             if (e.dataTransfer.files.length > 0) {
-                fileInput.files = e.dataTransfer.files;
-                showSelectedFile(e.dataTransfer.files[0]);
+                try {
+                    fileInput.files = e.dataTransfer.files;
+                    showSelectedFile(fileInput.files[0]);
+                } catch (err) {
+                    showSelectedFile(e.dataTransfer.files[0]);
+                }
             }
         });
 
@@ -109,12 +139,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             xhr.addEventListener('load', () => {
                 if (xhr.status === 200) {
-                    if (progressText) progressText.textContent = 'Upload সম্পন্ন! ✅';
+                    if (progressText) progressText.textContent = 'Upload complete.';
                     setTimeout(() => {
                         window.location.href = '/dashboard';
                     }, 500);
                 } else {
-                    let errMsg = 'Upload ব্যর্থ হয়েছে!';
+                    let errMsg = 'Upload failed.';
                     try {
                         const tempDiv = document.createElement('div');
                         tempDiv.innerHTML = xhr.responseText;
@@ -126,16 +156,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (progressText) progressText.textContent = errMsg;
                     if (uploadBtn) {
                         uploadBtn.disabled = false;
-                        uploadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>আবার চেষ্টা করো</span>';
+                        uploadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Try again</span>';
                     }
                 }
             });
 
             xhr.addEventListener('error', () => {
-                if (progressText) progressText.textContent = 'Upload ব্যর্থ হয়েছে! Network error.';
+                if (progressText) progressText.textContent = 'Upload failed. Network error.';
                 if (uploadBtn) {
                     uploadBtn.disabled = false;
-                    uploadBtn.innerHTML = '<span>আবার চেষ্টা করো</span>';
+                    uploadBtn.innerHTML = '<span>Try again</span>';
                 }
             });
 
@@ -212,9 +242,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        function playVideo() {
+            const playPromise = vid.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+                playPromise.catch(() => {});
+            }
+        }
+
         function togglePlay() {
             if (vid.paused) {
-                vid.play();
+                playVideo();
             } else {
                 vid.pause();
             }
@@ -297,14 +334,18 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             progressWrap.addEventListener('touchstart', (e) => {
+                e.preventDefault();
                 isDragging = true;
                 progressWrap.classList.add('vp-dragging');
                 seekFromEvent(e.touches[0]);
-            }, { passive: true });
+            }, { passive: false });
 
             progressWrap.addEventListener('touchmove', (e) => {
-                if (isDragging) seekFromEvent(e.touches[0]);
-            }, { passive: true });
+                if (isDragging) {
+                    e.preventDefault();
+                    seekFromEvent(e.touches[0]);
+                }
+            }, { passive: false });
         }
 
         document.addEventListener('mousemove', (e) => {
@@ -405,9 +446,17 @@ document.addEventListener('DOMContentLoaded', () => {
         function toggleFullscreen() {
             if (!container) return;
             if (isFullscreen()) {
-                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+                const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
+                if (exitFullscreen) {
+                    const exitPromise = exitFullscreen.call(document);
+                    if (exitPromise && typeof exitPromise.catch === 'function') exitPromise.catch(() => {});
+                }
             } else {
-                (container.requestFullscreen || container.webkitRequestFullscreen).call(container);
+                const requestFullscreen = container.requestFullscreen || container.webkitRequestFullscreen;
+                if (requestFullscreen) {
+                    const requestPromise = requestFullscreen.call(container);
+                    if (requestPromise && typeof requestPromise.catch === 'function') requestPromise.catch(() => {});
+                }
             }
         }
 
@@ -534,7 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Resume Feature ---
         if (videoId) {
             const savedPosKey = 'videohosk_pos_' + videoId;
-            const savedTime = parseFloat(localStorage.getItem(savedPosKey) || '0');
+            const savedTime = parseFloat(storage.getItem(savedPosKey) || '0');
 
             vid.addEventListener('loadedmetadata', () => {
                 if (savedTime > 5 && savedTime < vid.duration - 10) {
@@ -546,28 +595,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         document.getElementById('btnResumeYes')?.addEventListener('click', () => {
                             vid.currentTime = savedTime;
-                            vid.play();
+                            playVideo();
                             resumeToast.style.display = 'none';
                         });
 
                         document.getElementById('btnResumeNo')?.addEventListener('click', () => {
-                            localStorage.removeItem(savedPosKey);
+                            storage.removeItem(savedPosKey);
                             resumeToast.style.display = 'none';
-                            vid.play();
+                            playVideo();
                         });
                     }
                 }
             });
 
             // Save position periodically
+            let lastPositionSave = 0;
             vid.addEventListener('timeupdate', () => {
-                if (vid.currentTime > 2 && !vid.ended) {
-                    localStorage.setItem(savedPosKey, vid.currentTime);
+                const now = Date.now();
+                if (vid.currentTime > 2 && !vid.ended && now - lastPositionSave > 5000) {
+                    lastPositionSave = now;
+                    storage.setItem(savedPosKey, String(Math.floor(vid.currentTime)));
                 }
             });
 
             vid.addEventListener('ended', () => {
-                localStorage.removeItem(savedPosKey);
+                storage.removeItem(savedPosKey);
             });
         }
 
@@ -626,9 +678,9 @@ document.addEventListener('DOMContentLoaded', () => {
         theaterBtn.addEventListener('click', () => {
             watchPage.classList.toggle('theater-mode');
             const isTheater = watchPage.classList.contains('theater-mode');
-            localStorage.setItem('videohosk_theater', isTheater ? '1' : '0');
+            storage.setItem('videohosk_theater', isTheater ? '1' : '0');
         });
-        if (localStorage.getItem('videohosk_theater') === '1') {
+        if (storage.getItem('videohosk_theater') === '1') {
             watchPage.classList.add('theater-mode');
         }
     }
@@ -663,22 +715,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---- Stagger animation for video cards ----
     const videoCards = document.querySelectorAll('.video-card');
-    videoCards.forEach((card, index) => {
-        card.style.animationDelay = `${index * 0.1}s`;
-    });
+    if (!prefersReducedMotion) {
+        videoCards.forEach((card, index) => {
+            card.style.animationDelay = `${Math.min(index, 12) * 0.035}s`;
+        });
+    }
 
     // ---- Live Search Filter ----
     const searchInput = document.getElementById('searchInput');
     if (searchInput && videoCards.length > 0) {
+        let searchFrame = 0;
         searchInput.addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase().trim();
-            videoCards.forEach(card => {
-                const title = card.getAttribute('data-title') || '';
-                if (!query || title.includes(query)) {
-                    card.style.display = 'flex';
-                } else {
-                    card.style.display = 'none';
-                }
+            window.cancelAnimationFrame(searchFrame);
+            searchFrame = window.requestAnimationFrame(() => {
+                videoCards.forEach(card => {
+                    const title = card.getAttribute('data-title') || '';
+                    card.style.display = !query || title.includes(query) ? '' : 'none';
+                });
             });
         });
     }
@@ -715,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const theme = btn.getAttribute('data-set-theme');
             if (theme) {
                 document.documentElement.setAttribute('data-theme', theme);
-                localStorage.setItem('videohosk_theme', theme);
+                storage.setItem('videohosk_theme', theme);
                 closeThemeModal();
             }
         });

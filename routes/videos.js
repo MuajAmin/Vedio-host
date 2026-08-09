@@ -56,10 +56,13 @@ const upload = multer({
     limits: { fileSize: maxSize },
     fileFilter
 });
+const STREAM_HIGH_WATER_MARK = 128 * 1024;
 
 // GET /dashboard — Video gallery
 router.get('/dashboard', isAuthenticated, (req, res) => {
-    const videos = db.prepare('SELECT * FROM videos ORDER BY uploaded_at DESC').all();
+    const videos = db.prepare(
+        'SELECT id, title, size, uploaded_at FROM videos ORDER BY uploaded_at DESC'
+    ).all();
     res.render('dashboard', {
         user: req.session.user,
         videos
@@ -244,23 +247,45 @@ function streamFile(req, res, filePath, filename, stat) {
             'Content-Length': chunkSize
         });
 
-        return fs.createReadStream(filePath, {
+        if (req.method === 'HEAD') {
+            return res.end();
+        }
+
+        return pipeFile(res, filePath, {
             start: parsed.start,
             end: parsed.end,
-            highWaterMark: 256 * 1024
-        }).pipe(res);
+            highWaterMark: STREAM_HIGH_WATER_MARK
+        });
     }
 
     res.writeHead(200, {
         ...baseHeaders,
         'Content-Length': fileSize
     });
-    return fs.createReadStream(filePath, { highWaterMark: 256 * 1024 }).pipe(res);
+
+    if (req.method === 'HEAD') {
+        return res.end();
+    }
+
+    return pipeFile(res, filePath, { highWaterMark: STREAM_HIGH_WATER_MARK });
 }
 
-// Stream video
-router.get('/stream/:videoKey', isAuthenticated, (req, res) => {
-    const video = db.prepare('SELECT * FROM videos WHERE id = ? OR filename = ?').get(req.params.videoKey, req.params.videoKey);
+function pipeFile(res, filePath, options) {
+    const stream = fs.createReadStream(filePath, options);
+
+    stream.on('error', (err) => {
+        if (!res.headersSent) {
+            res.status(500).end('Stream error');
+            return;
+        }
+        res.destroy(err);
+    });
+
+    return stream.pipe(res);
+}
+
+function handleStream(req, res) {
+    const video = db.prepare('SELECT filename FROM videos WHERE id = ? OR filename = ?').get(req.params.videoKey, req.params.videoKey);
 
     if (!video) {
         return res.status(404).send('File not found');
@@ -272,8 +297,18 @@ router.get('/stream/:videoKey', isAuthenticated, (req, res) => {
         return res.status(404).send('File not found');
     }
 
-    const stat = fs.statSync(filePath);
+    let stat;
+    try {
+        stat = fs.statSync(filePath);
+    } catch (err) {
+        return res.status(404).send('File not found');
+    }
+
     return streamFile(req, res, filePath, video.filename, stat);
-});
+}
+
+// Stream video
+router.head('/stream/:videoKey', isAuthenticated, handleStream);
+router.get('/stream/:videoKey', isAuthenticated, handleStream);
 
 module.exports = router;

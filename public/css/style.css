@@ -36,9 +36,9 @@ html[data-theme="cinematic"] {
     --shadow-lg: 0 16px 50px rgba(0, 0, 0, 0.7);
     --shadow-glow: 0 0 40px rgba(229, 184, 90, 0.15);
 
-    --font-display: 'Sora', sans-serif;
-    --font-body: 'DM Sans', system-ui, sans-serif;
-    --font-accent: 'Playfair Display', serif;
+    --font-display: 'Bahnschrift', 'Aptos Display', 'Trebuchet MS', sans-serif;
+    --font-body: 'Aptos', 'Segoe UI', Tahoma, sans-serif;
+    --font-accent: Georgia, 'Times New Roman', serif;
 
     --radius-sm: 8px;
     --radius-md: 14px;
@@ -136,6 +136,8 @@ html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     background-color: var(--bg-deep);
 }
 
@@ -1078,6 +1080,7 @@ input, textarea {
     position: relative;
     backdrop-filter: blur(16px);
     animation: card-stagger-in 0.6s var(--ease-out) both;
+    contain: layout paint;
 }
 
 /* Animated gradient border on hover */
@@ -1774,6 +1777,7 @@ input, textarea {
     cursor: pointer;
     margin-bottom: 8px;
     transition: height 0.15s ease;
+    touch-action: none;
 }
 
 .vp-progress-wrap:hover {
@@ -2672,3 +2676,406 @@ kbd {
     }
 }
 
+/* ========================================
+   MOBILE PERFORMANCE PASS
+   ======================================== */
+h1,
+h2,
+h3,
+.nav-logo,
+.logo-text,
+.logo-tagline,
+.vault-pill,
+.header-pill,
+.badge-role,
+.card-badge,
+.vp-speed-btn {
+    letter-spacing: 0;
+}
+
+@media (max-width: 768px) {
+    body {
+        background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-primary) 100%);
+    }
+
+    .ambient-background {
+        display: none;
+    }
+
+    .navbar,
+    .mobile-bottom-bar,
+    .theme-switcher-btn,
+    .login-card,
+    .theme-modal-backdrop,
+    .theme-modal,
+    .search-input,
+    .video-card,
+    .card-badge,
+    .play-overlay,
+    .card-duration,
+    .upload-form,
+    .comments-section,
+    .love-banner-card,
+    .user-badge,
+    .resume-toast,
+    .vp-center-btn,
+    .vp-speed-menu {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    .dashboard-header-bar,
+    .empty-state,
+    .video-grid,
+    .video-card,
+    .upload-container,
+    .vp-cinema,
+    .comments-section,
+    .comment-item,
+    .love-banner-card {
+        animation: none;
+    }
+
+    .video-card::after,
+    .btn-primary::after,
+    .login-btn::after,
+    .btn-upload-submit::after,
+    .play-overlay::before {
+        display: none;
+    }
+
+    .navbar {
+        padding: 10px 14px;
+        background: rgba(8, 8, 14, 0.96);
+        box-shadow: 0 1px 0 var(--border-subtle);
+    }
+
+    .nav-left,
+    .nav-right {
+        gap: 8px;
+        min-width: 0;
+    }
+
+    .nav-logo {
+        min-width: 0;
+        gap: 9px;
+        font-size: 1.08rem;
+    }
+
+    .logo-icon-wrapper {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+    }
+
+    .user-badge {
+        max-width: 132px;
+        padding: 4px 10px 4px 4px;
+        overflow: hidden;
+    }
+
+    .user-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .badge-role {
+        display: none;
+    }
+
+    .main-content {
+        width: 100%;
+        padding: 18px 14px calc(88px + env(safe-area-inset-bottom));
+    }
+
+    .dashboard-header-bar {
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+
+    .header-pill {
+        margin-bottom: 8px;
+        padding: 4px 10px;
+        font-size: 0.68rem;
+    }
+
+    .header-titles h1,
+    .upload-header h1 {
+        font-size: 1.7rem;
+        line-height: 1.16;
+    }
+
+    .subtitle,
+    .upload-header p {
+        font-size: 0.9rem;
+    }
+
+    .search-input,
+    .form-input,
+    .comment-input {
+        font-size: 16px;
+    }
+
+    .video-grid {
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 12px;
+    }
+
+    .video-card {
+        box-shadow: 0 1px 0 var(--border-subtle);
+    }
+
+    .video-card:hover {
+        transform: none;
+        box-shadow: 0 1px 0 var(--border-subtle);
+    }
+
+    .card-thumbnail::before {
+        opacity: 0.65;
+    }
+
+    .login-container {
+        justify-content: flex-start;
+        min-height: 100svh;
+        padding: 84px 14px 24px;
+    }
+
+    .login-top-bar {
+        top: 14px;
+        right: 14px;
+    }
+
+    .login-card {
+        max-width: 100%;
+        padding: 28px 18px;
+        box-shadow: 0 10px 36px rgba(0, 0, 0, 0.48);
+    }
+
+    .logo-text {
+        font-size: 2rem;
+    }
+
+    .logo-tagline {
+        font-size: 0.72rem;
+    }
+
+    .theme-modal-backdrop {
+        align-items: flex-end;
+        padding: 0;
+        background: rgba(0, 0, 0, 0.72);
+    }
+
+    .theme-modal {
+        max-width: none;
+        border-radius: 20px 20px 0 0;
+        padding: 22px 16px calc(22px + env(safe-area-inset-bottom));
+        transform: translateY(100%);
+    }
+
+    .theme-modal-backdrop.active .theme-modal {
+        transform: translateY(0);
+    }
+
+    .theme-options-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .theme-card-option {
+        padding: 14px 10px;
+    }
+
+    .upload-header {
+        margin-bottom: 20px;
+        text-align: left;
+    }
+
+    .upload-form {
+        gap: 18px;
+        box-shadow: 0 1px 0 var(--border-subtle);
+    }
+
+    .upload-dropzone {
+        min-height: 176px;
+    }
+
+    .selected-name {
+        overflow-wrap: anywhere;
+    }
+
+    .watch-page {
+        max-width: 100%;
+    }
+
+    .vp-cinema {
+        aspect-ratio: 16 / 9;
+        border-radius: 12px;
+        box-shadow: 0 8px 26px rgba(0, 0, 0, 0.7);
+    }
+
+    .vp-cinema video {
+        height: 100%;
+        min-height: 0;
+        object-fit: contain;
+    }
+
+    .vp-controls-row {
+        gap: 2px;
+    }
+
+    .vp-controls-left,
+    .vp-controls-right {
+        gap: 2px;
+    }
+
+    .vp-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+    }
+
+    #vpPipBtn {
+        display: none;
+    }
+
+    .vp-speed-btn {
+        min-width: 42px;
+        padding: 0 8px;
+    }
+
+    .video-info-section {
+        padding: 16px 0;
+        margin-bottom: 18px;
+    }
+
+    .video-meta {
+        gap: 10px;
+    }
+
+    .video-action-buttons {
+        width: 100%;
+    }
+
+    .comments-section {
+        box-shadow: 0 1px 0 var(--border-subtle);
+    }
+
+    .comment-input-wrapper {
+        gap: 10px;
+    }
+
+    .comment-avatar {
+        width: 34px;
+        height: 34px;
+        font-size: 0.78rem;
+    }
+
+    .comment-header {
+        flex-wrap: wrap;
+        gap: 6px 10px;
+    }
+
+    .btn-comment {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .mobile-bottom-bar {
+        height: calc(62px + env(safe-area-inset-bottom));
+        background: rgba(8, 8, 14, 0.96);
+        box-shadow: 0 -1px 0 var(--border-subtle);
+    }
+
+    .bottom-nav-item {
+        min-width: 58px;
+        min-height: 44px;
+        padding: 4px 10px;
+    }
+
+    .upload-fab {
+        width: 42px;
+        height: 42px;
+        box-shadow: 0 4px 16px var(--accent-gold-glow);
+    }
+}
+
+@media (max-width: 560px) {
+    .video-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .video-card {
+        min-height: 112px;
+        flex-direction: row;
+        border-radius: 12px;
+    }
+
+    .card-thumbnail {
+        flex: 0 0 42%;
+        width: 42%;
+        min-height: 112px;
+        aspect-ratio: auto;
+    }
+
+    .card-info {
+        justify-content: center;
+        padding: 12px;
+    }
+
+    .card-title {
+        font-size: 0.95rem;
+        -webkit-line-clamp: 3;
+    }
+
+    .card-duration {
+        right: 8px;
+        bottom: 8px;
+        padding: 3px 7px;
+        font-size: 0.7rem;
+    }
+
+    .card-badge {
+        top: 8px;
+        left: 8px;
+    }
+
+    .play-overlay {
+        width: 38px;
+        height: 38px;
+    }
+}
+
+@media (max-width: 380px) {
+    .theme-options-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .nav-logo span {
+        display: none;
+    }
+
+    .card-thumbnail {
+        flex-basis: 38%;
+        width: 38%;
+    }
+
+    .vp-speed-group {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+    }
+}
