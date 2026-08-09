@@ -144,19 +144,140 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ---- Initialize Plyr ----
+    // ---- Advanced Video Player Logic & Plyr ----
     const playerElement = document.getElementById('player');
     if (playerElement && typeof Plyr !== 'undefined') {
-        new Plyr(playerElement, {
+        const videoId = playerElement.getAttribute('data-video-id');
+        const player = new Plyr(playerElement, {
             controls: [
                 'play-large', 'play', 'progress', 'current-time',
                 'duration', 'mute', 'volume', 'settings',
                 'pip', 'fullscreen'
             ],
-            settings: ['quality', 'speed'],
+            settings: ['speed'],
             speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
             tooltips: { controls: true, seek: true },
-            keyboard: { focused: true, global: true }
+            keyboard: { focused: true, global: true },
+            seekTime: 10
+        });
+
+        // 1. Position Resume Feature
+        if (videoId) {
+            const savedPosKey = 'videohosk_pos_' + videoId;
+            const savedTime = parseFloat(localStorage.getItem(savedPosKey) || '0');
+
+            player.on('loadedmetadata', () => {
+                if (savedTime > 5 && savedTime < player.duration - 10) {
+                    const resumeToast = document.getElementById('resumeToast');
+                    const resumeTimeStr = document.getElementById('resumeTimeStr');
+                    if (resumeToast && resumeTimeStr) {
+                        const mins = Math.floor(savedTime / 60);
+                        const secs = Math.floor(savedTime % 60);
+                        resumeTimeStr.textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+                        resumeToast.style.display = 'flex';
+
+                        document.getElementById('btnResumeYes')?.addEventListener('click', () => {
+                            player.currentTime = savedTime;
+                            player.play();
+                            resumeToast.style.display = 'none';
+                        });
+
+                        document.getElementById('btnResumeNo')?.addEventListener('click', () => {
+                            localStorage.removeItem(savedPosKey);
+                            resumeToast.style.display = 'none';
+                            player.play();
+                        });
+                    }
+                }
+            });
+
+            // Save position periodically
+            player.on('timeupdate', () => {
+                if (player.currentTime > 2 && !player.ended) {
+                    localStorage.setItem(savedPosKey, player.currentTime);
+                }
+            });
+
+            player.on('ended', () => {
+                localStorage.removeItem(savedPosKey);
+            });
+        }
+
+        // 2. Double Tap / Click Gesture for Seeking (Mobile & Desktop)
+        const playerContainer = document.getElementById('playerContainer');
+        const gestureLeft = document.getElementById('gestureLeft');
+        const gestureRight = document.getElementById('gestureRight');
+        let lastTapTime = 0;
+
+        function triggerGestureRipple(element) {
+            if (!element) return;
+            element.classList.remove('active');
+            void element.offsetWidth; // Trigger reflow
+            element.classList.add('active');
+            setTimeout(() => element.classList.remove('active'), 600);
+        }
+
+        if (playerContainer) {
+            playerContainer.addEventListener('click', (e) => {
+                // Ignore clicks on controls bar
+                if (e.target.closest('.plyr__controls')) return;
+
+                const now = Date.now();
+                const rect = playerContainer.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const isLeftHalf = clickX < rect.width / 2;
+
+                if (now - lastTapTime < 300) { // Double tap detected
+                    e.preventDefault();
+                    if (isLeftHalf) {
+                        player.rewind(10);
+                        triggerGestureRipple(gestureLeft);
+                    } else {
+                        player.forward(10);
+                        triggerGestureRipple(gestureRight);
+                    }
+                }
+                lastTapTime = now;
+            });
+        }
+
+        // 3. J, L Keyboard Custom Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+            if (e.key === 'j' || e.key === 'J') {
+                player.rewind(10);
+                triggerGestureRipple(gestureLeft);
+            } else if (e.key === 'l' || e.key === 'L') {
+                player.forward(10);
+                triggerGestureRipple(gestureRight);
+            }
+        });
+    }
+
+    // ---- Theater Mode Toggle ----
+    const theaterBtn = document.getElementById('btnTheaterMode');
+    const watchPage = document.querySelector('.watch-page');
+    if (theaterBtn && watchPage) {
+        theaterBtn.addEventListener('click', () => {
+            watchPage.classList.toggle('theater-mode');
+            const isTheater = watchPage.classList.contains('theater-mode');
+            localStorage.setItem('videohosk_theater', isTheater ? '1' : '0');
+        });
+        if (localStorage.getItem('videohosk_theater') === '1') {
+            watchPage.classList.add('theater-mode');
+        }
+    }
+
+    // ---- Shortcuts Modal ----
+    const shortcutsBtn = document.getElementById('btnShortcuts');
+    const shortcutsModal = document.getElementById('shortcutsModal');
+    const shortcutsCloseBtn = document.getElementById('shortcutsCloseBtn');
+
+    if (shortcutsBtn && shortcutsModal) {
+        shortcutsBtn.addEventListener('click', () => shortcutsModal.classList.add('active'));
+        if (shortcutsCloseBtn) shortcutsCloseBtn.addEventListener('click', () => shortcutsModal.classList.remove('active'));
+        shortcutsModal.addEventListener('click', (e) => {
+            if (e.target === shortcutsModal) shortcutsModal.classList.remove('active');
         });
     }
 
