@@ -176,4 +176,20 @@ document.addEventListener('DOMContentLoaded', () => {
         card.classList.add('card-animate');
     });
 
+    // ---- Live Search Filter ----
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput && videoCards.length > 0) {
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            videoCards.forEach(card => {
+                const title = card.getAttribute('data-title') || '';
+                if (!query || title.includes(query)) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    }
+
 });
