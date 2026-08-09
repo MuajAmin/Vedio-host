@@ -664,8 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Stagger animation for video cards ----
     const videoCards = document.querySelectorAll('.video-card');
     videoCards.forEach((card, index) => {
-        card.style.animationDelay = `${index * 0.08}s`;
-        card.classList.add('card-animate');
+        card.style.animationDelay = `${index * 0.1}s`;
     });
 
     // ---- Live Search Filter ----
