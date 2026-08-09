@@ -39,7 +39,7 @@ app.use((req, res, next) => {
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader(
         'Content-Security-Policy',
-        "default-src 'self'; script-src 'self' https://cdn.plyr.io; style-src 'self' 'unsafe-inline' https://cdn.plyr.io https://fonts.googleapis.com; font-src https://fonts.gstatic.com; media-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'"
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; media-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'"
     );
     next();
 });
