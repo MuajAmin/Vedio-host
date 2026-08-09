@@ -1581,7 +1581,7 @@ input, textarea {
     background:
         radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.08), transparent 24%),
         linear-gradient(135deg, #020203 0%, #080910 48%, #020203 100%);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 50px var(--accent-gold-glow);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.9), 0 0 50px var(--accent-gold-glow), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     margin-bottom: 24px;
     animation: fade-in-up 0.5s var(--ease-out) both;
     border: 1px solid var(--border-subtle);
@@ -1612,6 +1612,32 @@ input, textarea {
     background: #000;
     position: relative;
     z-index: 1;
+}
+
+.vp-audio-chip {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    color: #08080c;
+    background: linear-gradient(135deg, var(--accent-gold-bright), var(--accent-warm));
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.5), 0 0 24px var(--accent-gold-glow);
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.vp-muted .vp-audio-chip {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .vp-status-badge {
@@ -1829,8 +1855,8 @@ input, textarea {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 140px;
-    background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 40%, transparent 100%);
+    height: 170px;
+    background: linear-gradient(to top, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.64) 44%, rgba(0,0,0,0.18) 78%, transparent 100%);
     pointer-events: none;
     z-index: 3;
     opacity: 0;
@@ -1972,9 +1998,9 @@ input, textarea {
     left: 0;
     right: 0;
     z-index: 10;
-    padding: 0 14px 10px;
+    padding: 0 16px 14px;
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(10px);
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
@@ -1988,17 +2014,18 @@ input, textarea {
 .vp-progress-wrap {
     position: relative;
     width: 100%;
-    height: 5px;
-    background: rgba(255, 255, 255, 0.18);
-    border-radius: 3px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
     cursor: pointer;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     transition: height 0.15s ease;
     touch-action: none;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .vp-progress-wrap:hover {
-    height: 7px;
+    height: 8px;
 }
 
 .vp-progress-buffer {
@@ -2007,7 +2034,7 @@ input, textarea {
     left: 0;
     height: 100%;
     background: rgba(255, 255, 255, 0.22);
-    border-radius: 3px;
+    border-radius: inherit;
     pointer-events: none;
     transition: width 0.15s ease;
 }
@@ -2018,18 +2045,18 @@ input, textarea {
     left: 0;
     height: 100%;
     background: linear-gradient(90deg, var(--accent-gold), var(--accent-gold-bright));
-    border-radius: 3px;
+    border-radius: inherit;
     pointer-events: none;
     transition: width 0.05s linear;
 }
 
 .vp-progress-thumb {
     position: absolute;
-    right: -7px;
+    right: -8px;
     top: 50%;
     transform: translateY(-50%) scale(0);
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     background: var(--accent-gold-bright);
     box-shadow: 0 0 8px var(--accent-gold-glow-strong), 0 2px 6px rgba(0,0,0,0.5);
@@ -2067,14 +2094,22 @@ input, textarea {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
+    gap: 8px;
+    min-height: 50px;
+    padding: 5px 6px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(18, 18, 26, 0.82), rgba(6, 6, 10, 0.72));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px) saturate(1.25);
+    -webkit-backdrop-filter: blur(20px) saturate(1.25);
 }
 
 .vp-controls-left,
 .vp-controls-right {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
 }
 
 /* ---- Control Buttons ---- */
@@ -2083,30 +2118,49 @@ input, textarea {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 8px;
-    background: transparent;
-    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid transparent;
     color: #fff;
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
     flex-shrink: 0;
 }
 
 .vp-btn:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.16);
     color: var(--accent-gold-bright);
+}
+
+.vp-btn:focus-visible {
+    outline: 2px solid var(--accent-gold-bright);
+    outline-offset: 2px;
 }
 
 .vp-btn:active {
     transform: scale(0.88);
 }
 
+.vp-btn-muted {
+    color: #08080c;
+    background: linear-gradient(135deg, var(--accent-gold-bright), var(--accent-warm));
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 18px var(--accent-gold-glow);
+}
+
+.vp-btn-muted:hover {
+    color: #08080c;
+    background: linear-gradient(135deg, var(--accent-gold-bright), var(--accent-warm));
+    box-shadow: 0 0 24px var(--accent-gold-glow-strong);
+}
+
 /* Seek Buttons with label */
 .vp-btn-seek {
     position: relative;
-    width: 42px;
+    width: 46px;
 }
 
 .vp-seek-label {
@@ -2137,7 +2191,19 @@ input, textarea {
 .vp-volume-group {
     display: flex;
     align-items: center;
-    gap: 0;
+    gap: 2px;
+    height: 40px;
+    padding-right: 2px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.vp-volume-group:hover,
+.vp-volume-group:focus-within {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.14);
 }
 
 .vp-volume-slider-wrap {
@@ -2148,15 +2214,16 @@ input, textarea {
 }
 
 .vp-volume-group:hover .vp-volume-slider-wrap,
+.vp-volume-group:focus-within .vp-volume-slider-wrap,
 .vp-volume-slider-wrap.vp-vol-open {
-    width: 80px;
+    width: 86px;
     opacity: 1;
 }
 
 .vp-volume-slider {
     -webkit-appearance: none;
     appearance: none;
-    width: 72px;
+    width: 78px;
     height: 4px;
     border-radius: 2px;
     background: rgba(255, 255, 255, 0.25);
@@ -2875,6 +2942,13 @@ kbd {
     }
 
     .vp-volume-group {
+        display: flex;
+        padding-right: 0;
+        background: transparent;
+        border-color: transparent;
+    }
+
+    .vp-volume-slider-wrap {
         display: none;
     }
 
@@ -2935,6 +3009,7 @@ h3,
     .love-banner-card,
     .user-badge,
     .resume-toast,
+    .vp-controls-row,
     .vp-status-badge,
     .vp-loading-panel,
     .vp-center-btn,
@@ -3147,6 +3222,14 @@ h3,
         font-size: 0.72rem;
     }
 
+    .vp-audio-chip {
+        top: 10px;
+        left: 10px;
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+    }
+
     .vp-loading-overlay {
         padding: 14px;
         align-items: center;
@@ -3180,6 +3263,9 @@ h3,
 
     .vp-controls-row {
         gap: 2px;
+        min-height: 44px;
+        padding: 4px;
+        border-radius: 10px;
     }
 
     .vp-controls-left,

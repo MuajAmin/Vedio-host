@@ -220,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const centerPauseIcon = centerBtn?.querySelector('.vp-pause-icon');
 
         // Playback status / slow network UI
+        const audioChip = document.getElementById('vpAudioChip');
         const statusBadge = document.getElementById('vpStatusBadge');
         const statusText = document.getElementById('vpStatusText');
         const loadingOverlay = document.getElementById('vpLoadingOverlay');
@@ -237,6 +238,15 @@ document.addEventListener('DOMContentLoaded', () => {
         let recoveryTimer = null;
         let slowStartTimer = null;
         let retryCount = 0;
+        const DEFAULT_AUDIBLE_VOLUME = 1;
+        let lastAudibleVolume = DEFAULT_AUDIBLE_VOLUME;
+
+        vid.defaultMuted = true;
+        vid.muted = true;
+        try {
+            vid.volume = DEFAULT_AUDIBLE_VOLUME;
+        } catch (err) {}
+        if (volumeSlider) volumeSlider.value = '0';
 
         // --- Utility ---
         function fmtTime(s) {
@@ -756,36 +766,92 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // --- Volume ---
-        if (volumeSlider) {
-            volumeSlider.addEventListener('input', (e) => {
-                e.stopPropagation();
-                vid.volume = e.target.value / 100;
-                vid.muted = vid.volume === 0;
-                updateVolIcons();
-            });
-        }
-
         function updateVolIcons() {
-            if (vid.muted || vid.volume === 0) {
+            const isMuted = vid.muted || vid.volume === 0;
+
+            if (isMuted) {
                 if (iconVolOn) iconVolOn.style.display = 'none';
                 if (iconVolOff) iconVolOff.style.display = '';
             } else {
                 if (iconVolOn) iconVolOn.style.display = '';
                 if (iconVolOff) iconVolOff.style.display = 'none';
             }
+
+            if (muteBtn) {
+                muteBtn.classList.toggle('vp-btn-muted', isMuted);
+                muteBtn.title = isMuted ? 'Unmute (M)' : 'Mute (M)';
+                muteBtn.setAttribute('aria-label', isMuted ? 'Unmute' : 'Mute');
+                muteBtn.setAttribute('aria-pressed', String(isMuted));
+            }
+
+            if (container) container.classList.toggle('vp-muted', isMuted);
+            if (audioChip) audioChip.hidden = !isMuted;
+        }
+
+        function setVolumeLevel(nextVolume) {
+            const normalized = Math.max(0, Math.min(1, Number(nextVolume) || 0));
+            vid.volume = normalized;
+
+            if (normalized > 0) {
+                lastAudibleVolume = normalized;
+                vid.muted = false;
+            } else {
+                vid.muted = true;
+            }
+
+            if (volumeSlider) volumeSlider.value = String(Math.round(normalized * 100));
+            updateVolIcons();
+        }
+
+        function setMutedState(shouldMute) {
+            if (!shouldMute && vid.volume === 0) {
+                vid.volume = lastAudibleVolume || DEFAULT_AUDIBLE_VOLUME;
+            }
+
+            vid.muted = shouldMute;
+
+            if (!shouldMute && vid.volume > 0) {
+                lastAudibleVolume = vid.volume;
+            }
+
+            if (volumeSlider) {
+                volumeSlider.value = shouldMute ? '0' : String(Math.round(vid.volume * 100));
+            }
+
+            updateVolIcons();
+        }
+
+        function adjustVolume(delta) {
+            if ((vid.muted || vid.volume === 0) && delta < 0) return;
+            const baseVolume = (vid.muted || vid.volume === 0)
+                ? lastAudibleVolume || DEFAULT_AUDIBLE_VOLUME
+                : vid.volume;
+            setVolumeLevel(baseVolume + delta);
+        }
+
+        updateVolIcons();
+
+        if (volumeSlider) {
+            volumeSlider.addEventListener('input', (e) => {
+                e.stopPropagation();
+                setVolumeLevel(e.target.value / 100);
+            });
         }
 
         if (muteBtn) {
             muteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                vid.muted = !vid.muted;
-                if (volumeSlider) volumeSlider.value = vid.muted ? 0 : vid.volume * 100;
-                updateVolIcons();
+                setMutedState(!(vid.muted || vid.volume === 0));
             });
         }
 
         vid.addEventListener('volumechange', () => {
-            if (volumeSlider && !vid.muted) volumeSlider.value = vid.volume * 100;
+            if (vid.volume > 0) lastAudibleVolume = vid.volume;
+            if (volumeSlider) {
+                volumeSlider.value = (vid.muted || vid.volume === 0)
+                    ? '0'
+                    : String(Math.round(vid.volume * 100));
+            }
             updateVolIcons();
         });
 
@@ -1023,19 +1089,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'm':
                     e.preventDefault();
-                    vid.muted = !vid.muted;
-                    if (volumeSlider) volumeSlider.value = vid.muted ? 0 : vid.volume * 100;
-                    updateVolIcons();
+                    setMutedState(!(vid.muted || vid.volume === 0));
                     break;
                 case 'arrowup':
                     e.preventDefault();
-                    vid.volume = Math.min(1, vid.volume + 0.05);
-                    if (volumeSlider) volumeSlider.value = vid.volume * 100;
+                    adjustVolume(0.05);
                     break;
                 case 'arrowdown':
                     e.preventDefault();
-                    vid.volume = Math.max(0, vid.volume - 0.05);
-                    if (volumeSlider) volumeSlider.value = vid.volume * 100;
+                    adjustVolume(-0.05);
                     break;
             }
         });
