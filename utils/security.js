@@ -8,14 +8,9 @@ function escapeHtml(value) {
 }
 
 function timingSafeCompare(a, b) {
-    const aBuffer = Buffer.from(String(a || ''));
-    const bBuffer = Buffer.from(String(b || ''));
-
-    if (aBuffer.length !== bBuffer.length) {
-        return false;
-    }
-
-    return crypto.timingSafeEqual(aBuffer, bBuffer);
+    const aHash = crypto.createHash('sha256').update(String(a || '')).digest();
+    const bHash = crypto.createHash('sha256').update(String(b || '')).digest();
+    return crypto.timingSafeEqual(aHash, bHash);
 }
 
 function getCsrfToken(req) {

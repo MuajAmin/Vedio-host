@@ -6,6 +6,14 @@ const attempts = new Map();
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 8;
 
+// Clean up expired rate limit entries every hour
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, record] of attempts) {
+        if (record.expiresAt <= now) attempts.delete(key);
+    }
+}, 60 * 60 * 1000).unref();
+
 function getAttemptKey(req) {
     return req.ip || req.socket.remoteAddress || 'unknown';
 }
