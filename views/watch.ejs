@@ -64,6 +64,12 @@ const commentsHtml = comments.length === 0
                 </svg>
                 <span>Back</span>
             </a>
+            <button type="button" class="btn btn-ghost btn-icon desktop-only-theme" id="themeSwitcherNavBtn" title="Change Theme">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
+                </svg>
+            </button>
             <div class="user-badge ${isAdmin ? 'badge-admin' : 'badge-viewer'}">
                 <div class="badge-avatar">${isAdmin ? 'M' : 'H'}</div>
                 <span>${displayName}</span>
@@ -149,11 +155,11 @@ const commentsHtml = comments.length === 0
         </div>
 
         <!-- Shortcuts Modal -->
-        <div class="modal-backdrop" id="shortcutsModal">
-            <div class="modal-card">
-                <div class="modal-header">
+        <div class="theme-modal-backdrop" id="shortcutsModal">
+            <div class="theme-modal">
+                <div class="theme-modal-header">
                     <h3>⌨️ Video Player Shortcuts</h3>
-                    <button type="button" class="modal-close" id="shortcutsCloseBtn">&times;</button>
+                    <button type="button" class="theme-close-btn" id="shortcutsCloseBtn">&times;</button>
                 </div>
                 <div class="shortcuts-grid">
                     <div class="shortcut-item"><kbd>Space</kbd> / <kbd>K</kbd> <span>Play / Pause</span></div>
@@ -207,6 +213,13 @@ const commentsHtml = comments.length === 0
             </svg>
             <span>Library</span>
         </a>
+        <button type="button" class="bottom-nav-item" id="themeSwitcherBottomBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
+            </svg>
+            <span>Theme</span>
+        </button>
         ${isAdmin ? `
         <a href="/upload" class="bottom-nav-item bottom-nav-upload">
             <div class="upload-fab">
@@ -230,5 +243,45 @@ const commentsHtml = comments.length === 0
             </button>
         </form>
     </nav>
+</div>
+
+<!-- Theme Selector Modal -->
+<div class="theme-modal-backdrop" id="themeModalBackdrop">
+    <div class="theme-modal">
+        <div class="theme-modal-header">
+            <h3>🎨 Choose Palette Theme</h3>
+            <button type="button" class="theme-close-btn" id="themeCloseBtn">&times;</button>
+        </div>
+        <div class="theme-options-grid">
+            <button type="button" class="theme-card-option" data-set-theme="cinematic">
+                <div class="theme-preview preview-cinematic">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>🎬 Obsidian Gold</span>
+            </button>
+            <button type="button" class="theme-card-option" data-set-theme="cyberpunk">
+                <div class="theme-preview preview-cyberpunk">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>⚡ Cyberpunk Neon</span>
+            </button>
+            <button type="button" class="theme-card-option" data-set-theme="emerald">
+                <div class="theme-preview preview-emerald">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>🌿 Emerald Luxury</span>
+            </button>
+            <button type="button" class="theme-card-option" data-set-theme="sunset">
+                <div class="theme-preview preview-sunset">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>🌅 Sunset Velvet</span>
+            </button>
+        </div>
+    </div>
 </div>
 ` }) %>

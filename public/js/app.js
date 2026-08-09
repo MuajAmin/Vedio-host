@@ -279,6 +279,12 @@ document.addEventListener('DOMContentLoaded', () => {
         shortcutsModal.addEventListener('click', (e) => {
             if (e.target === shortcutsModal) shortcutsModal.classList.remove('active');
         });
+        // Close shortcuts modal on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && shortcutsModal.classList.contains('active')) {
+                shortcutsModal.classList.remove('active');
+            }
+        });
     }
 
     // ---- Auto-resize textarea ----
