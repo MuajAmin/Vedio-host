@@ -151,18 +151,7 @@ body {
     transition: background 0.4s ease, color 0.4s ease;
 }
 
-/* Film grain overlay — cinematic atmosphere */
-body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 9999;
-    opacity: 0.025;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    background-repeat: repeat;
-    mix-blend-mode: overlay;
-}
+
 
 a {
     text-decoration: none;
@@ -191,21 +180,7 @@ input, textarea {
     overflow: hidden;
 }
 
-/* Subtle horizontal scanlines */
-.ambient-background::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(
-        to bottom,
-        transparent 0px,
-        transparent 3px,
-        rgba(0, 0, 0, 0.03) 3px,
-        rgba(0, 0, 0, 0.03) 4px
-    );
-    z-index: 1;
-    pointer-events: none;
-}
+
 
 .ambient-orb {
     position: absolute;
@@ -221,7 +196,6 @@ input, textarea {
     background: radial-gradient(circle, var(--accent-gold-glow-strong) 0%, transparent 70%);
     top: -200px;
     left: -150px;
-    animation: orb-float-1 18s ease-in-out infinite alternate;
 }
 
 .orb-2 {
@@ -230,35 +204,9 @@ input, textarea {
     background: radial-gradient(circle, rgba(196, 139, 59, 0.12) 0%, transparent 70%);
     bottom: -150px;
     right: -100px;
-    animation: orb-float-2 22s ease-in-out infinite alternate;
 }
 
-/* Third orb — adds asymmetry and depth */
-.orb-3 {
-    width: 350px;
-    height: 350px;
-    background: radial-gradient(circle, var(--accent-gold-glow) 0%, transparent 70%);
-    top: 40%;
-    right: 15%;
-    filter: blur(160px);
-    opacity: 0.2;
-    animation: orb-float-3 25s ease-in-out infinite alternate;
-}
 
-@keyframes orb-float-1 {
-    0% { transform: translate(0, 0) scale(1); }
-    100% { transform: translate(60px, 40px) scale(1.1); }
-}
-
-@keyframes orb-float-2 {
-    0% { transform: translate(0, 0) scale(1); }
-    100% { transform: translate(-50px, -30px) scale(1.15); }
-}
-
-@keyframes orb-float-3 {
-    0% { transform: translate(0, 0) scale(1) rotate(0deg); }
-    100% { transform: translate(-40px, 60px) scale(1.2) rotate(5deg); }
-}
 
 /* ========================================
    UNIQUE LOGIN PAGE DESIGN
@@ -314,43 +262,28 @@ input, textarea {
     border-radius: var(--radius-xl);
     backdrop-filter: blur(40px);
     box-shadow: var(--shadow-lg), var(--shadow-glow);
-    animation: card-enter 0.9s var(--ease-out) both;
+    animation: card-enter 0.6s var(--ease-out) both;
 }
 
-/* Animated gradient border ring on login card */
+/* Static gradient border on login card */
 .login-card::before {
     content: '';
     position: absolute;
     inset: -2px;
     border-radius: calc(var(--radius-xl) + 2px);
-    background: conic-gradient(
-        from 0deg,
-        var(--accent-gold-dim),
-        transparent,
-        var(--accent-gold),
-        transparent,
-        var(--accent-gold-dim)
-    );
+    background: linear-gradient(135deg, var(--accent-gold-dim), transparent 40%, transparent 60%, var(--accent-gold-dim));
     z-index: -1;
     opacity: 0.35;
-    animation: login-border-spin 8s linear infinite;
-}
-
-@keyframes login-border-spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
 }
 
 @keyframes card-enter {
     from {
         opacity: 0;
-        transform: translateY(40px) scale(0.92);
-        filter: blur(8px);
+        transform: translateY(30px) scale(0.95);
     }
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
-        filter: blur(0);
     }
 }
 
@@ -374,12 +307,6 @@ input, textarea {
     color: var(--accent-gold-bright);
     margin-bottom: 22px;
     font-family: var(--font-display);
-    animation: vault-pill-glow 3s ease-in-out infinite alternate;
-}
-
-@keyframes vault-pill-glow {
-    0% { box-shadow: 0 0 8px var(--accent-gold-glow); }
-    100% { box-shadow: 0 0 20px var(--accent-gold-glow-strong); }
 }
 
 /* Aperture Spinning Logo */
@@ -398,13 +325,7 @@ input, textarea {
     inset: 0;
     border-radius: 50%;
     border: 2px dashed var(--accent-gold);
-    opacity: 0.6;
-    animation: spin-ring 20s linear infinite;
-}
-
-@keyframes spin-ring {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    opacity: 0.4;
 }
 
 .logo-icon-inner {
@@ -572,12 +493,11 @@ input, textarea {
     width: 40%;
     height: 100%;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-    animation: btn-shine 3s ease-in-out infinite;
+    transition: left 0.5s ease;
 }
 
-@keyframes btn-shine {
-    0%, 70%, 100% { left: -100%; }
-    30% { left: 150%; }
+.login-btn:hover::after {
+    left: 130%;
 }
 
 .login-btn:hover, .login-btn:focus {
@@ -613,78 +533,7 @@ input, textarea {
     font-weight: 600;
 }
 
-/* ---- Login Floating Particles ---- */
-.login-particle {
-    position: absolute;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--accent-gold);
-    opacity: 0;
-    pointer-events: none;
-    animation: particle-float linear infinite;
-}
 
-.p1 { left: 10%; animation-duration: 12s; animation-delay: 0s; }
-.p2 { left: 25%; animation-duration: 16s; animation-delay: 2s; width: 3px; height: 3px; }
-.p3 { left: 50%; animation-duration: 14s; animation-delay: 4s; }
-.p4 { left: 70%; animation-duration: 18s; animation-delay: 1s; width: 5px; height: 5px; }
-.p5 { left: 85%; animation-duration: 13s; animation-delay: 3s; width: 3px; height: 3px; }
-.p6 { left: 40%; animation-duration: 20s; animation-delay: 5s; }
-
-@keyframes particle-float {
-    0% {
-        bottom: -10px;
-        opacity: 0;
-        transform: translateX(0);
-    }
-    10% {
-        opacity: 0.5;
-    }
-    50% {
-        opacity: 0.3;
-        transform: translateX(20px);
-    }
-    90% {
-        opacity: 0.1;
-    }
-    100% {
-        bottom: 100%;
-        opacity: 0;
-        transform: translateX(-10px);
-    }
-}
-
-/* ---- Geometric Accent Lines ---- */
-.login-geo-line {
-    position: absolute;
-    pointer-events: none;
-    background: linear-gradient(to bottom, transparent, var(--accent-gold-dim), transparent);
-    opacity: 0.08;
-}
-
-.line-1 {
-    width: 1px;
-    height: 40%;
-    left: 12%;
-    top: 20%;
-    transform: rotate(15deg);
-    animation: geo-line-fade 6s ease-in-out infinite alternate;
-}
-
-.line-2 {
-    width: 1px;
-    height: 35%;
-    right: 15%;
-    top: 30%;
-    transform: rotate(-10deg);
-    animation: geo-line-fade 8s ease-in-out infinite alternate-reverse;
-}
-
-@keyframes geo-line-fade {
-    0% { opacity: 0.04; }
-    100% { opacity: 0.12; }
-}
 
 /* ========================================
    THEME SELECTOR MODAL
@@ -895,12 +744,6 @@ input, textarea {
     mask-composite: exclude;
     opacity: 0;
     transition: opacity 0.35s ease;
-    animation: logo-ring-pulse 3s ease-in-out infinite;
-}
-
-@keyframes logo-ring-pulse {
-    0%, 100% { opacity: 0; }
-    50% { opacity: 0.6; }
 }
 
 .nav-logo:hover .logo-icon-wrapper {
@@ -1121,12 +964,6 @@ input, textarea {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    animation: heading-shimmer 6s ease-in-out infinite;
-}
-
-@keyframes heading-shimmer {
-    0%, 100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
 }
 
 .subtitle {
@@ -1183,8 +1020,8 @@ input, textarea {
 }
 
 @keyframes fade-in-up {
-    from { opacity: 0; transform: translateY(18px); filter: blur(2px); }
-    to { opacity: 1; transform: translateY(0); filter: blur(0); }
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fade-in-down {
@@ -1304,13 +1141,11 @@ input, textarea {
 @keyframes card-stagger-in {
     from {
         opacity: 0;
-        transform: translateY(24px) scale(0.96);
-        filter: blur(4px);
+        transform: translateY(20px) scale(0.97);
     }
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
-        filter: blur(0);
     }
 }
 
@@ -1331,12 +1166,6 @@ input, textarea {
     inset: 0;
     background: radial-gradient(circle at 30% 60%, var(--accent-gold-glow) 0%, transparent 50%),
                 radial-gradient(circle at 70% 30%, var(--accent-gold-glow) 0%, transparent 50%);
-    animation: thumbnail-glow 4s ease-in-out infinite alternate;
-}
-
-@keyframes thumbnail-glow {
-    0% { opacity: 0.6; }
-    100% { opacity: 1; }
 }
 
 /* Film-strip decoration on thumbnail */
@@ -1393,7 +1222,7 @@ input, textarea {
     position: relative;
 }
 
-/* Pulsing ring around play button */
+/* Ring around play button on hover */
 .play-overlay::before {
     content: '';
     position: absolute;
@@ -1401,17 +1230,12 @@ input, textarea {
     border-radius: 50%;
     border: 2px solid var(--accent-gold);
     opacity: 0;
-    transition: opacity 0.3s ease;
-    animation: play-ring-pulse 2s ease-in-out infinite;
+    transition: all 0.3s ease;
 }
 
 .video-card:hover .play-overlay::before {
-    opacity: 0.6;
-}
-
-@keyframes play-ring-pulse {
-    0%, 100% { transform: scale(1); opacity: 0; }
-    50% { transform: scale(1.15); opacity: 0.5; }
+    opacity: 0.5;
+    transform: scale(1.1);
 }
 
 .play-overlay svg {
@@ -2499,7 +2323,6 @@ kbd {
     left: 50%;
     transform: translate(-50%, -50%);
     opacity: 0.25;
-    animation: orb-float-1 15s ease-in-out infinite alternate;
 }
 
 .error-content {
@@ -2529,12 +2352,6 @@ kbd {
     color: var(--danger);
     margin-bottom: 24px;
     opacity: 0.85;
-    animation: error-icon-pulse 2s ease-in-out infinite;
-}
-
-@keyframes error-icon-pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.06); }
 }
 
 .forbidden-icon {
@@ -2656,7 +2473,7 @@ kbd {
     margin-bottom: 32px;
     backdrop-filter: blur(24px);
     box-shadow: 0 8px 32px rgba(244, 63, 94, 0.15);
-    animation: love-pulse-glow 3s ease-in-out infinite alternate, fade-in-up 0.8s var(--ease-out) both;
+    animation: fade-in-up 0.6s var(--ease-out) both;
     position: relative;
     overflow: hidden;
 }
@@ -2671,37 +2488,8 @@ kbd {
     opacity: 0.4;
 }
 
-/* Sparkle shimmer sweep */
-.love-banner-card::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 50%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
-    animation: love-shimmer 5s ease-in-out infinite;
-    pointer-events: none;
-}
-
-@keyframes love-shimmer {
-    0%, 60%, 100% { left: -100%; }
-    30% { left: 130%; }
-}
-
-@keyframes love-pulse-glow {
-    0% { border-color: rgba(244, 63, 94, 0.3); box-shadow: 0 4px 20px rgba(244, 63, 94, 0.12); }
-    100% { border-color: rgba(244, 63, 94, 0.65); box-shadow: 0 8px 36px rgba(244, 63, 94, 0.35); }
-}
-
 .love-banner-icon {
     font-size: 2.4rem;
-    animation: heart-bounce 1.5s ease-in-out infinite alternate;
-}
-
-@keyframes heart-bounce {
-    0% { transform: scale(1); }
-    100% { transform: scale(1.2); }
 }
 
 .love-banner-text h2 {
