@@ -1,0 +1,21 @@
+<%
+const h = escapeHtml;
+const destination = user ? '/dashboard' : '/';
+const label = user ? 'Go to Dashboard' : 'Go to Login';
+%>
+<%- include('layout', { pageTitle: 'Error', body: `
+<div class="error-container">
+    <div class="error-content">
+        <div class="error-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="80" height="80">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+        </div>
+        <h1>Something went wrong</h1>
+        <p>${h(message || 'Unexpected error.')}</p>
+        <a href="${destination}" class="btn btn-primary">${label}</a>
+    </div>
+</div>
+` }) %>

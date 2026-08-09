@@ -1,0 +1,16 @@
+<% const h = escapeHtml; %>
+<%- include('layout', { pageTitle: 'Forbidden', body: `
+<div class="error-container">
+    <div class="error-content">
+        <div class="error-icon forbidden-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="80" height="80">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+        </div>
+        <h1>Forbidden</h1>
+        <p>${h(message || 'You do not have permission to do this.')}</p>
+        <a href="/dashboard" class="btn btn-primary">Go to Dashboard</a>
+    </div>
+</div>
+` }) %>
