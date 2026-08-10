@@ -1591,6 +1591,15 @@ input, textarea {
     isolation: isolate;
 }
 
+/* Hide cursor when controls are hidden (immersive viewing) */
+.vp-cinema.vp-cursor-hidden {
+    cursor: none;
+}
+
+.vp-cinema.vp-cursor-hidden * {
+    cursor: none !important;
+}
+
 .vp-cinema::before {
     content: '';
     position: absolute;
@@ -1601,6 +1610,12 @@ input, textarea {
         linear-gradient(90deg, rgba(255,255,255,0.035), transparent 14%, transparent 86%, rgba(255,255,255,0.035)),
         linear-gradient(180deg, rgba(255,255,255,0.08), transparent 24%, transparent 74%, rgba(0,0,0,0.28));
     box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05), inset 0 0 90px rgba(0, 0, 0, 0.65);
+    transition: opacity 0.4s ease;
+}
+
+/* Hide the decorative overlay during playback for cleaner video */
+.vp-cinema.vp-playing::before {
+    opacity: 0;
 }
 
 .vp-cinema video {
@@ -1640,6 +1655,12 @@ input, textarea {
     transform: translateY(0);
 }
 
+/* Hide audio chip when idle for immersive viewing */
+.vp-cinema.vp-idle .vp-audio-chip {
+    opacity: 0 !important;
+    transform: translateY(-8px);
+}
+
 .vp-status-badge {
     position: absolute;
     top: 14px;
@@ -1668,6 +1689,12 @@ input, textarea {
 .vp-has-status .vp-status-badge {
     opacity: 1;
     transform: translateY(0);
+}
+
+/* Hide status badge when idle for immersive viewing */
+.vp-cinema.vp-idle .vp-status-badge {
+    opacity: 0 !important;
+    transform: translateY(-8px);
 }
 
 .vp-status-dot {
@@ -1841,11 +1868,18 @@ input, textarea {
     border-radius: 0;
     border: none;
     box-shadow: none;
+    background: #000;
+}
+
+.vp-cinema:fullscreen::before,
+.vp-cinema:-webkit-full-screen::before {
+    display: none;
 }
 
 .vp-cinema:fullscreen video,
 .vp-cinema:-webkit-full-screen video {
     height: 100vh;
+    width: 100vw;
     object-fit: contain;
 }
 
@@ -1863,7 +1897,6 @@ input, textarea {
     transition: opacity 0.35s ease;
 }
 
-.vp-cinema:hover .vp-bottom-gradient,
 .vp-cinema.vp-controls-visible .vp-bottom-gradient {
     opacity: 1;
 }
@@ -2001,13 +2034,14 @@ input, textarea {
     padding: 0 16px 14px;
     opacity: 0;
     transform: translateY(10px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    pointer-events: none;
 }
 
-.vp-cinema:hover .vp-controls,
 .vp-cinema.vp-controls-visible .vp-controls {
     opacity: 1;
     transform: translateY(0);
+    pointer-events: auto;
 }
 
 /* ---- Progress Bar ---- */

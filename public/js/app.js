@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 container.classList.toggle('vp-error', showOverlay && state === 'error');
                 container.classList.toggle('vp-offline', showOverlay && state === 'offline');
                 container.classList.toggle('vp-warning', showOverlay && state === 'warning');
-                container.classList.add('vp-controls-visible');
+                if (showOverlay) container.classList.add('vp-controls-visible');
             }
 
             if (!persistent) {
@@ -508,8 +508,17 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => centerBtn.classList.remove('vp-animate'), 550);
         }
 
-        vid.addEventListener('play', updatePlayState);
-        vid.addEventListener('pause', updatePlayState);
+        vid.addEventListener('play', () => {
+            updatePlayState();
+            if (container) container.classList.add('vp-playing');
+        });
+        vid.addEventListener('pause', () => {
+            updatePlayState();
+            if (container) container.classList.remove('vp-playing');
+        });
+        vid.addEventListener('ended', () => {
+            if (container) container.classList.remove('vp-playing');
+        });
         if (playBtn) playBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
 
         // --- Progress Bar ---
@@ -1000,7 +1009,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const clickX = e.clientX - rect.left;
                 const isLeftHalf = clickX < rect.width / 2;
 
-                if (now - lastClickTime < 300) {
+                if (now - lastClickTime < 280) {
                     // Double tap — seek
                     clearTimeout(clickTimer);
                     if (isLeftHalf) {
@@ -1010,37 +1019,98 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     lastClickTime = 0;
                 } else {
-                    // Single tap — play/pause with delay to check for double
+                    // Single tap — play/pause with shorter delay
                     lastClickTime = now;
                     clickTimer = setTimeout(() => {
                         togglePlay();
                         animateCenterBtn();
-                    }, 300);
+                    }, 250);
                 }
             });
         }
 
-        // --- Auto-hide Controls ---
+        // --- Auto-hide Controls (Improved Immersive Experience) ---
         let hideTimer = null;
+        let cursorHideTimer = null;
+        let isUserInteracting = false;
+
+        function getHideDelay() {
+            // Faster hide in fullscreen for immersive viewing
+            return isFullscreen() ? 1500 : 2000;
+        }
 
         function showControls() {
-            if (container) container.classList.add('vp-controls-visible');
+            if (container) {
+                container.classList.add('vp-controls-visible');
+                container.classList.remove('vp-cursor-hidden');
+                container.classList.remove('vp-idle');
+            }
             clearTimeout(hideTimer);
-            if (!vid.paused) {
-                hideTimer = setTimeout(() => {
-                    if (container) container.classList.remove('vp-controls-visible');
-                }, 3000);
+            clearTimeout(cursorHideTimer);
+
+            if (!vid.paused && !isDragging) {
+                hideTimer = setTimeout(hideControls, getHideDelay());
+            }
+        }
+
+        function hideControls() {
+            if (isDragging) return;
+            // Don't hide if speed menu is open
+            if (speedMenu && speedMenu.classList.contains('vp-menu-open')) return;
+
+            if (container) {
+                container.classList.remove('vp-controls-visible');
+                // Hide cursor after controls fade out
+                cursorHideTimer = setTimeout(() => {
+                    if (!vid.paused && container) {
+                        container.classList.add('vp-cursor-hidden');
+                        container.classList.add('vp-idle');
+                    }
+                }, 400);
             }
         }
 
         if (container) {
-            container.addEventListener('mousemove', showControls);
-            container.addEventListener('touchstart', showControls, { passive: true });
+            // Mouse movement shows controls, but only triggers re-hide
+            container.addEventListener('mousemove', (e) => {
+                // Ignore micro-movements (less than 3px)
+                if (container._lastMouseX !== undefined) {
+                    const dx = Math.abs(e.clientX - container._lastMouseX);
+                    const dy = Math.abs(e.clientY - container._lastMouseY);
+                    if (dx < 3 && dy < 3) return;
+                }
+                container._lastMouseX = e.clientX;
+                container._lastMouseY = e.clientY;
+                showControls();
+            });
+
+            // Mouse leave hides controls faster
+            container.addEventListener('mouseleave', () => {
+                if (!vid.paused) {
+                    clearTimeout(hideTimer);
+                    hideTimer = setTimeout(hideControls, 600);
+                }
+            });
+
+            container.addEventListener('touchstart', () => {
+                // On touch: toggle controls visibility
+                if (container.classList.contains('vp-controls-visible') && !vid.paused) {
+                    hideControls();
+                } else {
+                    showControls();
+                }
+            }, { passive: true });
         }
 
         vid.addEventListener('pause', () => {
-            if (container) container.classList.add('vp-controls-visible');
+            // Always show controls when paused
+            if (container) {
+                container.classList.add('vp-controls-visible');
+                container.classList.remove('vp-cursor-hidden');
+                container.classList.remove('vp-idle');
+            }
             clearTimeout(hideTimer);
+            clearTimeout(cursorHideTimer);
         });
 
         vid.addEventListener('play', () => {
