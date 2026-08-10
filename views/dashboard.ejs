@@ -66,11 +66,14 @@ const videoGrid = videos.length === 0
     }).join('')}</div>`;
 %>
 <%- include('layout', { pageTitle: 'Dashboard', body: `
-<div class="app-container">
+<div class="app-container ${isHajera ? 'hajera-mode' : ''}">
     <div class="ambient-background">
         <div class="ambient-orb orb-1"></div>
         <div class="ambient-orb orb-2"></div>
     </div>
+
+    ${isHajera ? '<div class="floating-hearts-container" id="floatingHeartsContainer"></div>' : ''}
+    ${isHajera ? '<div class="sparkle-trail-container" id="sparkleTrailContainer"></div>' : ''}
 
     <nav class="navbar">
         <div class="nav-left">
@@ -113,20 +116,27 @@ const videoGrid = videos.length === 0
 
     <main class="main-content">
         ${isHajera ? `
-        <div class="love-banner-card">
-            <div class="love-banner-icon">💖</div>
-            <div class="love-banner-text">
-                <h2>I Love You, Hajera! 💕</h2>
-                <p>Welcome to our private cinema room. Enjoy watching our special videos! ✨</p>
+        <div class="love-banner-card" id="loveBanner">
+            <div class="love-banner-shimmer"></div>
+            <div class="love-banner-inner">
+                <div class="love-banner-icon" id="heartbeatIcon">💖</div>
+                <div class="love-banner-text">
+                    <h2 id="typewriterTarget"></h2>
+                    <p class="love-quote" id="loveQuote">Welcome to our private cinema room ✨</p>
+                </div>
+            </div>
+            <div class="love-banner-particles">
+                <span class="lp">♥</span><span class="lp">✦</span><span class="lp">♥</span>
+                <span class="lp">✧</span><span class="lp">♥</span><span class="lp">✦</span>
             </div>
         </div>
         ` : ''}
 
         <div class="dashboard-header-bar">
             <div class="header-titles">
-                <span class="header-pill">${isHajera ? '💖 Special Message For Hajera' : '✨ Private Screening Vault'}</span>
-                <h1>${isHajera ? 'Our Private Collection 💕' : 'Cinematic Collection'}</h1>
-                <p class="subtitle">${h(videoCountText)} stored securely</p>
+                <span class="header-pill">${isHajera ? '💖 Our Love Space' : '✨ Private Screening Vault'}</span>
+                <h1>${isHajera ? '<span class="romantic-title" id="romanticTitle">Our Private Collection 💕</span>' : 'Cinematic Collection'}</h1>
+                <p class="subtitle">${isHajera ? '<span class="romantic-subtitle">Every moment here is for you, my love 🌹</span>' : h(videoCountText) + ' stored securely'}</p>
             </div>
             ${videos.length > 0 ? `
             <div class="search-box">

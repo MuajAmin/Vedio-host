@@ -1687,5 +1687,170 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    // ========================================
+    // Hajera Romantic Dashboard Features
+    // ========================================
+    const isHajeraMode = document.querySelector('.hajera-mode');
+
+    if (isHajeraMode && !prefersReducedMotion) {
+
+        const isMobileView = window.innerWidth <= 768;
+
+        // ---- 1. Floating Hearts Background (Desktop/Tablet only) ----
+        const heartsContainer = document.getElementById('floatingHeartsContainer');
+        if (heartsContainer && !isMobileView) {
+            const heartSymbols = ['♥', '💕', '💗', '♡', '❤', '💖', '🌹'];
+            const maxHearts = window.innerWidth <= 1024 ? 8 : 15;
+            let activeHearts = 0;
+
+            function spawnHeart() {
+                if (activeHearts >= maxHearts) return;
+                activeHearts++;
+
+                const heart = document.createElement('span');
+                heart.className = 'floating-heart';
+                heart.textContent = heartSymbols[Math.floor(Math.random() * heartSymbols.length)];
+
+                const size = 0.6 + Math.random() * 1.4;
+                const left = Math.random() * 100;
+                const duration = 10 + Math.random() * 15;
+                const delay = Math.random() * 2;
+                const sway = (Math.random() - 0.5) * 40;
+
+                heart.style.left = left + '%';
+                heart.style.fontSize = size + 'rem';
+                heart.style.animationDuration = duration + 's';
+                heart.style.animationDelay = delay + 's';
+                heart.style.opacity = (0.08 + Math.random() * 0.15).toString();
+                heart.style.setProperty('--sway', sway + 'px');
+
+                heartsContainer.appendChild(heart);
+
+                setTimeout(() => {
+                    heart.remove();
+                    activeHearts--;
+                }, (duration + delay) * 1000);
+            }
+
+            // Initial burst
+            for (let i = 0; i < 8; i++) {
+                setTimeout(spawnHeart, i * 600);
+            }
+
+            // Continuous spawn
+            setInterval(spawnHeart, 3000);
+        }
+
+        // ---- 2. Typewriter Effect ----
+        const typewriterTarget = document.getElementById('typewriterTarget');
+        if (typewriterTarget) {
+            const typewriterMessages = [
+                'I Love You, Hajera! 💕',
+                'তুমি আমার সবকিছু 💖',
+                'You are my everything 🌹',
+                'তোমাকে ছাড়া অসম্পূর্ণ আমি 💗',
+                'Forever yours, Hajera 💕',
+            ];
+            let currentMsgIndex = 0;
+            let charIndex = 0;
+            let isDeleting = false;
+            let typingTimeout = null;
+
+            function typeNextChar() {
+                const msg = typewriterMessages[currentMsgIndex];
+                typewriterTarget.classList.remove('typing-done');
+
+                if (!isDeleting) {
+                    charIndex++;
+                    typewriterTarget.textContent = msg.substring(0, charIndex);
+
+                    if (charIndex >= msg.length) {
+                        typewriterTarget.classList.add('typing-done');
+                        typingTimeout = setTimeout(() => {
+                            isDeleting = true;
+                            typeNextChar();
+                        }, 4000);
+                        return;
+                    }
+                    typingTimeout = setTimeout(typeNextChar, 60 + Math.random() * 40);
+                } else {
+                    charIndex--;
+                    typewriterTarget.textContent = msg.substring(0, charIndex);
+
+                    if (charIndex <= 0) {
+                        isDeleting = false;
+                        currentMsgIndex = (currentMsgIndex + 1) % typewriterMessages.length;
+                        typingTimeout = setTimeout(typeNextChar, 500);
+                        return;
+                    }
+                    typingTimeout = setTimeout(typeNextChar, 30);
+                }
+            }
+
+            setTimeout(typeNextChar, 800);
+        }
+
+        // ---- 3. Rotating Love Quotes ----
+        const loveQuoteEl = document.getElementById('loveQuote');
+        if (loveQuoteEl) {
+            const quotes = [
+                'Welcome to our private cinema room ✨',
+                'তোমার জন্য এই সব ভিডিও সাজিয়ে রেখেছি 🎬',
+                'Every video here reminds me of us 💫',
+                'তুমি দেখলেই আমার মন ভালো হয়ে যায় 🌸',
+                'Our memories, our moments, our love 💖',
+                'তোমার হাসি আমার সবচেয়ে প্রিয় ভিডিও 💕',
+                'Made with love, just for you 🌹',
+                'তুমি আমার দুনিয়ার সবচেয়ে সুন্দর মানুষ 🦋',
+            ];
+            let quoteIndex = 0;
+
+            setInterval(() => {
+                quoteIndex = (quoteIndex + 1) % quotes.length;
+                loveQuoteEl.style.opacity = '0';
+                loveQuoteEl.style.transform = 'translateY(6px)';
+
+                setTimeout(() => {
+                    loveQuoteEl.textContent = quotes[quoteIndex];
+                    loveQuoteEl.style.opacity = '1';
+                    loveQuoteEl.style.transform = 'translateY(0)';
+                }, 400);
+            }, 6000);
+        }
+
+        // ---- 4. Sparkle Cursor Trail (Desktop only) ----
+        const sparkleContainer = document.getElementById('sparkleTrailContainer');
+        if (sparkleContainer && window.matchMedia('(pointer: fine)').matches) {
+            const sparkleSymbols = ['✦', '✧', '♥', '✨'];
+            let sparkleThrottle = 0;
+
+            document.addEventListener('mousemove', (e) => {
+                const now = Date.now();
+                if (now - sparkleThrottle < 60) return;
+                sparkleThrottle = now;
+
+                const sparkle = document.createElement('span');
+                const isStar = Math.random() > 0.4;
+
+                if (isStar) {
+                    sparkle.className = 'sparkle-particle star';
+                    sparkle.textContent = sparkleSymbols[Math.floor(Math.random() * sparkleSymbols.length)];
+                } else {
+                    sparkle.className = 'sparkle-particle';
+                }
+
+                const sx = (Math.random() - 0.5) * 30;
+                const sy = -10 - Math.random() * 20;
+                sparkle.style.left = e.clientX + 'px';
+                sparkle.style.top = e.clientY + 'px';
+                sparkle.style.setProperty('--sx', sx + 'px');
+                sparkle.style.setProperty('--sy', sy + 'px');
+
+                sparkleContainer.appendChild(sparkle);
+
+                setTimeout(() => sparkle.remove(), 800);
+            });
+        }
+    }
 
 });

@@ -3024,21 +3024,22 @@ kbd {
     border: 0;
 }
 
-/* ---- Love Banner Card for Hajera ---- */
+/* ---- Love Banner Card for Hajera (Romantic Upgrade) ---- */
 .love-banner-card {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 24px 28px;
-    background: linear-gradient(135deg, rgba(244, 63, 94, 0.15), rgba(225, 29, 72, 0.06));
-    border: 1.5px solid rgba(244, 63, 94, 0.35);
+    position: relative;
+    padding: 28px 32px;
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.12), rgba(190, 24, 93, 0.08), rgba(244, 63, 94, 0.12));
+    border: 1.5px solid rgba(244, 63, 94, 0.3);
     border-radius: var(--radius-xl);
     margin-bottom: 32px;
-    backdrop-filter: blur(24px);
-    box-shadow: 0 8px 32px rgba(244, 63, 94, 0.15);
-    animation: fade-in-up 0.6s var(--ease-out) both;
-    position: relative;
+    backdrop-filter: blur(28px);
+    box-shadow:
+        0 8px 40px rgba(244, 63, 94, 0.18),
+        0 0 60px rgba(244, 63, 94, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    animation: fade-in-up 0.6s var(--ease-out) both, love-glow-pulse 4s ease-in-out infinite;
     overflow: hidden;
+    z-index: 1;
 }
 
 .love-banner-card::before {
@@ -3046,13 +3047,57 @@ kbd {
     position: absolute;
     inset: -1px;
     border-radius: calc(var(--radius-xl) + 1px);
-    background: linear-gradient(135deg, rgba(244, 63, 94, 0.5), transparent 40%, transparent 60%, rgba(244, 63, 94, 0.5));
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.6), transparent 30%, transparent 70%, rgba(190, 24, 93, 0.6));
     z-index: -1;
-    opacity: 0.4;
+    opacity: 0.5;
+    animation: border-rotate 6s linear infinite;
+}
+
+.love-banner-card::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 50%, rgba(244, 63, 94, 0.06) 0%, transparent 50%);
+    animation: ambient-shift 8s ease-in-out infinite;
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* Shimmer overlay */
+.love-banner-shimmer {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        110deg,
+        transparent 20%,
+        rgba(255, 200, 220, 0.08) 40%,
+        rgba(255, 200, 220, 0.15) 50%,
+        rgba(255, 200, 220, 0.08) 60%,
+        transparent 80%
+    );
+    background-size: 200% 100%;
+    animation: shimmer-sweep 3.5s ease-in-out infinite;
+    border-radius: var(--radius-xl);
+    z-index: 0;
+    pointer-events: none;
+}
+
+.love-banner-inner {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    position: relative;
+    z-index: 2;
 }
 
 .love-banner-icon {
-    font-size: 2.4rem;
+    font-size: 2.8rem;
+    animation: heartbeat 1.2s ease-in-out infinite;
+    filter: drop-shadow(0 0 12px rgba(244, 63, 94, 0.5));
+    flex-shrink: 0;
 }
 
 .love-banner-text h2 {
@@ -3060,12 +3105,232 @@ kbd {
     font-size: 1.5rem;
     font-weight: 800;
     color: #fecdd3;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    min-height: 1.8em;
+}
+
+/* Typewriter cursor blink */
+.love-banner-text h2::after {
+    content: '|';
+    color: #f43f5e;
+    font-weight: 300;
+    animation: cursor-blink 0.8s step-end infinite;
+    margin-left: 2px;
+}
+
+.love-banner-text h2.typing-done::after {
+    display: none;
 }
 
 .love-banner-text p {
     font-size: 0.94rem;
     color: #fda4af;
+    transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.love-quote {
+    animation: quote-fade 0.6s ease both;
+}
+
+/* Floating particles inside banner */
+.love-banner-particles {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.love-banner-particles .lp {
+    position: absolute;
+    color: rgba(244, 63, 94, 0.25);
+    font-size: 0.9rem;
+    animation: lp-float 6s ease-in-out infinite;
+    opacity: 0;
+}
+
+.lp:nth-child(1) { left: 10%; top: 20%; animation-delay: 0s; font-size: 1rem; }
+.lp:nth-child(2) { left: 25%; top: 70%; animation-delay: 1s; font-size: 0.7rem; }
+.lp:nth-child(3) { left: 50%; top: 15%; animation-delay: 2s; font-size: 1.1rem; }
+.lp:nth-child(4) { left: 70%; top: 60%; animation-delay: 0.5s; font-size: 0.8rem; }
+.lp:nth-child(5) { left: 85%; top: 30%; animation-delay: 1.5s; font-size: 1rem; }
+.lp:nth-child(6) { left: 92%; top: 75%; animation-delay: 2.5s; font-size: 0.6rem; }
+
+/* ---- Floating Hearts Background ---- */
+.floating-hearts-container {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+}
+
+.floating-heart {
+    position: absolute;
+    bottom: -30px;
+    color: rgba(244, 63, 94, 0.15);
+    font-size: 1.2rem;
+    animation: float-up-heart linear forwards;
+    pointer-events: none;
+    filter: drop-shadow(0 0 4px rgba(244, 63, 94, 0.2));
+}
+
+/* ---- Sparkle Cursor Trail ---- */
+.sparkle-trail-container {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    overflow: hidden;
+}
+
+.sparkle-particle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: radial-gradient(circle, rgba(244, 63, 94, 0.9), rgba(255, 182, 193, 0.6));
+    border-radius: 50%;
+    pointer-events: none;
+    animation: sparkle-fade 0.8s ease-out forwards;
+    box-shadow: 0 0 6px rgba(244, 63, 94, 0.5);
+}
+
+.sparkle-particle.star {
+    width: auto;
+    height: auto;
+    background: none;
+    font-size: 0.7rem;
+    color: rgba(244, 63, 94, 0.7);
+    box-shadow: none;
+}
+
+/* ---- Hajera Mode — Romantic Accent Overrides ---- */
+.hajera-mode {
+    --hajera-accent: #f43f5e;
+    --hajera-accent-glow: rgba(244, 63, 94, 0.22);
+    --hajera-accent-soft: rgba(244, 63, 94, 0.08);
+}
+
+.hajera-mode .video-card:hover {
+    box-shadow: 0 12px 40px rgba(244, 63, 94, 0.15), var(--shadow-md);
+    border-color: rgba(244, 63, 94, 0.3);
+}
+
+.hajera-mode .search-box:has(.search-input:focus) {
+    border-color: rgba(244, 63, 94, 0.5);
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.12);
+}
+
+.hajera-mode .search-box:has(.search-input:focus) .search-icon {
+    color: #f43f5e;
+}
+
+.hajera-mode .header-pill {
+    background: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.25);
+    color: #fda4af;
+}
+
+.hajera-mode .card-badge {
+    background: rgba(244, 63, 94, 0.85);
+}
+
+.hajera-mode .play-overlay {
+    background: rgba(244, 63, 94, 0.85);
+}
+
+.romantic-title {
+    background: linear-gradient(135deg, #fecdd3, #f43f5e, #fda4af);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    background-size: 200% auto;
+    animation: gradient-text-shift 4s ease-in-out infinite;
+}
+
+.romantic-subtitle {
+    color: #fda4af;
+    font-style: italic;
+}
+
+/* ---- Romantic Keyframes ---- */
+@keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    14% { transform: scale(1.25); }
+    28% { transform: scale(1); }
+    42% { transform: scale(1.15); }
+    56% { transform: scale(1); }
+}
+
+@keyframes shimmer-sweep {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@keyframes love-glow-pulse {
+    0%, 100% { box-shadow: 0 8px 40px rgba(244, 63, 94, 0.18), 0 0 60px rgba(244, 63, 94, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+    50% { box-shadow: 0 8px 50px rgba(244, 63, 94, 0.28), 0 0 80px rgba(244, 63, 94, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+}
+
+@keyframes border-rotate {
+    0% { opacity: 0.5; }
+    50% { opacity: 0.8; }
+    100% { opacity: 0.5; }
+}
+
+@keyframes ambient-shift {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(5%, -5%); }
+}
+
+@keyframes cursor-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+@keyframes lp-float {
+    0% { opacity: 0; transform: translateY(0) scale(0.5); }
+    20% { opacity: 0.5; }
+    80% { opacity: 0.3; }
+    100% { opacity: 0; transform: translateY(-30px) scale(1.2) rotate(20deg); }
+}
+
+@keyframes float-up-heart {
+    0% {
+        transform: translateY(0) rotate(0deg) scale(1);
+        opacity: 0;
+    }
+    10% {
+        opacity: 1;
+    }
+    90% {
+        opacity: 0.6;
+    }
+    100% {
+        transform: translateY(-110vh) rotate(360deg) scale(0.3);
+        opacity: 0;
+    }
+}
+
+@keyframes sparkle-fade {
+    0% {
+        transform: scale(1) translate(0, 0);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(0) translate(var(--sx, 10px), var(--sy, -15px));
+        opacity: 0;
+    }
+}
+
+@keyframes quote-fade {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gradient-text-shift {
+    0%, 100% { background-position: 0% center; }
+    50% { background-position: 200% center; }
 }
 
 /* ========================================
@@ -3281,6 +3546,7 @@ h3,
     .upload-form,
     .comments-section,
     .love-banner-card,
+    .love-banner-shimmer,
     .user-badge,
     .resume-toast,
     .vp-controls-row,
@@ -3302,6 +3568,46 @@ h3,
     .comment-item,
     .love-banner-card {
         animation: none;
+    }
+
+    .love-banner-card {
+        box-shadow: 0 4px 20px rgba(244, 63, 94, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+
+    .love-banner-card::after {
+        display: none;
+    }
+
+    .love-banner-shimmer {
+        animation: none;
+        background: none;
+    }
+
+    .love-banner-icon {
+        animation: none;
+        filter: none;
+        font-size: 2.2rem;
+    }
+
+    .love-banner-particles {
+        display: none;
+    }
+
+    .love-banner-text h2 {
+        font-size: 1.25rem;
+    }
+
+    .floating-hearts-container {
+        display: none;
+    }
+
+    .sparkle-trail-container {
+        display: none;
+    }
+
+    .romantic-title {
+        animation: none;
+        background-size: 100% auto;
     }
 
     .video-card::after,
