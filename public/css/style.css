@@ -1163,6 +1163,45 @@ input, textarea {
     overflow: hidden;
 }
 
+.thumb-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    z-index: 1;
+    transition: transform 0.45s var(--ease-out);
+}
+
+.video-card:hover .thumb-img {
+    transform: scale(1.06);
+}
+
+.thumb-img.thumb-error {
+    display: none !important;
+}
+
+.thumb-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    opacity: 0.7;
+    z-index: 0;
+    transition: opacity 0.3s ease;
+}
+
+.thumb-placeholder.has-thumb {
+    opacity: 0;
+}
+
+.thumb-img.thumb-error + .thumb-placeholder {
+    opacity: 0.7 !important;
+}
+
 .card-thumbnail::before {
     content: '';
     position: absolute;

@@ -35,6 +35,7 @@ db.exec(`
         original_name TEXT,
         size INTEGER DEFAULT 0,
         duration TEXT,
+        thumbnail TEXT,
         uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -57,5 +58,17 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 `);
+
+// Migration: Check if thumbnail column exists in existing database
+try {
+    const tableInfo = db.prepare("PRAGMA table_info(videos)").all();
+    const hasThumbnail = tableInfo.some(col => col.name === 'thumbnail');
+    if (!hasThumbnail) {
+        db.exec('ALTER TABLE videos ADD COLUMN thumbnail TEXT');
+        console.log('[db] Migrated videos table: added thumbnail column.');
+    }
+} catch (err) {
+    console.error('[db] Migration check error:', err.message);
+}
 
 module.exports = db;

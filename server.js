@@ -22,10 +22,16 @@ if (isProduction) {
     }
 }
 
-// Ensure uploads directory
+const { backfillMissingThumbnails } = require('./utils/thumbnail');
+
+// Ensure uploads directories exist
 const uploadsDir = path.join(__dirname, 'uploads', 'videos');
+const thumbnailsDir = path.join(__dirname, 'uploads', 'thumbnails');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
+}
+if (!fs.existsSync(thumbnailsDir)) {
+    fs.mkdirSync(thumbnailsDir, { recursive: true });
 }
 
 // View engine
@@ -66,6 +72,10 @@ app.use(express.json({ limit: '32kb' }));
 app.use(express.static(path.join(__dirname, 'public'), {
     etag: true,
     immutable: isProduction,
+    maxAge: isProduction ? '7d' : 0
+}));
+app.use('/thumbnails', express.static(path.join(__dirname, 'uploads', 'thumbnails'), {
+    etag: true,
     maxAge: isProduction ? '7d' : 0
 }));
 
@@ -132,6 +142,8 @@ app.use((err, req, res, next) => {
 // Start server
 const server = app.listen(PORT, () => {
     console.log(`VideoHost listening on http://localhost:${PORT}`);
+    // Run thumbnail backfill in background for existing videos
+    backfillMissingThumbnails();
 });
 
 // Increase timeouts for large file uploads on slow connections

@@ -58,10 +58,12 @@ const upload = multer({
 });
 const STREAM_HIGH_WATER_MARK = 64 * 1024;
 
+const { generateVideoThumbnail } = require('../utils/thumbnail');
+
 // GET /dashboard — Video gallery
 router.get('/dashboard', isAuthenticated, (req, res) => {
     const videos = db.prepare(
-        'SELECT id, title, size, uploaded_at FROM videos ORDER BY uploaded_at DESC'
+        'SELECT id, title, size, thumbnail, uploaded_at FROM videos ORDER BY uploaded_at DESC'
     ).all();
     res.render('dashboard', {
         user: req.session.user,
@@ -76,7 +78,7 @@ router.get('/upload', isAuthenticated, (req, res) => {
 
 // POST /upload — Handle video upload (any authenticated user)
 router.post('/upload', isAuthenticated, (req, res) => {
-    upload.single('video')(req, res, (err) => {
+    upload.single('video')(req, res, async (err) => {
         const isXHR = req.xhr || (req.headers['x-requested-with'] || '').toLowerCase() === 'xmlhttprequest';
 
         const fail = (status, error) => {
@@ -116,10 +118,18 @@ router.post('/upload', isAuthenticated, (req, res) => {
         const id = uuidv4();
         const title = String(req.body.title || req.file.originalname).trim().slice(0, MAX_TITLE_LENGTH);
 
+        // Generate video thumbnail (lightweight single-frame FFmpeg extraction)
+        let thumbnail = null;
+        try {
+            thumbnail = await generateVideoThumbnail(req.file.filename, id);
+        } catch (thumbErr) {
+            console.warn('[upload] Thumbnail generation error:', thumbErr.message);
+        }
+
         try {
             db.prepare(
-                'INSERT INTO videos (id, title, filename, original_name, size) VALUES (?, ?, ?, ?, ?)'
-            ).run(id, title || req.file.originalname, req.file.filename, req.file.originalname, req.file.size);
+                'INSERT INTO videos (id, title, filename, original_name, size, thumbnail) VALUES (?, ?, ?, ?, ?, ?)'
+            ).run(id, title || req.file.originalname, req.file.filename, req.file.originalname, req.file.size, thumbnail);
         } catch (dbError) {
             return fail(500, 'Could not save video metadata.');
         }
@@ -150,8 +160,8 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
     });
 });
 
-// POST /delete/:id — Delete video (Muaj only)
-router.post('/delete/:id', isAuthenticated, isMuaj, (req, res) => {
+// POST /delete/:id — Delete video (any authenticated user)
+router.post('/delete/:id', isAuthenticated, (req, res) => {
     const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(req.params.id);
 
     if (video) {

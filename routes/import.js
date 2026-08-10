@@ -295,7 +295,9 @@ async function startDownload(job, outputPath, outputFilename) {
     });
 
     proc.stderr.on('data', (data) => {
-        stderrBuffer += data.toString();
+        if (stderrBuffer.length < 10000) {
+            stderrBuffer += data.toString();
+        }
     });
 
     proc.on('close', async (code) => {
@@ -325,10 +327,19 @@ async function startDownload(job, outputPath, outputFilename) {
             const videoId = uuidv4();
             const title = job.customTitle || job.title || 'Imported Video';
 
+            // Generate thumbnail
+            let thumbnail = null;
+            try {
+                const { generateVideoThumbnail } = require('../utils/thumbnail');
+                thumbnail = await generateVideoThumbnail(finalFilename, videoId);
+            } catch (tErr) {
+                console.warn('[import] Thumbnail extraction error:', tErr.message);
+            }
+
             try {
                 db.prepare(
-                    'INSERT INTO videos (id, title, filename, original_name, size) VALUES (?, ?, ?, ?, ?)'
-                ).run(videoId, title, finalFilename, title + '.mp4', fileSize);
+                    'INSERT INTO videos (id, title, filename, original_name, size, thumbnail) VALUES (?, ?, ?, ?, ?, ?)'
+                ).run(videoId, title, finalFilename, title + '.mp4', fileSize, thumbnail);
 
                 job.status = 'done';
                 job.progress = 100;

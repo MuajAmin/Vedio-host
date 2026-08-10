@@ -33,8 +33,18 @@ const videoGrid = videos.length === 0
        </div>`
     : `<div class="video-grid" id="videoGrid">${videos.map((v) => {
         const watchUrl = '/watch/' + encodeURIComponent(v.id);
+        const thumbImg = v.thumbnail
+            ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="thumb-img" loading="lazy" onerror="this.classList.add('thumb-error');" />`
+            : '';
         return `<a href="${watchUrl}" class="video-card" data-title="${h(v.title.toLowerCase())}">
             <div class="card-thumbnail">
+                ${thumbImg}
+                <div class="thumb-placeholder ${v.thumbnail ? 'has-thumb' : ''}">
+                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
+                        <rect x="6" y="10" width="36" height="28" rx="4"/>
+                        <polygon points="20,18 32,24 20,30" fill="currentColor"/>
+                    </svg>
+                </div>
                 <div class="card-badge">HD</div>
                 <div class="play-overlay">
                     <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
