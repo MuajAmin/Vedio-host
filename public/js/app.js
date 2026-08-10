@@ -1047,38 +1047,46 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // --- Click on video area to play/pause ---
-        let lastClickTime = 0;
-        let clickTimer = null;
+        // --- Click & Touch Double-Tap Gestures on Video Area ---
+        let lastTapTime = 0;
+        let lastTapX = 0;
+        let tapTimer = null;
 
-        if (container) {
-            container.addEventListener('click', (e) => {
-                // Ignore clicks on controls
-                if (e.target.closest('.vp-controls') || e.target.closest('.resume-toast') || e.target.closest('.vp-speed-menu')) return;
+        function processTapGesture(clientX, isTouch = false) {
+            const now = Date.now();
+            const rect = container.getBoundingClientRect();
+            const clickX = clientX - rect.left;
+            const isLeftHalf = clickX < rect.width / 2;
 
-                const now = Date.now();
-                const rect = container.getBoundingClientRect();
-                const clickX = e.clientX - rect.left;
-                const isLeftHalf = clickX < rect.width / 2;
+            if (now - lastTapTime < 320 && Math.abs(clickX - lastTapX) < 160) {
+                // Double tap / double click detected!
+                clearTimeout(tapTimer);
+                lastTapTime = 0;
 
-                if (now - lastClickTime < 280) {
-                    // Double tap — seek
-                    clearTimeout(clickTimer);
-                    if (isLeftHalf) {
-                        rewind(10);
-                    } else {
-                        forward(10);
-                    }
-                    lastClickTime = 0;
+                if (isLeftHalf) {
+                    rewind(10);
                 } else {
-                    // Single tap — play/pause with shorter delay
-                    lastClickTime = now;
-                    clickTimer = setTimeout(() => {
+                    forward(10);
+                }
+                showControls();
+            } else {
+                // Single tap / single click
+                lastTapTime = now;
+                lastTapX = clickX;
+
+                tapTimer = setTimeout(() => {
+                    if (isTouch) {
+                        if (container.classList.contains('vp-controls-visible') && !vid.paused) {
+                            hideControls();
+                        } else {
+                            showControls();
+                        }
+                    } else {
                         togglePlay();
                         animateCenterBtn();
-                    }, 250);
-                }
-            });
+                    }
+                }, 260);
+            }
         }
 
         // --- Auto-hide Controls (Android-optimized) ---
@@ -1132,17 +1140,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (container) {
-            // Touch on the VIDEO element toggles controls
-            vid.addEventListener('touchend', (e) => {
-                // Only handle single taps on the video itself
-                if (e.target !== vid) return;
+            // Touch gestures for Mobile / Android
+            container.addEventListener('touchend', (e) => {
+                if (e.target.closest('.vp-controls') ||
+                    e.target.closest('.resume-toast') ||
+                    e.target.closest('.vp-speed-menu') ||
+                    e.target.closest('.vp-center-btn') ||
+                    e.target.closest('.vp-loading-overlay')) return;
+
+                const touch = e.changedTouches[0];
+                if (!touch) return;
 
                 e.preventDefault();
-                if (container.classList.contains('vp-controls-visible') && !vid.paused) {
-                    hideControls();
-                } else {
-                    showControls();
-                }
+                processTapGesture(touch.clientX, true);
+            }, { passive: false });
+
+            // Click gestures for Desktop / Mouse
+            container.addEventListener('click', (e) => {
+                if (e.detail === 0 || ('ontouchstart' in window && e.pointerType === 'touch')) return;
+                if (e.target.closest('.vp-controls') ||
+                    e.target.closest('.resume-toast') ||
+                    e.target.closest('.vp-speed-menu') ||
+                    e.target.closest('.vp-center-btn') ||
+                    e.target.closest('.vp-loading-overlay')) return;
+
+                processTapGesture(e.clientX, false);
             });
 
             // Prevent touch on controls from bubbling to video toggle
