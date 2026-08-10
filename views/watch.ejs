@@ -311,15 +311,42 @@ const commentsHtml = comments.length === 0
                         </svg>
                         <span class="btn-text">Shortcuts</span>
                     </button>
-                    <a href="/download/${videoId}" class="btn btn-ghost btn-sm" title="Download Video" download>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btnDownload" title="Download Video">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                             <polyline points="7 10 12 15 17 10"/>
                             <line x1="12" y1="15" x2="12" y2="3"/>
                         </svg>
                         <span class="btn-text">Download</span>
-                    </a>
+                    </button>
                     ${deleteForm}
+                </div>
+            </div>
+        </div>
+
+        <!-- Download Confirmation Modal -->
+        <div class="theme-modal-backdrop" id="downloadModal">
+            <div class="theme-modal">
+                <div class="theme-modal-header">
+                    <h3>📥 Confirm Download</h3>
+                    <button type="button" class="theme-close-btn" id="downloadCloseBtn">&times;</button>
+                </div>
+                <div style="margin-bottom: 24px; text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 12px;">🎥</div>
+                    <h4 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">${h(video.title)}</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin-bottom: 14px;">Do you want to download this video file to your device?</p>
+                    ${video.size ? `<div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.06); padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; color: var(--accent-gold); border: 1px solid rgba(255,255,255,0.1);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> File Size: ` + h((video.size / (1024 * 1024)).toFixed(1)) + ` MB</div>` : ''}
+                </div>
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-ghost" id="downloadCancelBtn">Cancel</button>
+                    <a href="/download/${videoId}" class="btn btn-primary" id="downloadConfirmBtn" download>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        <span>Download Now</span>
+                    </a>
                 </div>
             </div>
         </div>

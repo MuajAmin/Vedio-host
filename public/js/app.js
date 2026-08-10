@@ -30,6 +30,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    document.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-confirm]');
+        if (!el || el.tagName === 'FORM') return;
+
+        const message = el.getAttribute('data-confirm');
+        if (message && !window.confirm(message)) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    });
+
     // ---- Password Toggle ----
     const toggleBtn = document.getElementById('togglePassword');
     const passwordInput = document.getElementById('password');
@@ -1313,6 +1324,30 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && shortcutsModal.classList.contains('active')) {
                 shortcutsModal.classList.remove('active');
+            }
+        });
+    }
+
+    // ---- Download Confirmation Modal ----
+    const downloadBtn = document.getElementById('btnDownload');
+    const downloadModal = document.getElementById('downloadModal');
+    const downloadCloseBtn = document.getElementById('downloadCloseBtn');
+    const downloadCancelBtn = document.getElementById('downloadCancelBtn');
+    const downloadConfirmBtn = document.getElementById('downloadConfirmBtn');
+
+    if (downloadBtn && downloadModal) {
+        const closeModal = () => downloadModal.classList.remove('active');
+        downloadBtn.addEventListener('click', () => downloadModal.classList.add('active'));
+        if (downloadCloseBtn) downloadCloseBtn.addEventListener('click', closeModal);
+        if (downloadCancelBtn) downloadCancelBtn.addEventListener('click', closeModal);
+        if (downloadConfirmBtn) downloadConfirmBtn.addEventListener('click', closeModal);
+
+        downloadModal.addEventListener('click', (e) => {
+            if (e.target === downloadModal) closeModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && downloadModal.classList.contains('active')) {
+                closeModal();
             }
         });
     }
