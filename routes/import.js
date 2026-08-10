@@ -131,11 +131,62 @@ function notifyListeners(job) {
     }
 }
 
-function startDownload(job, outputPath, outputFilename) {
+// ---- Auto-detect python/yt-dlp command for cross-platform support ----
+let cachedPythonCmd = null;
+
+function detectPythonCmd() {
+    if (cachedPythonCmd) return Promise.resolve(cachedPythonCmd);
+
+    return new Promise((resolve) => {
+        // Try: python3 (Linux), python (Windows), yt-dlp binary directly
+        const candidates = [
+            { cmd: 'python3', args: ['-m', 'yt_dlp', '--version'], prefix: ['-m', 'yt_dlp'] },
+            { cmd: 'python', args: ['-m', 'yt_dlp', '--version'], prefix: ['-m', 'yt_dlp'] },
+            { cmd: 'yt-dlp', args: ['--version'], prefix: [] }
+        ];
+
+        let idx = 0;
+        function tryNext() {
+            if (idx >= candidates.length) {
+                return resolve(null);
+            }
+            const c = candidates[idx++];
+            const proc = spawn(c.cmd, c.args, {
+                stdio: ['ignore', 'pipe', 'pipe'],
+                windowsHide: true
+            });
+            let resolved = false;
+            proc.on('close', (code) => {
+                if (resolved) return;
+                if (code === 0) {
+                    resolved = true;
+                    cachedPythonCmd = { cmd: c.cmd, prefix: c.prefix };
+                    console.log(`[import] Using: ${c.cmd} ${c.prefix.join(' ')}`);
+                    resolve(cachedPythonCmd);
+                } else {
+                    tryNext();
+                }
+            });
+            proc.on('error', () => {
+                if (!resolved) tryNext();
+            });
+        }
+        tryNext();
+    });
+}
+
+async function startDownload(job, outputPath, outputFilename) {
+    const pythonCmd = await detectPythonCmd();
+
+    if (!pythonCmd) {
+        job.status = 'error';
+        job.error = 'yt-dlp not found on server. Run: pip3 install yt-dlp';
+        notifyListeners(job);
+        return;
+    }
+
     // yt-dlp arguments — optimized for low-resource VPS (1 core, 1GB RAM)
-    // Prefer single pre-merged format to avoid RAM-heavy ffmpeg merge
-    const args = [
-        '-m', 'yt_dlp',
+    const ytdlpArgs = [
         '--no-check-certificates',
         '--no-playlist',
         '--merge-output-format', 'mp4',
@@ -151,10 +202,12 @@ function startDownload(job, outputPath, outputFilename) {
         job.url
     ];
 
+    const args = [...pythonCmd.prefix, ...ytdlpArgs];
+
     job.status = 'downloading';
     notifyListeners(job);
 
-    const proc = spawn('python', args, {
+    const proc = spawn(pythonCmd.cmd, args, {
         cwd: uploadsDir,
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe']
@@ -201,22 +254,20 @@ function startDownload(job, outputPath, outputFilename) {
     });
 
     proc.on('close', (code) => {
-        if (code === 0 && fs.existsSync(outputPath)) {
-            // Success — find the actual output file (yt-dlp may add different extension)
-            let finalPath = outputPath;
-            let finalFilename = outputFilename;
+        // Find the actual output file — yt-dlp may create file with different extension
+        let finalPath = outputPath;
+        let finalFilename = outputFilename;
 
-            // Check if yt-dlp created a file with different name pattern
-            // Sometimes it merges and keeps the .mp4
-            if (!fs.existsSync(outputPath)) {
-                // Look for any file starting with the jobId
-                const files = fs.readdirSync(uploadsDir).filter(f => f.startsWith(job.id));
-                if (files.length > 0) {
-                    finalFilename = files[0];
-                    finalPath = path.join(uploadsDir, finalFilename);
-                }
+        // Look for any file starting with the jobId
+        try {
+            const files = fs.readdirSync(uploadsDir).filter(f => f.startsWith(job.id));
+            if (files.length > 0) {
+                finalFilename = files[0];
+                finalPath = path.join(uploadsDir, finalFilename);
             }
+        } catch (err) {}
 
+        if (code === 0 && fs.existsSync(finalPath)) {
             let fileSize = 0;
             try {
                 const stat = fs.statSync(finalPath);
@@ -255,17 +306,14 @@ function startDownload(job, outputPath, outputFilename) {
             } else if (stderrBuffer.includes('network') || stderrBuffer.includes('connection')) {
                 errorMsg = 'Network error. Check your internet connection.';
             } else if (stderrBuffer.includes('ERROR:')) {
-                // Extract the specific error message
                 const errorMatch = stderrBuffer.match(/ERROR:\s*(.+?)(?:\n|$)/);
                 if (errorMatch) {
                     errorMsg = errorMatch[1].trim().slice(0, 200);
                 }
             }
 
-            // Clean up partial file
+            // Clean up partial files
             try {
-                if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-                // Also clean any partial files
                 const partials = fs.readdirSync(uploadsDir).filter(f => f.startsWith(job.id));
                 for (const f of partials) {
                     fs.unlinkSync(path.join(uploadsDir, f));
@@ -283,7 +331,7 @@ function startDownload(job, outputPath, outputFilename) {
 
     proc.on('error', (err) => {
         job.status = 'error';
-        job.error = 'Could not start yt-dlp. Make sure Python and yt-dlp are installed.';
+        job.error = 'Could not start download process. Install: sudo apt install python3-pip && pip3 install yt-dlp';
         notifyListeners(job);
     });
 }
