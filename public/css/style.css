@@ -2831,8 +2831,7 @@ kbd {
    RESPONSIVE & ANDROID OPTIMIZATIONS
    ======================================== */
 @media (max-width: 768px) {
-    .desktop-only-logout,
-    .desktop-only-theme {
+    .desktop-only-logout {
         display: none !important;
     }
 

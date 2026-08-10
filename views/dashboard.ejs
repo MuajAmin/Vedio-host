@@ -29,7 +29,7 @@ const videoGrid = videos.length === 0
             </svg>
         </div>
         <h2>No videos in library</h2>
-        <p>${isAdmin ? 'Click Upload above to add your first private video.' : 'Muaj has not uploaded any videos yet.'}</p>
+        <p>Click Upload above to add your first private video.</p>
        </div>`
     : `<div class="video-grid" id="videoGrid">${videos.map((v) => {
         const watchUrl = '/watch/' + encodeURIComponent(v.id);
@@ -75,7 +75,7 @@ const videoGrid = videos.length === 0
             </a>
         </div>
         <div class="nav-right">
-            <button type="button" class="btn btn-ghost btn-icon desktop-only-theme" id="themeSwitcherNavBtn" title="Change Theme">
+            <button type="button" class="btn btn-ghost btn-icon" id="themeSwitcherNavBtn" title="Change Theme">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                     <circle cx="12" cy="12" r="10"/>
                     <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
@@ -86,7 +86,7 @@ const videoGrid = videos.length === 0
                 <span class="user-name">${displayName}</span>
                 <span class="badge-role">${roleName}</span>
             </div>
-            ${isAdmin ? '<a href="/upload" class="btn btn-primary btn-upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Upload</span></a>' : ''}
+            <a href="/upload" class="btn btn-primary btn-upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Upload</span></a>
             <form action="/logout" method="POST" class="nav-form desktop-only-logout">
                 <input type="hidden" name="_csrf" value="${h(csrfToken)}">
                 <button type="submit" class="btn btn-ghost" title="Logout">
@@ -142,14 +142,6 @@ const videoGrid = videos.length === 0
             </svg>
             <span>Library</span>
         </a>
-        <button type="button" class="bottom-nav-item" id="themeSwitcherBottomBtn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
-            </svg>
-            <span>Theme</span>
-        </button>
-        ${isAdmin ? `
         <a href="/upload" class="bottom-nav-item bottom-nav-upload">
             <div class="upload-fab">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="22" height="22">
@@ -159,7 +151,6 @@ const videoGrid = videos.length === 0
             </div>
             <span>Upload</span>
         </a>
-        ` : ''}
         <form action="/logout" method="POST" class="bottom-nav-form">
             <input type="hidden" name="_csrf" value="${h(csrfToken)}">
             <button type="submit" class="bottom-nav-item">

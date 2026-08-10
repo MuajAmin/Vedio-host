@@ -69,13 +69,13 @@ router.get('/dashboard', isAuthenticated, (req, res) => {
     });
 });
 
-// GET /upload — Upload form (Muaj only)
-router.get('/upload', isAuthenticated, isMuaj, (req, res) => {
+// GET /upload — Upload form (any authenticated user)
+router.get('/upload', isAuthenticated, (req, res) => {
     res.render('upload', { user: req.session.user, error: null });
 });
 
-// POST /upload — Handle video upload (Muaj only)
-router.post('/upload', isAuthenticated, isMuaj, (req, res) => {
+// POST /upload — Handle video upload (any authenticated user)
+router.post('/upload', isAuthenticated, (req, res) => {
     upload.single('video')(req, res, (err) => {
         const fail = (status, error) => {
             if (req.file) {
