@@ -37,60 +37,151 @@ const errorHtml = error
     <main class="main-content">
         <div class="upload-container">
             <div class="upload-header">
-                <h1>Video Upload</h1>
-                <p>Add a new video to the private collection</p>
+                <h1>Add Video</h1>
+                <p>Upload a file or import from URL</p>
             </div>
 
             ${errorHtml}
 
-            <form action="/upload" method="POST" enctype="multipart/form-data" class="upload-form" id="uploadForm">
-                <input type="hidden" name="_csrf" value="${h(csrfToken)}">
-                <div class="form-group">
-                    <label for="title">Video Title</label>
-                    <input type="text" name="title" id="title" placeholder="Video name..." maxlength="180" class="form-input">
-                </div>
-
-                <div class="upload-dropzone" id="dropzone">
-                    <input type="file" name="video" id="videoFile" accept=".mp4,.mkv,.avi,.mov,.webm,.flv,.wmv,.m4v,video/*" required hidden>
-                    <div class="dropzone-content" id="dropzoneContent">
-                        <div class="dropzone-icon">
-                            <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64">
-                                <path d="M40 42V46C40 48.2091 38.2091 50 36 50H12C9.79086 50 8 48.2091 8 46V22C8 19.7909 9.79086 18 12 18H16"/>
-                                <rect x="24" y="14" width="32" height="28" rx="2"/>
-                                <polyline points="40 22 40 28"/>
-                                <polyline points="37 25 40 22 43 25"/>
-                            </svg>
-                        </div>
-                        <p class="dropzone-text">Drop video here</p>
-                        <p class="dropzone-subtext">or tap to choose file</p>
-                        <p class="dropzone-formats">MP4, MKV, AVI, MOV, WebM - Max ${h(process.env.MAX_FILE_SIZE_MB || 500)}MB</p>
-                    </div>
-                    <div class="dropzone-selected" id="dropzoneSelected" style="display:none">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32">
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                            <polyline points="22 4 12 14.01 9 11.01"/>
-                        </svg>
-                        <p class="selected-name" id="selectedName"></p>
-                        <p class="selected-size" id="selectedSize"></p>
-                    </div>
-                </div>
-
-                <div class="upload-progress" id="uploadProgress" style="display:none">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
-                    <p class="progress-text" id="progressText">Uploading... 0%</p>
-                </div>
-
-                <button type="submit" class="btn btn-primary btn-upload-submit" id="uploadBtn">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+            <!-- Tab Switcher -->
+            <div class="upload-tabs">
+                <button type="button" class="upload-tab active" id="tabFile" data-tab="file">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                         <polyline points="17 8 12 3 7 8"/>
                         <line x1="12" y1="3" x2="12" y2="15"/>
                     </svg>
-                    <span>Upload</span>
+                    <span>File Upload</span>
                 </button>
-            </form>
+                <button type="button" class="upload-tab" id="tabUrl" data-tab="url">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                    <span>Import from URL</span>
+                </button>
+            </div>
+
+            <!-- File Upload Panel -->
+            <div class="upload-panel active" id="panelFile">
+                <form action="/upload" method="POST" enctype="multipart/form-data" class="upload-form" id="uploadForm">
+                    <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                    <div class="form-group">
+                        <label for="title">Video Title</label>
+                        <input type="text" name="title" id="title" placeholder="Video name..." maxlength="180" class="form-input">
+                    </div>
+
+                    <div class="upload-dropzone" id="dropzone">
+                        <input type="file" name="video" id="videoFile" accept=".mp4,.mkv,.avi,.mov,.webm,.flv,.wmv,.m4v,video/*" required hidden>
+                        <div class="dropzone-content" id="dropzoneContent">
+                            <div class="dropzone-icon">
+                                <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64">
+                                    <path d="M40 42V46C40 48.2091 38.2091 50 36 50H12C9.79086 50 8 48.2091 8 46V22C8 19.7909 9.79086 18 12 18H16"/>
+                                    <rect x="24" y="14" width="32" height="28" rx="2"/>
+                                    <polyline points="40 22 40 28"/>
+                                    <polyline points="37 25 40 22 43 25"/>
+                                </svg>
+                            </div>
+                            <p class="dropzone-text">Drop video here</p>
+                            <p class="dropzone-subtext">or tap to choose file</p>
+                            <p class="dropzone-formats">MP4, MKV, AVI, MOV, WebM - Max ${h(process.env.MAX_FILE_SIZE_MB || 500)}MB</p>
+                        </div>
+                        <div class="dropzone-selected" id="dropzoneSelected" style="display:none">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                <polyline points="22 4 12 14.01 9 11.01"/>
+                            </svg>
+                            <p class="selected-name" id="selectedName"></p>
+                            <p class="selected-size" id="selectedSize"></p>
+                        </div>
+                    </div>
+
+                    <div class="upload-progress" id="uploadProgress" style="display:none">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <p class="progress-text" id="progressText">Uploading... 0%</p>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-upload-submit" id="uploadBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <span>Upload</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- URL Import Panel -->
+            <div class="upload-panel" id="panelUrl">
+                <div class="upload-form" id="importForm">
+                    <div class="form-group">
+                        <label for="importTitle">Video Title <span class="label-hint">(optional — auto-detected from URL)</span></label>
+                        <input type="text" id="importTitle" placeholder="Leave empty to auto-detect title..." maxlength="180" class="form-input">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="importUrl">Video URL</label>
+                        <div class="url-input-wrapper">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" class="url-input-icon">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                            </svg>
+                            <input type="url" id="importUrl" placeholder="Paste video URL here..." class="form-input url-input" required>
+                        </div>
+                        <p class="form-hint">Supports 1000+ sites — paste any video page URL</p>
+                    </div>
+
+                    <!-- Import Progress -->
+                    <div class="import-progress-section" id="importProgressSection" style="display:none">
+                        <div class="import-status-card">
+                            <div class="import-status-header">
+                                <div class="import-spinner" id="importSpinner"></div>
+                                <div class="import-status-text">
+                                    <p class="import-title" id="importStatusTitle">Starting import...</p>
+                                    <p class="import-detail" id="importStatusDetail">Connecting to site...</p>
+                                </div>
+                            </div>
+                            <div class="progress-bar import-progress-bar">
+                                <div class="progress-fill import-progress-fill" id="importProgressFill"></div>
+                            </div>
+                            <div class="import-stats">
+                                <span id="importPercent">0%</span>
+                                <span id="importSpeed"></span>
+                                <span id="importEta"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Import Result -->
+                    <div class="import-result" id="importResult" style="display:none">
+                        <div class="import-result-card" id="importResultCard">
+                            <div class="import-result-icon" id="importResultIcon">✅</div>
+                            <p class="import-result-text" id="importResultText">Video imported successfully!</p>
+                            <a href="/dashboard" class="btn btn-primary" id="importResultBtn" style="display:none">
+                                <span>Go to Library</span>
+                            </a>
+                            <a href="#" class="btn btn-primary" id="importWatchBtn" style="display:none">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                                    <polygon points="6,3 20,12 6,21"/>
+                                </svg>
+                                <span>Watch Now</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-primary btn-upload-submit" id="importBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        <span>Import Video</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </main>
 

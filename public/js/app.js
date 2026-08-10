@@ -1308,4 +1308,177 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // ---- Upload Tabs ----
+    const uploadTabs = document.querySelectorAll('.upload-tab');
+    const uploadPanels = document.querySelectorAll('.upload-panel');
+
+    uploadTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.dataset.tab;
+            uploadTabs.forEach(t => t.classList.remove('active'));
+            uploadPanels.forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            const panel = document.getElementById('panel' + target.charAt(0).toUpperCase() + target.slice(1));
+            if (panel) panel.classList.add('active');
+        });
+    });
+
+    // ---- URL Import ----
+    const importBtn = document.getElementById('importBtn');
+    const importUrlInput = document.getElementById('importUrl');
+    const importTitleInput = document.getElementById('importTitle');
+    const importProgressSection = document.getElementById('importProgressSection');
+    const importResult = document.getElementById('importResult');
+    const importResultCard = document.getElementById('importResultCard');
+    const importResultIcon = document.getElementById('importResultIcon');
+    const importResultText = document.getElementById('importResultText');
+    const importResultBtn = document.getElementById('importResultBtn');
+    const importWatchBtn = document.getElementById('importWatchBtn');
+    const importSpinner = document.getElementById('importSpinner');
+    const importStatusTitle = document.getElementById('importStatusTitle');
+    const importStatusDetail = document.getElementById('importStatusDetail');
+    const importProgressFill = document.getElementById('importProgressFill');
+    const importPercent = document.getElementById('importPercent');
+    const importSpeed = document.getElementById('importSpeed');
+    const importEta = document.getElementById('importEta');
+
+    if (importBtn && importUrlInput) {
+        importBtn.addEventListener('click', async () => {
+            const url = importUrlInput.value.trim();
+            const title = importTitleInput ? importTitleInput.value.trim() : '';
+
+            if (!url) {
+                importUrlInput.focus();
+                importUrlInput.classList.add('shake');
+                setTimeout(() => importUrlInput.classList.remove('shake'), 500);
+                return;
+            }
+
+            // Get CSRF token
+            const csrfMeta = document.querySelector('input[name="_csrf"]');
+            const csrf = csrfMeta ? csrfMeta.value : '';
+
+            // Disable button and show progress
+            importBtn.disabled = true;
+            importBtn.innerHTML = '<span>Importing...</span>';
+            if (importProgressSection) importProgressSection.style.display = 'block';
+            if (importResult) importResult.style.display = 'none';
+            if (importStatusTitle) importStatusTitle.textContent = 'Starting import...';
+            if (importStatusDetail) importStatusDetail.textContent = 'Connecting to site and extracting video...';
+            if (importProgressFill) importProgressFill.style.width = '0%';
+            if (importPercent) importPercent.textContent = '0%';
+            if (importSpeed) importSpeed.textContent = '';
+            if (importEta) importEta.textContent = '';
+            if (importSpinner) importSpinner.className = 'import-spinner';
+
+            try {
+                // Start the import
+                const response = await fetch('/import-url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-csrf-token': csrf
+                    },
+                    body: JSON.stringify({ url, title })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Import failed');
+                }
+
+                // Connect to SSE for progress
+                const eventSource = new EventSource('/import-progress/' + data.jobId);
+
+                eventSource.onmessage = (event) => {
+                    try {
+                        const progress = JSON.parse(event.data);
+
+                        if (progress.title && importStatusTitle) {
+                            importStatusTitle.textContent = progress.title;
+                        }
+
+                        if (progress.status === 'downloading') {
+                            if (importStatusDetail) importStatusDetail.textContent = 'Downloading video...';
+                            if (importProgressFill) importProgressFill.style.width = progress.progress + '%';
+                            if (importPercent) importPercent.textContent = progress.progress + '%';
+                            if (importSpeed) importSpeed.textContent = progress.speed || '';
+                            if (importEta && progress.eta) importEta.textContent = 'ETA: ' + progress.eta;
+                        }
+
+                        if (progress.status === 'done') {
+                            eventSource.close();
+                            if (importSpinner) importSpinner.className = 'import-spinner done';
+                            if (importProgressFill) importProgressFill.style.width = '100%';
+                            if (importPercent) importPercent.textContent = '100%';
+                            if (importStatusDetail) importStatusDetail.textContent = 'Video imported successfully!';
+                            if (importSpeed) importSpeed.textContent = '';
+                            if (importEta) importEta.textContent = '';
+
+                            // Show result
+                            setTimeout(() => {
+                                if (importProgressSection) importProgressSection.style.display = 'none';
+                                if (importResult) importResult.style.display = 'block';
+                                if (importResultCard) importResultCard.className = 'import-result-card success';
+                                if (importResultIcon) importResultIcon.textContent = '✅';
+                                if (importResultText) importResultText.textContent = '"' + (progress.title || 'Video') + '" imported successfully!';
+                                if (importResultBtn) importResultBtn.style.display = 'inline-flex';
+                                if (importWatchBtn && progress.videoId) {
+                                    importWatchBtn.style.display = 'inline-flex';
+                                    importWatchBtn.href = '/watch/' + progress.videoId;
+                                }
+
+                                importBtn.disabled = false;
+                                importBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Import Another</span>';
+                                importUrlInput.value = '';
+                                if (importTitleInput) importTitleInput.value = '';
+                            }, 800);
+                        }
+
+                        if (progress.status === 'error') {
+                            eventSource.close();
+                            if (importSpinner) importSpinner.className = 'import-spinner error';
+                            if (importStatusDetail) importStatusDetail.textContent = progress.error || 'Download failed';
+
+                            setTimeout(() => {
+                                if (importProgressSection) importProgressSection.style.display = 'none';
+                                if (importResult) importResult.style.display = 'block';
+                                if (importResultCard) importResultCard.className = 'import-result-card error';
+                                if (importResultIcon) importResultIcon.textContent = '❌';
+                                if (importResultText) importResultText.textContent = progress.error || 'Import failed. Try a different URL.';
+                                if (importResultBtn) importResultBtn.style.display = 'none';
+                                if (importWatchBtn) importWatchBtn.style.display = 'none';
+
+                                importBtn.disabled = false;
+                                importBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Try Again</span>';
+                            }, 1200);
+                        }
+                    } catch (parseErr) {
+                        // Ignore parse errors
+                    }
+                };
+
+                eventSource.onerror = () => {
+                    eventSource.close();
+                    if (importStatusDetail) importStatusDetail.textContent = 'Lost connection. Check if the import completed on the dashboard.';
+                    importBtn.disabled = false;
+                    importBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Import Video</span>';
+                };
+
+            } catch (err) {
+                if (importProgressSection) importProgressSection.style.display = 'none';
+                if (importResult) importResult.style.display = 'block';
+                if (importResultCard) importResultCard.className = 'import-result-card error';
+                if (importResultIcon) importResultIcon.textContent = '❌';
+                if (importResultText) importResultText.textContent = err.message || 'Could not start import.';
+                if (importResultBtn) importResultBtn.style.display = 'none';
+                if (importWatchBtn) importWatchBtn.style.display = 'none';
+
+                importBtn.disabled = false;
+                importBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Try Again</span>';
+            }
+        });
+    }
+
 });

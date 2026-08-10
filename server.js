@@ -74,6 +74,9 @@ app.use((req, res, next) => {
     if (req.path === '/upload' && req.method === 'POST') {
         return next();
     }
+    if (req.path === '/import-url' && req.method === 'POST') {
+        return next();
+    }
     return requireCsrf(req, res, next);
 });
 
@@ -81,10 +84,12 @@ app.use((req, res, next) => {
 const authRoutes = require('./routes/auth');
 const videoRoutes = require('./routes/videos');
 const commentRoutes = require('./routes/comments');
+const importRoutes = require('./routes/import');
 
 app.use('/', authRoutes);
 app.use('/', videoRoutes);
 app.use('/', commentRoutes);
+app.use('/', importRoutes);
 
 // Error handling
 app.use((req, res) => {

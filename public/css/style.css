@@ -1557,6 +1557,223 @@ input, textarea {
     left: 130%;
 }
 
+/* ---- Upload Tabs ---- */
+.upload-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-bottom: none;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 6px 6px 0;
+    overflow: hidden;
+}
+
+.upload-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 16px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+}
+
+.upload-tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.upload-tab.active {
+    color: var(--accent-gold-bright);
+    background: var(--bg-elevated);
+}
+
+.upload-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 20%;
+    right: 20%;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent-gold), var(--accent-gold-bright));
+    border-radius: 2px 2px 0 0;
+}
+
+.upload-tab svg {
+    flex-shrink: 0;
+}
+
+/* ---- Upload Panels ---- */
+.upload-panel {
+    display: none;
+}
+
+.upload-panel.active {
+    display: block;
+}
+
+.upload-panel .upload-form {
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+
+/* ---- URL Import Styles ---- */
+.url-input-wrapper {
+    position: relative;
+}
+
+.url-input-icon {
+    position: absolute;
+    top: 50%;
+    left: 16px;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+    transition: color 0.2s ease;
+}
+
+.url-input {
+    padding-left: 44px !important;
+}
+
+.url-input:focus ~ .url-input-icon,
+.url-input-wrapper:focus-within .url-input-icon {
+    color: var(--accent-gold);
+}
+
+.form-hint {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+    font-weight: 500;
+}
+
+.label-hint {
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+/* ---- Import Progress ---- */
+.import-status-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.import-status-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.import-spinner {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.15);
+    border-top-color: var(--accent-gold-bright);
+    box-shadow: 0 0 16px var(--accent-gold-glow);
+    animation: vp-spin 0.85s linear infinite;
+    flex-shrink: 0;
+}
+
+.import-spinner.done {
+    animation: none;
+    border-color: var(--success);
+    border-top-color: var(--success);
+    box-shadow: 0 0 16px rgba(52, 211, 153, 0.2);
+}
+
+.import-spinner.error {
+    animation: none;
+    border-color: var(--danger);
+    border-top-color: var(--danger);
+    box-shadow: 0 0 16px rgba(224, 82, 82, 0.2);
+}
+
+.import-status-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.import-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+    word-break: break-word;
+}
+
+.import-detail {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.import-progress-bar {
+    height: 6px;
+}
+
+.import-stats {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.import-stats span:first-child {
+    color: var(--accent-gold-bright);
+}
+
+/* ---- Import Result ---- */
+.import-result-card {
+    text-align: center;
+    padding: 28px 22px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.import-result-card.success {
+    border-color: rgba(52, 211, 153, 0.3);
+}
+
+.import-result-card.error {
+    border-color: rgba(224, 82, 82, 0.3);
+}
+
+.import-result-icon {
+    font-size: 2.4rem;
+    line-height: 1;
+}
+
+.import-result-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
 /* ========================================
    WATCH PAGE / THEATER MODE
    ======================================== */
