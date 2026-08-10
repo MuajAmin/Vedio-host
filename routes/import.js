@@ -16,11 +16,36 @@ if (!fs.existsSync(uploadsDir)) {
 // Active import jobs (keyed by job ID)
 const activeJobs = new Map();
 
-// Validate URL
+// Validate URL — blocks internal/private IPs to prevent SSRF
 function isValidUrl(str) {
     try {
         const url = new URL(str);
-        return url.protocol === 'http:' || url.protocol === 'https:';
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+
+        const hostname = url.hostname.toLowerCase();
+
+        // Block localhost, IPv6 loopback, and private/link-local ranges
+        const blockedPatterns = [
+            /^localhost$/i,
+            /^127\./,
+            /^10\./,
+            /^192\.168\./,
+            /^172\.(1[6-9]|2\d|3[01])\./,
+            /^169\.254\./,
+            /^0\./,
+            /^\[?::1\]?$/,
+            /^\[?fe80:/i,
+            /^\[?fc00:/i,
+            /^\[?fd/i,
+            /\.local$/i,
+            /\.internal$/i
+        ];
+
+        for (const pattern of blockedPatterns) {
+            if (pattern.test(hostname)) return false;
+        }
+
+        return true;
     } catch {
         return false;
     }
@@ -273,27 +298,29 @@ async function startDownload(job, outputPath, outputFilename) {
         stderrBuffer += data.toString();
     });
 
-    proc.on('close', (code) => {
+    proc.on('close', async (code) => {
         // Find the actual output file — yt-dlp may create file with different extension
         let finalPath = outputPath;
         let finalFilename = outputFilename;
 
         // Look for any file starting with the jobId
         try {
-            const files = fs.readdirSync(uploadsDir).filter(f => f.startsWith(job.id));
+            const files = (await fs.promises.readdir(uploadsDir)).filter(f => f.startsWith(job.id));
             if (files.length > 0) {
                 finalFilename = files[0];
                 finalPath = path.join(uploadsDir, finalFilename);
             }
         } catch (err) { }
 
-        if (code === 0 && fs.existsSync(finalPath)) {
-            let fileSize = 0;
-            try {
-                const stat = fs.statSync(finalPath);
-                fileSize = stat.size;
-            } catch (err) { }
+        let fileExists = false;
+        let fileSize = 0;
+        try {
+            const stat = await fs.promises.stat(finalPath);
+            fileExists = true;
+            fileSize = stat.size;
+        } catch (err) { }
 
+        if (code === 0 && fileExists) {
             // Save to database
             const videoId = uuidv4();
             const title = job.customTitle || job.title || 'Imported Video';
@@ -334,9 +361,9 @@ async function startDownload(job, outputPath, outputFilename) {
 
             // Clean up partial files
             try {
-                const partials = fs.readdirSync(uploadsDir).filter(f => f.startsWith(job.id));
+                const partials = (await fs.promises.readdir(uploadsDir)).filter(f => f.startsWith(job.id));
                 for (const f of partials) {
-                    fs.unlinkSync(path.join(uploadsDir, f));
+                    await fs.promises.unlink(path.join(uploadsDir, f)).catch(() => {});
                 }
             } catch (err) { }
 

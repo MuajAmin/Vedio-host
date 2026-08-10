@@ -1,10 +1,12 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
 const { attachLocals, requireCsrf } = require('./utils/security');
 const SQLiteSessionStore = require('./utils/sessionStore');
+const db = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,10 +36,25 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
 // Middleware
+
+// Gzip compression — reduces CSS/JS/HTML by ~70% on the wire
+app.use(compression({
+    level: 6,
+    threshold: 1024,
+    filter: (req, res) => {
+        // Don't compress video streams — they're already binary and chunked
+        if (req.path.startsWith('/stream/')) return false;
+        return compression.filter(req, res);
+    }
+}));
+
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'same-origin');
+    if (isProduction) {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
     res.setHeader(
         'Content-Security-Policy',
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'"
@@ -91,6 +108,11 @@ app.use('/', videoRoutes);
 app.use('/', commentRoutes);
 app.use('/', importRoutes);
 
+// Health check endpoint for monitoring / reverse proxy
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', uptime: Math.floor(process.uptime()) });
+});
+
 // Error handling
 app.use((req, res) => {
     res.status(404).render('error', {
@@ -117,3 +139,26 @@ const server = app.listen(PORT, () => {
 server.timeout = 10 * 60 * 1000;         // 10 min request timeout
 server.keepAliveTimeout = 65 * 1000;      // 65s keep-alive (slightly above typical proxy 60s)
 server.headersTimeout = 70 * 1000;        // 70s headers timeout
+
+// Graceful shutdown — close DB cleanly to prevent WAL corruption
+function gracefulShutdown(signal) {
+    console.log(`\n[${signal}] Shutting down gracefully...`);
+    server.close(() => {
+        try {
+            db.pragma('wal_checkpoint(TRUNCATE)');
+            db.close();
+            console.log('Database closed cleanly.');
+        } catch (err) {
+            console.error('Error closing database:', err.message);
+        }
+        process.exit(0);
+    });
+    // Force exit after 10 seconds if connections hang
+    setTimeout(() => {
+        console.error('Forced shutdown after timeout.');
+        process.exit(1);
+    }, 10000).unref();
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

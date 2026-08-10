@@ -1,4 +1,3 @@
-require('dotenv').config();
 const { timingSafeCompare } = require('../utils/security');
 
 function isAuthenticated(req, res, next) {

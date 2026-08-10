@@ -1285,6 +1285,96 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ---- AJAX Comment Submit ----
+    const commentForm = document.querySelector('.comment-form');
+    if (commentForm) {
+        commentForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const textarea = commentForm.querySelector('textarea[name="text"]');
+            const submitBtn = commentForm.querySelector('button[type="submit"]');
+            const text = (textarea?.value || '').trim();
+            if (!text || !textarea) return;
+
+            const csrfInput = commentForm.querySelector('input[name="_csrf"]');
+            const csrf = csrfInput ? csrfInput.value : '';
+            const action = commentForm.getAttribute('action');
+
+            // Disable while submitting
+            submitBtn.disabled = true;
+            textarea.disabled = true;
+
+            try {
+                const res = await fetch(action, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'x-csrf-token': csrf
+                    },
+                    body: JSON.stringify({ text })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    // Build new comment HTML and prepend
+                    const commentsList = document.querySelector('.comments-list');
+                    const noComments = commentsList?.querySelector('.no-comments');
+                    if (noComments) noComments.remove();
+
+                    const isAdmin = data.comment.user === 'muaj';
+                    const displayName = isAdmin ? 'Muaj' : 'Hajera';
+                    const avatarClass = isAdmin ? 'avatar-admin' : 'avatar-viewer';
+                    const initial = isAdmin ? 'M' : 'H';
+                    const now = new Date();
+                    const timeStr = now.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' })
+                        + ' ' + now.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+
+                    // Escape text for safe insertion
+                    const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+                    const commentHtml = `<div class="comment-item" style="opacity:0;transform:translateY(-8px);transition:all 0.3s ease"><div class="comment-avatar ${avatarClass}">${initial}</div><div class="comment-body"><div class="comment-header"><span class="comment-author">${displayName}</span><span class="comment-time">${timeStr}</span></div><p class="comment-text">${escaped}</p></div></div>`;
+
+                    if (commentsList) {
+                        commentsList.insertAdjacentHTML('afterbegin', commentHtml);
+                        // Animate in
+                        requestAnimationFrame(() => {
+                            const newComment = commentsList.firstElementChild;
+                            if (newComment) {
+                                newComment.style.opacity = '1';
+                                newComment.style.transform = 'translateY(0)';
+                            }
+                        });
+                    }
+
+                    // Update comment count
+                    const countTitle = document.querySelector('.comments-title');
+                    if (countTitle) {
+                        const match = countTitle.textContent.match(/\((\d+)\)/);
+                        if (match) {
+                            const newCount = parseInt(match[1]) + 1;
+                            countTitle.innerHTML = countTitle.innerHTML.replace(/\(\d+\)/, `(${newCount})`);
+                        }
+                    }
+
+                    // Clear textarea
+                    textarea.value = '';
+                    textarea.style.height = 'auto';
+                } else {
+                    // Fallback: reload
+                    commentForm.submit();
+                }
+            } catch (err) {
+                // Network error — fallback to normal submit
+                commentForm.submit();
+            } finally {
+                submitBtn.disabled = false;
+                textarea.disabled = false;
+                textarea.focus();
+            }
+        });
+    }
+
     // ---- Auto-resize textarea ----
     const commentInputs = document.querySelectorAll('.comment-input');
     commentInputs.forEach(textarea => {
