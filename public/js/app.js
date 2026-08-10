@@ -978,15 +978,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // --- Auto-hide Controls (Improved Immersive Experience) ---
+        // --- Auto-hide Controls (Android-optimized) ---
         let hideTimer = null;
         let cursorHideTimer = null;
-        let isUserInteracting = false;
-
-        function getHideDelay() {
-            // Faster hide in fullscreen for immersive viewing
-            return isFullscreen() ? 1500 : 2000;
-        }
+        let controlsLocked = false; // When user is interacting with controls
 
         function showControls() {
             if (container) {
@@ -996,33 +991,86 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             clearTimeout(hideTimer);
             clearTimeout(cursorHideTimer);
+            scheduleHide();
+        }
 
-            if (!vid.paused && !isDragging) {
-                hideTimer = setTimeout(hideControls, getHideDelay());
+        function scheduleHide() {
+            clearTimeout(hideTimer);
+            if (!vid.paused && !isDragging && !controlsLocked) {
+                hideTimer = setTimeout(hideControls, 1200);
             }
         }
 
         function hideControls() {
-            if (isDragging) return;
-            // Don't hide if speed menu is open
+            if (isDragging || controlsLocked) return;
             if (speedMenu && speedMenu.classList.contains('vp-menu-open')) return;
+            if (vid.paused) return; // Never hide when paused
 
             if (container) {
                 container.classList.remove('vp-controls-visible');
-                // Hide cursor after controls fade out
                 cursorHideTimer = setTimeout(() => {
                     if (!vid.paused && container) {
                         container.classList.add('vp-cursor-hidden');
                         container.classList.add('vp-idle');
                     }
-                }, 400);
+                }, 300);
             }
         }
 
+        // Lock controls visible while interacting (touching seek bar, buttons etc.)
+        function lockControls() {
+            controlsLocked = true;
+            clearTimeout(hideTimer);
+        }
+
+        function unlockControls() {
+            controlsLocked = false;
+            scheduleHide();
+        }
+
         if (container) {
-            // Mouse movement shows controls, but only triggers re-hide
+            // Touch on the VIDEO element toggles controls
+            vid.addEventListener('touchend', (e) => {
+                // Only handle single taps on the video itself
+                if (e.target !== vid) return;
+
+                e.preventDefault();
+                if (container.classList.contains('vp-controls-visible') && !vid.paused) {
+                    hideControls();
+                } else {
+                    showControls();
+                }
+            });
+
+            // Prevent touch on controls from bubbling to video toggle
+            const controlsBar = container.querySelector('.vp-controls');
+            const bottomGrad = container.querySelector('.vp-bottom-gradient');
+
+            if (controlsBar) {
+                controlsBar.addEventListener('touchstart', (e) => {
+                    e.stopPropagation();
+                    lockControls();
+                }, { passive: true });
+                controlsBar.addEventListener('touchend', () => {
+                    setTimeout(unlockControls, 300);
+                }, { passive: true });
+            }
+
+            if (bottomGrad) {
+                bottomGrad.addEventListener('touchstart', (e) => {
+                    e.stopPropagation();
+                }, { passive: true });
+            }
+
+            // Center play/pause button should not toggle controls
+            if (centerBtn) {
+                centerBtn.addEventListener('touchstart', (e) => {
+                    e.stopPropagation();
+                }, { passive: true });
+            }
+
+            // Mouse support (for testing on desktop)
             container.addEventListener('mousemove', (e) => {
-                // Ignore micro-movements (less than 3px)
                 if (container._lastMouseX !== undefined) {
                     const dx = Math.abs(e.clientX - container._lastMouseX);
                     const dy = Math.abs(e.clientY - container._lastMouseY);
@@ -1033,22 +1081,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 showControls();
             });
 
-            // Mouse leave hides controls faster
             container.addEventListener('mouseleave', () => {
                 if (!vid.paused) {
                     clearTimeout(hideTimer);
-                    hideTimer = setTimeout(hideControls, 600);
+                    hideTimer = setTimeout(hideControls, 400);
                 }
             });
-
-            container.addEventListener('touchstart', () => {
-                // On touch: toggle controls visibility
-                if (container.classList.contains('vp-controls-visible') && !vid.paused) {
-                    hideControls();
-                } else {
-                    showControls();
-                }
-            }, { passive: true });
         }
 
         vid.addEventListener('pause', () => {
@@ -1063,6 +1101,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         vid.addEventListener('play', () => {
+            // Brief show then auto-hide
             showControls();
         });
 

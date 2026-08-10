@@ -1820,6 +1820,8 @@ input, textarea {
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
     isolation: isolate;
 }
 
@@ -1887,46 +1889,15 @@ input, textarea {
     transform: translateY(0);
 }
 
-/* Hide audio chip when idle for immersive viewing */
-.vp-cinema.vp-idle .vp-audio-chip {
+/* Hide audio chip when controls are hidden */
+.vp-cinema:not(.vp-controls-visible) .vp-audio-chip {
     opacity: 0 !important;
     transform: translateY(-8px);
+    transition-delay: 0.1s;
 }
 
 .vp-status-badge {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-    z-index: 12;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    max-width: min(58%, 320px);
-    padding: 8px 12px;
-    border-radius: 8px;
-    background: rgba(8, 8, 12, 0.78);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 0.78rem;
-    font-weight: 800;
-    line-height: 1.2;
-    backdrop-filter: blur(16px);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-    opacity: 0;
-    transform: translateY(-8px);
-    pointer-events: none;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.vp-has-status .vp-status-badge {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-/* Hide status badge when idle for immersive viewing */
-.vp-cinema.vp-idle .vp-status-badge {
-    opacity: 0 !important;
-    transform: translateY(-8px);
+    display: none;
 }
 
 .vp-status-dot {
@@ -2115,7 +2086,6 @@ input, textarea {
     object-fit: contain;
 }
 
-/* Bottom Gradient — so controls are always readable */
 .vp-bottom-gradient {
     position: absolute;
     bottom: 0;
@@ -2126,7 +2096,7 @@ input, textarea {
     pointer-events: none;
     z-index: 3;
     opacity: 0;
-    transition: opacity 0.35s ease;
+    transition: opacity 0.25s ease;
 }
 
 .vp-cinema.vp-controls-visible .vp-bottom-gradient {
@@ -2265,8 +2235,8 @@ input, textarea {
     z-index: 10;
     padding: 0 16px 14px;
     opacity: 0;
-    transform: translateY(10px);
-    transition: opacity 0.35s ease, transform 0.35s ease;
+    transform: translateY(8px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
     pointer-events: none;
 }
 
