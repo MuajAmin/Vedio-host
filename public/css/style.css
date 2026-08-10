@@ -3100,17 +3100,30 @@ kbd {
     flex-shrink: 0;
 }
 
-.love-banner-text h2 {
+.love-banner-text .love-main-title {
     font-family: var(--font-display);
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     font-weight: 800;
     color: #fecdd3;
+    margin-bottom: 4px;
+    background: linear-gradient(135deg, #fff1f2, #fda4af, #fecdd3);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: none;
+}
+
+.love-typewriter-line {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #fbb4c4;
     margin-bottom: 6px;
-    min-height: 1.8em;
+    min-height: 1.5em;
 }
 
 /* Typewriter cursor blink */
-.love-banner-text h2::after {
+.love-typewriter-line::after {
     content: '|';
     color: #f43f5e;
     font-weight: 300;
@@ -3118,7 +3131,7 @@ kbd {
     margin-left: 2px;
 }
 
-.love-banner-text h2.typing-done::after {
+.love-typewriter-line.typing-done::after {
     display: none;
 }
 
@@ -3574,17 +3587,29 @@ h3,
         box-shadow: 0 4px 20px rgba(244, 63, 94, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     }
 
+    .love-banner-card::before {
+        animation: none;
+    }
+
     .love-banner-card::after {
         display: none;
     }
 
     .love-banner-shimmer {
-        animation: none;
-        background: none;
+        animation: shimmer-sweep 5s ease-in-out infinite;
+        background: linear-gradient(
+            110deg,
+            transparent 25%,
+            rgba(255, 200, 220, 0.06) 45%,
+            rgba(255, 200, 220, 0.1) 50%,
+            rgba(255, 200, 220, 0.06) 55%,
+            transparent 75%
+        );
+        background-size: 200% 100%;
     }
 
     .love-banner-icon {
-        animation: none;
+        animation: heartbeat 1.4s ease-in-out infinite;
         filter: none;
         font-size: 2.2rem;
     }
@@ -3593,21 +3618,25 @@ h3,
         display: none;
     }
 
-    .love-banner-text h2 {
-        font-size: 1.25rem;
+    .love-main-title {
+        font-size: 1.3rem;
+    }
+
+    .love-typewriter-line {
+        font-size: 0.92rem;
     }
 
     .floating-hearts-container {
-        display: none;
+        opacity: 0.7;
     }
 
     .sparkle-trail-container {
-        display: none;
+        /* Touch sparkle handled in JS, keep container */
     }
 
     .romantic-title {
-        animation: none;
-        background-size: 100% auto;
+        animation: gradient-text-shift 5s ease-in-out infinite;
+        background-size: 200% auto;
     }
 
     .video-card::after,

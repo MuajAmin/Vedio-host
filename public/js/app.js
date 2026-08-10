@@ -1695,12 +1695,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isHajeraMode && !prefersReducedMotion) {
 
         const isMobileView = window.innerWidth <= 768;
+        const isTabletView = window.innerWidth <= 1024;
 
-        // ---- 1. Floating Hearts Background (Desktop/Tablet only) ----
+        // ---- 1. Floating Hearts Background ----
         const heartsContainer = document.getElementById('floatingHeartsContainer');
-        if (heartsContainer && !isMobileView) {
+        if (heartsContainer) {
             const heartSymbols = ['♥', '💕', '💗', '♡', '❤', '💖', '🌹'];
-            const maxHearts = window.innerWidth <= 1024 ? 8 : 15;
+            const maxHearts = isMobileView ? 4 : (isTabletView ? 8 : 15);
+            const spawnInterval = isMobileView ? 6000 : 3000;
+            const initialBurst = isMobileView ? 3 : 8;
             let activeHearts = 0;
 
             function spawnHeart() {
@@ -1711,18 +1714,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 heart.className = 'floating-heart';
                 heart.textContent = heartSymbols[Math.floor(Math.random() * heartSymbols.length)];
 
-                const size = 0.6 + Math.random() * 1.4;
+                const size = isMobileView ? (0.5 + Math.random() * 0.8) : (0.6 + Math.random() * 1.4);
                 const left = Math.random() * 100;
-                const duration = 10 + Math.random() * 15;
+                const duration = isMobileView ? (14 + Math.random() * 12) : (10 + Math.random() * 15);
                 const delay = Math.random() * 2;
-                const sway = (Math.random() - 0.5) * 40;
 
                 heart.style.left = left + '%';
                 heart.style.fontSize = size + 'rem';
                 heart.style.animationDuration = duration + 's';
                 heart.style.animationDelay = delay + 's';
-                heart.style.opacity = (0.08 + Math.random() * 0.15).toString();
-                heart.style.setProperty('--sway', sway + 'px');
+                heart.style.opacity = (0.06 + Math.random() * 0.12).toString();
 
                 heartsContainer.appendChild(heart);
 
@@ -1733,23 +1734,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Initial burst
-            for (let i = 0; i < 8; i++) {
-                setTimeout(spawnHeart, i * 600);
+            for (let i = 0; i < initialBurst; i++) {
+                setTimeout(spawnHeart, i * 800);
             }
 
             // Continuous spawn
-            setInterval(spawnHeart, 3000);
+            setInterval(spawnHeart, spawnInterval);
         }
 
         // ---- 2. Typewriter Effect ----
         const typewriterTarget = document.getElementById('typewriterTarget');
         if (typewriterTarget) {
             const typewriterMessages = [
-                'I Love You, Hajera! 💕',
                 'তুমি আমার সবকিছু 💖',
                 'You are my everything 🌹',
                 'তোমাকে ছাড়া অসম্পূর্ণ আমি 💗',
-                'Forever yours, Hajera 💕',
+                'Forever yours, my love 💕',
+                'তুমি আমার জীবনের সেরা উপহার ✨',
+                'Every beat of my heart says your name 🥰',
             ];
             let currentMsgIndex = 0;
             let charIndex = 0;
@@ -1818,8 +1820,47 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 6000);
         }
 
-        // ---- 4. Sparkle Cursor Trail (Desktop only) ----
+        // ---- 4. Touch Sparkle Burst (Android/Mobile) ----
         const sparkleContainer = document.getElementById('sparkleTrailContainer');
+        if (sparkleContainer && !window.matchMedia('(pointer: fine)').matches) {
+            const burstSymbols = ['✦', '♥', '✧', '💕', '✨'];
+            let lastTouchBurst = 0;
+
+            document.addEventListener('touchstart', (e) => {
+                const now = Date.now();
+                if (now - lastTouchBurst < 400) return;
+                lastTouchBurst = now;
+
+                const touch = e.touches[0];
+                if (!touch) return;
+
+                const x = touch.clientX;
+                const y = touch.clientY;
+
+                for (let i = 0; i < 5; i++) {
+                    const spark = document.createElement('span');
+                    spark.className = 'sparkle-particle star';
+                    spark.textContent = burstSymbols[Math.floor(Math.random() * burstSymbols.length)];
+
+                    const angle = (Math.PI * 2 * i) / 5 + (Math.random() - 0.5) * 0.5;
+                    const dist = 20 + Math.random() * 25;
+                    const sx = Math.cos(angle) * dist;
+                    const sy = Math.sin(angle) * dist;
+
+                    spark.style.left = x + 'px';
+                    spark.style.top = y + 'px';
+                    spark.style.setProperty('--sx', sx + 'px');
+                    spark.style.setProperty('--sy', sy + 'px');
+                    spark.style.fontSize = (0.6 + Math.random() * 0.5) + 'rem';
+                    spark.style.animationDelay = (i * 40) + 'ms';
+
+                    sparkleContainer.appendChild(spark);
+                    setTimeout(() => spark.remove(), 900);
+                }
+            }, { passive: true });
+        }
+
+        // ---- 5. Sparkle Cursor Trail (Desktop only) ----
         if (sparkleContainer && window.matchMedia('(pointer: fine)').matches) {
             const sparkleSymbols = ['✦', '✧', '♥', '✨'];
             let sparkleThrottle = 0;
