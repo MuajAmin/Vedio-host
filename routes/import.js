@@ -41,6 +41,7 @@ router.post('/import-url', isAuthenticated, (req, res) => {
 
     const url = String(req.body.url || '').trim();
     const customTitle = String(req.body.title || '').trim().slice(0, 180);
+    const quality = String(req.body.quality || '480').trim();
 
     if (!url) {
         return res.status(400).json({ error: 'No URL provided.' });
@@ -58,6 +59,7 @@ router.post('/import-url', isAuthenticated, (req, res) => {
         id: jobId,
         url,
         customTitle,
+        quality,
         status: 'starting',
         progress: 0,
         speed: '',
@@ -185,12 +187,30 @@ async function startDownload(job, outputPath, outputFilename) {
         return;
     }
 
+    // Build format string based on quality selection
+    let formatStr;
+    switch (job.quality) {
+        case 'best':
+            formatStr = 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best';
+            break;
+        case '480':
+            formatStr = 'best[height<=480][ext=mp4]/best[height<=480]/bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]';
+            break;
+        case '360':
+            formatStr = 'best[height<=360][ext=mp4]/best[height<=360]/bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]';
+            break;
+        case '720':
+        default:
+            formatStr = 'best[height<=720][ext=mp4]/best[height<=720]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]';
+            break;
+    }
+
     // yt-dlp arguments — optimized for low-resource VPS (1 core, 1GB RAM)
     const ytdlpArgs = [
         '--no-check-certificates',
         '--no-playlist',
         '--merge-output-format', 'mp4',
-        '-f', 'best[ext=mp4]/best[ext=webm]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best',
+        '-f', formatStr,
         '--newline',
         '--progress',
         '--progress-template', '%(progress._percent_str)s|||%(progress._speed_str)s|||%(progress._eta_str)s',
@@ -265,14 +285,14 @@ async function startDownload(job, outputPath, outputFilename) {
                 finalFilename = files[0];
                 finalPath = path.join(uploadsDir, finalFilename);
             }
-        } catch (err) {}
+        } catch (err) { }
 
         if (code === 0 && fs.existsSync(finalPath)) {
             let fileSize = 0;
             try {
                 const stat = fs.statSync(finalPath);
                 fileSize = stat.size;
-            } catch (err) {}
+            } catch (err) { }
 
             // Save to database
             const videoId = uuidv4();
@@ -318,7 +338,7 @@ async function startDownload(job, outputPath, outputFilename) {
                 for (const f of partials) {
                     fs.unlinkSync(path.join(uploadsDir, f));
                 }
-            } catch (err) {}
+            } catch (err) { }
 
             job.status = 'error';
             job.error = errorMsg;

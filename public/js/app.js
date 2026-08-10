@@ -221,12 +221,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Playback status / slow network UI
         const audioChip = document.getElementById('vpAudioChip');
-        const statusBadge = document.getElementById('vpStatusBadge');
-        const statusText = document.getElementById('vpStatusText');
         const loadingOverlay = document.getElementById('vpLoadingOverlay');
         const loadingTitle = document.getElementById('vpLoadingTitle');
         const loadingDetail = document.getElementById('vpLoadingDetail');
-        const loadMeterFill = document.getElementById('vpLoadMeterFill');
         const retryBtn = document.getElementById('vpRetryBtn');
         const sourceEl = vid.querySelector('source');
         const sourceType = vid.getAttribute('data-source-type') || sourceEl?.getAttribute('type') || '';
@@ -315,17 +312,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (loadingOverlay) loadingOverlay.setAttribute('aria-hidden', 'true');
         }
 
+        // Only show overlay for errors and offline — no loading/buffering messages
         function setPlayerStatus(state, title, detail, options = {}) {
-            const showOverlay = options.showOverlay === true;
-            const persistent = options.persistent === true || showOverlay;
+            const isError = state === 'error' || state === 'offline' || state === 'warning';
+            const showOverlay = isError && options.showOverlay === true;
+
+            if (!isError) {
+                // For non-error states, just silently clear
+                clearPlayerStatus();
+                return;
+            }
 
             if (statusHideTimer) window.clearTimeout(statusHideTimer);
             statusHideTimer = null;
 
-            if (statusBadge) {
-                statusBadge.className = 'vp-status-badge vp-status-' + state;
-            }
-            if (statusText) statusText.textContent = title;
             if (loadingTitle) loadingTitle.textContent = title;
             if (loadingDetail) loadingDetail.textContent = detail || '';
             if (retryBtn) retryBtn.hidden = options.canRetry !== true;
@@ -333,16 +333,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (container) {
                 container.classList.add('vp-has-status');
-                container.classList.toggle('vp-loading', showOverlay && state === 'loading');
-                container.classList.toggle('vp-buffering', showOverlay && state === 'buffering');
-                container.classList.toggle('vp-error', showOverlay && state === 'error');
-                container.classList.toggle('vp-offline', showOverlay && state === 'offline');
-                container.classList.toggle('vp-warning', showOverlay && state === 'warning');
+                container.classList.toggle('vp-error', state === 'error');
+                container.classList.toggle('vp-offline', state === 'offline');
+                container.classList.toggle('vp-warning', state === 'warning');
                 if (showOverlay) container.classList.add('vp-controls-visible');
-            }
-
-            if (!persistent) {
-                statusHideTimer = window.setTimeout(clearPlayerStatus, 1800);
             }
         }
 
@@ -534,19 +528,12 @@ document.addEventListener('DOMContentLoaded', () => {
         function updateBuffer() {
             const pct = getBufferedPercent();
             if (progressBuffer) progressBuffer.style.width = pct + '%';
-            if (loadMeterFill) loadMeterFill.style.width = pct + '%';
         }
 
         vid.addEventListener('timeupdate', updateProgress);
         vid.addEventListener('progress', updateBuffer);
         vid.addEventListener('loadstart', () => {
             startSlowStartTimer();
-            setPlayerStatus(
-                'loading',
-                'Preparing video',
-                'Opening the private stream.',
-                { showOverlay: vid.readyState < 2, canRetry: false, persistent: true }
-            );
         });
         vid.addEventListener('loadedmetadata', () => {
             clearSlowStartTimer();
@@ -565,63 +552,31 @@ document.addEventListener('DOMContentLoaded', () => {
             clearRecoveryTimer();
             clearSlowStartTimer();
             updateBuffer();
-            setPlayerStatus(
-                'ready',
-                'Ready to play',
-                connectionDetail('Enough video data is ready.'),
-                { showOverlay: false }
-            );
+            clearPlayerStatus();
         });
         vid.addEventListener('playing', () => {
             retryCount = 0;
             clearRecoveryTimer();
             clearSlowStartTimer();
             updateBuffer();
-            setPlayerStatus(
-                'ready',
-                'Playing',
-                connectionDetail('The stream is running.'),
-                { showOverlay: false }
-            );
+            clearPlayerStatus();
         });
         vid.addEventListener('waiting', () => {
             if (vid.ended) return;
-            setPlayerStatus(
-                'buffering',
-                'Buffering video',
-                connectionDetail('Slow connection detected. Waiting for more video data.'),
-                { showOverlay: true, canRetry: true, persistent: true }
-            );
+            // No overlay for buffering — just silently wait
             queueRecovery();
         });
         vid.addEventListener('stalled', () => {
-            setPlayerStatus(
-                'buffering',
-                'Connection stalled',
-                connectionDetail('The stream stopped receiving data. Retrying may help.'),
-                { showOverlay: true, canRetry: true, persistent: true }
-            );
+            // No overlay for stalled — just queue recovery
             queueRecovery();
         });
         vid.addEventListener('seeking', () => {
-            if (getBufferedAhead() < 0.5) {
-                setPlayerStatus(
-                    'buffering',
-                    'Finding that moment',
-                    'Loading video data around the new position.',
-                    { showOverlay: true, canRetry: false, persistent: true }
-                );
-            }
+            // No overlay for seeking
         });
         vid.addEventListener('seeked', () => {
             updateBuffer();
             if (vid.readyState >= 3) {
-                setPlayerStatus(
-                    'ready',
-                    'Ready',
-                    connectionDetail('Playback can continue.'),
-                    { showOverlay: false }
-                );
+                clearPlayerStatus();
             }
         });
         vid.addEventListener('error', () => {
@@ -678,12 +633,6 @@ document.addEventListener('DOMContentLoaded', () => {
             );
         } else if (vid.readyState < 2) {
             startSlowStartTimer();
-            setPlayerStatus(
-                'loading',
-                'Preparing video',
-                'Opening the private stream.',
-                { showOverlay: true, canRetry: false, persistent: true }
-            );
         } else {
             updateBuffer();
         }
@@ -1327,6 +1276,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const importBtn = document.getElementById('importBtn');
     const importUrlInput = document.getElementById('importUrl');
     const importTitleInput = document.getElementById('importTitle');
+    const importQualitySelect = document.getElementById('importQuality');
     const importProgressSection = document.getElementById('importProgressSection');
     const importResult = document.getElementById('importResult');
     const importResultCard = document.getElementById('importResultCard');
@@ -1346,6 +1296,7 @@ document.addEventListener('DOMContentLoaded', () => {
         importBtn.addEventListener('click', async () => {
             const url = importUrlInput.value.trim();
             const title = importTitleInput ? importTitleInput.value.trim() : '';
+            const quality = importQualitySelect ? importQualitySelect.value : '720';
 
             if (!url) {
                 importUrlInput.focus();
@@ -1379,7 +1330,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         'Content-Type': 'application/json',
                         'x-csrf-token': csrf
                     },
-                    body: JSON.stringify({ url, title })
+                    body: JSON.stringify({ url, title, quality })
                 });
 
                 const data = await response.json();

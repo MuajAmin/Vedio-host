@@ -144,20 +144,13 @@ const commentsHtml = comments.length === 0
                     <line x1="16" y1="9" x2="22" y2="15" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
                 </svg>
             </div>
-            <div class="vp-status-badge vp-status-loading" id="vpStatusBadge" aria-live="polite">
-                <span class="vp-status-dot"></span>
-                <span id="vpStatusText">Preparing video</span>
-            </div>
 
             <div class="vp-loading-overlay" id="vpLoadingOverlay" aria-live="polite" aria-hidden="true">
                 <div class="vp-loading-panel">
                     <div class="vp-spinner" aria-hidden="true"></div>
                     <div class="vp-loading-copy">
-                        <p class="vp-loading-title" id="vpLoadingTitle">Loading video...</p>
-                        <p class="vp-loading-detail" id="vpLoadingDetail">Waiting for enough video data to start smoothly.</p>
-                    </div>
-                    <div class="vp-load-meter" aria-hidden="true">
-                        <span id="vpLoadMeterFill"></span>
+                        <p class="vp-loading-title" id="vpLoadingTitle"></p>
+                        <p class="vp-loading-detail" id="vpLoadingDetail"></p>
                     </div>
                     <button type="button" class="vp-retry-btn" id="vpRetryBtn">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">

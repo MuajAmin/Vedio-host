@@ -134,6 +134,19 @@ const errorHtml = error
                         <p class="form-hint">Supports 1000+ sites — paste any video page URL</p>
                     </div>
 
+                    <div class="form-group">
+                        <label for="importQuality">Video Quality</label>
+                        <div class="quality-selector">
+                            <select id="importQuality" class="form-input quality-select">
+                                <option value="best">🎬 Best Quality (1080p+)</option>
+                                <option value="720" selected>📺 High (720p) — Recommended</option>
+                                <option value="480">📱 Medium (480p) — Saves Space</option>
+                                <option value="360">💾 Low (360p) — Minimum Size</option>
+                            </select>
+                        </div>
+                        <p class="form-hint">Lower quality = faster download, less storage used</p>
+                    </div>
+
                     <!-- Import Progress -->
                     <div class="import-progress-section" id="importProgressSection" style="display:none">
                         <div class="import-status-card">
