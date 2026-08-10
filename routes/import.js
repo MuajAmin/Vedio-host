@@ -33,6 +33,12 @@ router.post('/import-url', isAuthenticated, (req, res) => {
     requireCsrf(req, res, () => { csrfOk = true; });
     if (!csrfOk) return;
 
+    // Only allow 1 concurrent import to save RAM on small VPS
+    const activeDownloads = [...activeJobs.values()].filter(j => j.status === 'downloading' || j.status === 'starting');
+    if (activeDownloads.length >= 1) {
+        return res.status(429).json({ error: 'Another video is already being imported. Please wait for it to finish.' });
+    }
+
     const url = String(req.body.url || '').trim();
     const customTitle = String(req.body.title || '').trim().slice(0, 180);
 
@@ -126,18 +132,21 @@ function notifyListeners(job) {
 }
 
 function startDownload(job, outputPath, outputFilename) {
-    // yt-dlp arguments
+    // yt-dlp arguments — optimized for low-resource VPS (1 core, 1GB RAM)
+    // Prefer single pre-merged format to avoid RAM-heavy ffmpeg merge
     const args = [
         '-m', 'yt_dlp',
         '--no-check-certificates',
         '--no-playlist',
         '--merge-output-format', 'mp4',
-        '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        '-f', 'best[ext=mp4]/best[ext=webm]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best',
         '--newline',
         '--progress',
         '--progress-template', '%(progress._percent_str)s|||%(progress._speed_str)s|||%(progress._eta_str)s',
         '-o', outputPath,
         '--print', 'before_dl:%(title)s',
+        '--no-mtime',
+        '--buffer-size', '1M',
         '--no-overwrites',
         job.url
     ];
