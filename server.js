@@ -108,6 +108,12 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`VideoHost listening on http://localhost:${PORT}`);
 });
+
+// Increase timeouts for large file uploads on slow connections
+// Default is 2 minutes which kills uploads on mobile networks
+server.timeout = 10 * 60 * 1000;         // 10 min request timeout
+server.keepAliveTimeout = 65 * 1000;      // 65s keep-alive (slightly above typical proxy 60s)
+server.headersTimeout = 70 * 1000;        // 70s headers timeout

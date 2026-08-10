@@ -56,7 +56,7 @@ const upload = multer({
     limits: { fileSize: maxSize },
     fileFilter
 });
-const STREAM_HIGH_WATER_MARK = 512 * 1024;
+const STREAM_HIGH_WATER_MARK = 64 * 1024;
 
 // GET /dashboard — Video gallery
 router.get('/dashboard', isAuthenticated, (req, res) => {
@@ -77,6 +77,8 @@ router.get('/upload', isAuthenticated, (req, res) => {
 // POST /upload — Handle video upload (any authenticated user)
 router.post('/upload', isAuthenticated, (req, res) => {
     upload.single('video')(req, res, (err) => {
+        const isXHR = req.xhr || (req.headers['x-requested-with'] || '').toLowerCase() === 'xmlhttprequest';
+
         const fail = (status, error) => {
             if (req.file) {
                 fs.promises.unlink(path.join(uploadsDir, req.file.filename)).catch(() => {});
@@ -230,12 +232,21 @@ function streamFile(req, res, filePath, filename, stat) {
     const fileSize = stat.size;
     const range = req.headers.range;
     const mimeType = getMimeType(filename);
+    const etag = `"${stat.size.toString(16)}-${stat.mtime.getTime().toString(16)}"`;
+
+    // ETag-based caching — avoid re-sending data the browser already has
+    if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
+    }
+
     const baseHeaders = {
         'Accept-Ranges': 'bytes',
         'Content-Type': mimeType,
         'Content-Disposition': `inline; filename="${safeHeaderFilename(filename)}"`,
         'Cache-Control': 'private, max-age=86400, no-transform',
         'Last-Modified': stat.mtime.toUTCString(),
+        'ETag': etag,
+        'Connection': 'keep-alive',
         'X-Content-Type-Options': 'nosniff'
     };
 
@@ -246,10 +257,15 @@ function streamFile(req, res, filePath, filename, stat) {
             return res.status(416).end();
         }
 
-        const chunkSize = parsed.end - parsed.start + 1;
+        // Cap chunk size to 2MB to prevent memory spikes on large seeks
+        const MAX_CHUNK = 2 * 1024 * 1024;
+        const requestedEnd = parsed.end;
+        const cappedEnd = Math.min(parsed.start + MAX_CHUNK - 1, requestedEnd);
+        const chunkSize = cappedEnd - parsed.start + 1;
+
         res.writeHead(206, {
             ...baseHeaders,
-            'Content-Range': `bytes ${parsed.start}-${parsed.end}/${fileSize}`,
+            'Content-Range': `bytes ${parsed.start}-${cappedEnd}/${fileSize}`,
             'Content-Length': chunkSize
         });
 
@@ -259,7 +275,7 @@ function streamFile(req, res, filePath, filename, stat) {
 
         return pipeFile(res, filePath, {
             start: parsed.start,
-            end: parsed.end,
+            end: cappedEnd,
             highWaterMark: STREAM_HIGH_WATER_MARK
         });
     }
@@ -287,10 +303,17 @@ function pipeFile(res, filePath, options) {
         res.destroy(err);
     });
 
+    // Clean up stream if client disconnects mid-download
+    res.on('close', () => {
+        if (!stream.destroyed) {
+            stream.destroy();
+        }
+    });
+
     return stream.pipe(res);
 }
 
-function handleStream(req, res) {
+async function handleStream(req, res) {
     const video = db.prepare('SELECT filename FROM videos WHERE id = ? OR filename = ?').get(req.params.videoKey, req.params.videoKey);
 
     if (!video) {
@@ -298,14 +321,13 @@ function handleStream(req, res) {
     }
 
     const filePath = getSafeVideoPath(video.filename);
-
-    if (!filePath || !fs.existsSync(filePath)) {
+    if (!filePath) {
         return res.status(404).send('File not found');
     }
 
     let stat;
     try {
-        stat = fs.statSync(filePath);
+        stat = await fs.promises.stat(filePath);
     } catch (err) {
         return res.status(404).send('File not found');
     }

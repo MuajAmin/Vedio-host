@@ -114,6 +114,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadBtn = document.getElementById('uploadBtn');
 
     if (uploadForm && fileInput) {
+        let activeXhr = null;
+
         uploadForm.addEventListener('submit', (e) => {
             if (!fileInput.files || fileInput.files.length === 0) return;
 
@@ -121,6 +123,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const formData = new FormData(uploadForm);
             const xhr = new XMLHttpRequest();
+            activeXhr = xhr;
+
+            const fileSize = fileInput.files[0].size;
+            let uploadStartTime = Date.now();
+
+            // 5 minute timeout — prevents infinite hang on dead connections
+            xhr.timeout = 5 * 60 * 1000;
 
             // Show progress
             if (uploadProgress) uploadProgress.style.display = 'block';
@@ -133,13 +142,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (e.lengthComputable) {
                     const percent = Math.round((e.loaded / e.total) * 100);
                     if (progressFill) progressFill.style.width = percent + '%';
-                    if (progressText) progressText.textContent = 'Uploading... ' + percent + '%';
+
+                    // Calculate upload speed
+                    const elapsed = (Date.now() - uploadStartTime) / 1000;
+                    let speedText = '';
+                    if (elapsed > 0.5) {
+                        const bytesPerSec = e.loaded / elapsed;
+                        if (bytesPerSec >= 1024 * 1024) {
+                            speedText = ' • ' + (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
+                        } else {
+                            speedText = ' • ' + (bytesPerSec / 1024).toFixed(0) + ' KB/s';
+                        }
+                        // ETA
+                        if (percent < 100) {
+                            const remaining = (e.total - e.loaded) / bytesPerSec;
+                            if (remaining < 60) {
+                                speedText += ' • ~' + Math.ceil(remaining) + 's left';
+                            } else {
+                                speedText += ' • ~' + Math.ceil(remaining / 60) + 'min left';
+                            }
+                        }
+                    }
+
+                    if (progressText) progressText.textContent = 'Uploading... ' + percent + '%' + speedText;
                 }
             });
 
             xhr.addEventListener('load', () => {
-                if (xhr.status === 200) {
-                    if (progressText) progressText.textContent = 'Upload complete.';
+                activeXhr = null;
+                // Server sends 302 redirect on success, XHR auto-follows it → 200
+                // Also accept direct 200 responses
+                if (xhr.status >= 200 && xhr.status < 400) {
+                    if (progressFill) progressFill.style.width = '100%';
+                    if (progressText) progressText.textContent = 'Upload complete! Redirecting...';
                     setTimeout(() => {
                         window.location.href = '/dashboard';
                     }, 500);
@@ -152,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (alertSpan && alertSpan.textContent) {
                             errMsg = alertSpan.textContent;
                         }
-                    } catch (e) {}
+                    } catch (parseErr) {}
                     if (progressText) progressText.textContent = errMsg;
                     if (uploadBtn) {
                         uploadBtn.disabled = false;
@@ -162,10 +197,30 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             xhr.addEventListener('error', () => {
-                if (progressText) progressText.textContent = 'Upload failed. Network error.';
+                activeXhr = null;
+                if (progressText) progressText.textContent = 'Upload failed. Network error — check your connection.';
                 if (uploadBtn) {
                     uploadBtn.disabled = false;
                     uploadBtn.innerHTML = '<span>Try again</span>';
+                }
+            });
+
+            xhr.addEventListener('timeout', () => {
+                activeXhr = null;
+                if (progressText) progressText.textContent = 'Upload timed out. Connection too slow — try again later.';
+                if (uploadBtn) {
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<span>Try again</span>';
+                }
+            });
+
+            xhr.addEventListener('abort', () => {
+                activeXhr = null;
+                if (progressText) progressText.textContent = 'Upload cancelled.';
+                if (progressFill) progressFill.style.width = '0%';
+                if (uploadBtn) {
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Upload</span>';
                 }
             });
 
@@ -371,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     connectionDetail('The connection is slow. Trying to buffer enough video before playback.'),
                     { showOverlay: true, canRetry: true, persistent: true }
                 );
-            }, 3500);
+            }, 2000);
         }
 
         function videoErrorMessage() {
@@ -453,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'The connection is not stable enough right now. Retry when the signal improves.',
                     { showOverlay: true, canRetry: true, persistent: true }
                 );
-            }, 10000);
+            }, 4000);
         }
 
         // --- Play/Pause ---
@@ -559,6 +614,11 @@ document.addEventListener('DOMContentLoaded', () => {
             clearRecoveryTimer();
             clearSlowStartTimer();
             updateBuffer();
+            clearPlayerStatus();
+        });
+        vid.addEventListener('canplaythrough', () => {
+            clearRecoveryTimer();
+            clearSlowStartTimer();
             clearPlayerStatus();
         });
         vid.addEventListener('waiting', () => {

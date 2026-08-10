@@ -132,7 +132,7 @@ const commentsHtml = comments.length === 0
             </div>
 
             <!-- The Video Element -->
-            <video id="vpVideo" preload="auto" playsinline muted data-video-id="${h(video.id)}" data-stream-url="${h(streamUrl)}" data-source-type="${h(sourceType)}">
+            <video id="vpVideo" preload="metadata" playsinline muted data-video-id="${h(video.id)}" data-stream-url="${h(streamUrl)}" data-source-type="${h(sourceType)}">
                 <source src="${h(streamUrl)}" type="${h(sourceType)}">
             </video>
 
