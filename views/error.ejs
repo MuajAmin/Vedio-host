@@ -1,10 +1,14 @@
 <%
 const h = escapeHtml;
+const isHajera = user === 'hajera';
 const destination = user ? '/dashboard' : '/';
 const label = user ? 'Go to Dashboard' : 'Go to Login';
 %>
 <%- include('layout', { pageTitle: 'Error', body: `
-<div class="error-container">
+<div class="app-container ${isHajera ? 'hajera-mode' : ''}">
+    ${isHajera ? '<div class="floating-hearts-container" id="floatingHeartsContainer"></div>' : ''}
+    ${isHajera ? '<div class="sparkle-trail-container" id="sparkleTrailContainer"></div>' : ''}
+    <div class="error-container">
     <div class="error-content">
         <div class="error-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="80" height="80">
@@ -16,6 +20,7 @@ const label = user ? 'Go to Dashboard' : 'Go to Login';
         <h1>Something went wrong</h1>
         <p>${h(message || 'Unexpected error.')}</p>
         <a href="${destination}" class="btn btn-primary">${label}</a>
+    </div>
     </div>
 </div>
 ` }) %>

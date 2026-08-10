@@ -66,7 +66,9 @@ router.post('/import-url', isAuthenticated, (req, res) => {
 
     const url = String(req.body.url || '').trim();
     const customTitle = String(req.body.title || '').trim().slice(0, 180);
-    const quality = String(req.body.quality || '480').trim();
+    const allowedQualities = new Set(['best', '720', '480', '360']);
+    const rawQuality = String(req.body.quality || '720').trim();
+    const quality = allowedQualities.has(rawQuality) ? rawQuality : '720';
 
     if (!url) {
         return res.status(400).json({ error: 'No URL provided.' });

@@ -3217,7 +3217,7 @@ kbd {
     box-shadow: none;
 }
 
-/* ---- Hajera Mode — Romantic Accent Overrides ---- */
+/* ---- Hajera Mode — Romantic Accent Overrides Across All Pages ---- */
 .hajera-mode {
     --hajera-accent: #f43f5e;
     --hajera-accent-glow: rgba(244, 63, 94, 0.22);
@@ -3250,6 +3250,82 @@ kbd {
 
 .hajera-mode .play-overlay {
     background: rgba(244, 63, 94, 0.85);
+}
+
+.hajera-mode .btn-primary {
+    background: linear-gradient(135deg, #f43f5e, #be123c);
+    box-shadow: 0 4px 20px rgba(244, 63, 94, 0.35);
+}
+
+.hajera-mode .btn-primary:hover {
+    box-shadow: 0 6px 25px rgba(244, 63, 94, 0.5);
+}
+
+.hajera-mode .btn-ghost:hover {
+    background: rgba(244, 63, 94, 0.12);
+    color: #fecdd3;
+    border-color: rgba(244, 63, 94, 0.25);
+}
+
+.hajera-mode .upload-container {
+    border-color: rgba(244, 63, 94, 0.25);
+    box-shadow: 0 12px 40px rgba(244, 63, 94, 0.12);
+}
+
+.hajera-mode .upload-header h1 {
+    background: linear-gradient(135deg, #fecdd3, #f43f5e, #fda4af);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.hajera-mode .upload-tab.active {
+    background: rgba(244, 63, 94, 0.18);
+    color: #fecdd3;
+    border-color: rgba(244, 63, 94, 0.4);
+}
+
+.hajera-mode .dropzone:hover,
+.hajera-mode .dropzone.drag-over {
+    border-color: #f43f5e;
+    background: rgba(244, 63, 94, 0.06);
+}
+
+.hajera-mode .form-input:focus,
+.hajera-mode .url-input:focus,
+.hajera-mode .quality-select:focus,
+.hajera-mode .comment-form textarea:focus {
+    border-color: rgba(244, 63, 94, 0.5);
+    box-shadow: 0 0 18px rgba(244, 63, 94, 0.18);
+}
+
+.hajera-mode .progress-fill,
+.hajera-mode .import-progress-fill {
+    background: linear-gradient(90deg, #f43f5e, #fb7185);
+}
+
+.hajera-mode .badge-viewer,
+.hajera-mode .avatar-viewer {
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.25), rgba(190, 18, 60, 0.35));
+    border-color: rgba(244, 63, 94, 0.4);
+    color: #fecdd3;
+}
+
+.hajera-mode .vp-progress-played {
+    background: linear-gradient(90deg, #f43f5e, #fb7185);
+}
+
+.hajera-mode .vp-progress-handle {
+    background: #f43f5e;
+    box-shadow: 0 0 10px rgba(244, 63, 94, 0.8);
+}
+
+.hajera-mode .upload-fab {
+    background: linear-gradient(135deg, #f43f5e, #be123c);
+    box-shadow: 0 4px 15px rgba(244, 63, 94, 0.4);
+}
+
+.hajera-mode .bottom-nav-item.active {
+    color: #f43f5e;
 }
 
 .romantic-title {

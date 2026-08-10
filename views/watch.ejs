@@ -1,6 +1,7 @@
 <%
 const h = escapeHtml;
 const isAdmin = user === 'muaj';
+const isHajera = user === 'hajera';
 const displayName = isAdmin ? 'Muaj' : 'Hajera';
 
 function formatDate(value, withTime) {
@@ -53,11 +54,14 @@ const commentsHtml = comments.length === 0
     }).join('');
 %>
 <%- include('layout', { pageTitle: video.title, body: `
-<div class="app-container">
+<div class="app-container ${isHajera ? 'hajera-mode' : ''}">
     <div class="ambient-background">
         <div class="ambient-orb orb-1"></div>
         <div class="ambient-orb orb-2"></div>
     </div>
+
+    ${isHajera ? '<div class="floating-hearts-container" id="floatingHeartsContainer"></div>' : ''}
+    ${isHajera ? '<div class="sparkle-trail-container" id="sparkleTrailContainer"></div>' : ''}
 
     <nav class="navbar">
         <div class="nav-left">
