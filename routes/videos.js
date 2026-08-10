@@ -200,8 +200,18 @@ function getMimeType(filename) {
     return mimeMap[ext] || 'video/mp4';
 }
 
-function safeHeaderFilename(filename) {
-    return path.basename(filename).replace(/["\\\r\n]/g, '_');
+function formatContentDisposition(filename, type = 'attachment') {
+    const ext = path.extname(filename).toLowerCase();
+    const base = path.basename(filename, ext);
+
+    const asciiBase = base.replace(/["\\\r\n\x00-\x1F\x7F-\uFFFF]/g, '_').trim() || 'video';
+    const asciiFilename = `${asciiBase}${ext}`;
+
+    const utf8Filename = encodeURIComponent(path.basename(filename))
+        .replace(/['()]/g, escape)
+        .replace(/\*/g, '%2A');
+
+    return `${type}; filename="${asciiFilename}"; filename*=UTF-8''${utf8Filename}`;
 }
 
 function getSafeVideoPath(filename) {
@@ -262,7 +272,7 @@ function streamFile(req, res, filePath, filename, stat) {
     const baseHeaders = {
         'Accept-Ranges': 'bytes',
         'Content-Type': mimeType,
-        'Content-Disposition': `inline; filename="${safeHeaderFilename(filename)}"`,
+        'Content-Disposition': formatContentDisposition(filename, 'inline'),
         'Cache-Control': 'private, max-age=86400, no-transform',
         'Last-Modified': stat.mtime.toUTCString(),
         'ETag': etag,
@@ -380,11 +390,14 @@ router.get('/download/:id', isAuthenticated, async (req, res) => {
     }
 
     const ext = path.extname(video.filename).toLowerCase() || '.mp4';
-    const downloadName = safeHeaderFilename((video.original_name || video.title || 'video') + (video.original_name ? '' : ext));
+    let rawName = video.original_name || video.title || 'video';
+    if (!path.extname(rawName)) {
+        rawName += ext;
+    }
 
     res.writeHead(200, {
         'Content-Type': getMimeType(video.filename),
-        'Content-Disposition': `attachment; filename="${downloadName}"`,
+        'Content-Disposition': formatContentDisposition(rawName, 'attachment'),
         'Content-Length': stat.size,
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff'
