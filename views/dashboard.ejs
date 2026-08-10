@@ -51,7 +51,7 @@ const videoGrid = videos.length === 0
                         <polygon points="6,4 20,12 6,20"/>
                     </svg>
                 </div>
-                <div class="card-duration">${h(formatSize(v.size))}</div>
+                <div class="card-duration">${v.duration ? h(v.duration) : h(formatSize(v.size))}</div>
             </div>
             <div class="card-info">
                 <h3 class="card-title">${h(v.title)}</h3>

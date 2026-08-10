@@ -58,7 +58,7 @@ router.post('/comment/delete/:id', isAuthenticated, (req, res) => {
 
     if (comment && (req.session.user === 'muaj' || req.session.user === comment.user)) {
         db.prepare('DELETE FROM comments WHERE id = ?').run(req.params.id);
-        return res.redirect(`/watch/${comment.video_id}`);
+        return res.redirect(`/watch/${encodeURIComponent(comment.video_id)}`);
     }
 
     res.redirect('/dashboard');

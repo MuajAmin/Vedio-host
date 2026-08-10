@@ -128,6 +128,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const fileSize = fileInput.files[0].size;
             let uploadStartTime = Date.now();
 
+            // Sliding window for accurate real-time speed (last 3 seconds)
+            const speedSamples = [];
+            const SPEED_WINDOW_MS = 3000;
+
+            function getRealtimeSpeed(loaded) {
+                const now = Date.now();
+                speedSamples.push({ time: now, bytes: loaded });
+
+                // Remove samples older than window
+                while (speedSamples.length > 1 && now - speedSamples[0].time > SPEED_WINDOW_MS) {
+                    speedSamples.shift();
+                }
+
+                if (speedSamples.length < 2) return 0;
+
+                const oldest = speedSamples[0];
+                const newest = speedSamples[speedSamples.length - 1];
+                const timeDiff = (newest.time - oldest.time) / 1000;
+                if (timeDiff < 0.3) return 0;
+
+                return (newest.bytes - oldest.bytes) / timeDiff;
+            }
+
             // 5 minute timeout — prevents infinite hang on dead connections
             xhr.timeout = 5 * 60 * 1000;
 
@@ -143,28 +166,37 @@ document.addEventListener('DOMContentLoaded', () => {
                     const percent = Math.round((e.loaded / e.total) * 100);
                     if (progressFill) progressFill.style.width = percent + '%';
 
-                    // Calculate upload speed
-                    const elapsed = (Date.now() - uploadStartTime) / 1000;
+                    // Real-time speed using sliding window
+                    const bytesPerSec = getRealtimeSpeed(e.loaded);
                     let speedText = '';
-                    if (elapsed > 0.5) {
-                        const bytesPerSec = e.loaded / elapsed;
+
+                    if (bytesPerSec > 0) {
                         if (bytesPerSec >= 1024 * 1024) {
                             speedText = ' • ' + (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
                         } else {
                             speedText = ' • ' + (bytesPerSec / 1024).toFixed(0) + ' KB/s';
                         }
-                        // ETA
-                        if (percent < 100) {
+                        // Accurate ETA based on current speed
+                        if (percent < 100 && bytesPerSec > 0) {
                             const remaining = (e.total - e.loaded) / bytesPerSec;
                             if (remaining < 60) {
                                 speedText += ' • ~' + Math.ceil(remaining) + 's left';
+                            } else if (remaining < 3600) {
+                                const mins = Math.floor(remaining / 60);
+                                const secs = Math.ceil(remaining % 60);
+                                speedText += ' • ~' + mins + 'm ' + secs + 's left';
                             } else {
-                                speedText += ' • ~' + Math.ceil(remaining / 60) + 'min left';
+                                speedText += ' • ~' + Math.floor(remaining / 3600) + 'h ' + Math.floor((remaining % 3600) / 60) + 'm left';
                             }
                         }
                     }
 
-                    if (progressText) progressText.textContent = 'Uploading... ' + percent + '%' + speedText;
+                    // Uploaded / Total size display
+                    const uploadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
+                    const totalMB = (e.total / (1024 * 1024)).toFixed(1);
+                    const sizeText = ' • ' + uploadedMB + '/' + totalMB + ' MB';
+
+                    if (progressText) progressText.textContent = 'Uploading... ' + percent + '%' + sizeText + speedText;
                 }
             });
 

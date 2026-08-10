@@ -71,27 +71,85 @@ function generateVideoThumbnail(videoFilename, videoId) {
 async function backfillMissingThumbnails() {
     try {
         const rows = db.prepare(
-            'SELECT id, filename FROM videos WHERE thumbnail IS NULL OR thumbnail = ""'
+            'SELECT id, filename, thumbnail, duration FROM videos WHERE thumbnail IS NULL OR thumbnail = \'\' OR duration IS NULL OR duration = \'\''
         ).all();
 
         if (rows.length === 0) return;
 
-        console.log(`[thumbnail] Found ${rows.length} video(s) missing thumbnails. Processing in background...`);
+        console.log(`[backfill] Found ${rows.length} video(s) missing metadata. Processing in background...`);
 
         for (const video of rows) {
-            const thumbFilename = await generateVideoThumbnail(video.filename, video.id);
-            if (thumbFilename) {
-                db.prepare('UPDATE videos SET thumbnail = ? WHERE id = ?').run(thumbFilename, video.id);
-                console.log(`[thumbnail] Generated thumbnail for video ${video.id}`);
+            // Generate thumbnail if missing
+            if (!video.thumbnail) {
+                const thumbFilename = await generateVideoThumbnail(video.filename, video.id);
+                if (thumbFilename) {
+                    db.prepare('UPDATE videos SET thumbnail = ? WHERE id = ?').run(thumbFilename, video.id);
+                    console.log(`[backfill] Generated thumbnail for video ${video.id}`);
+                }
+            }
+            // Extract duration if missing
+            if (!video.duration) {
+                const dur = await getVideoDuration(video.filename);
+                if (dur) {
+                    db.prepare('UPDATE videos SET duration = ? WHERE id = ?').run(dur, video.id);
+                    console.log(`[backfill] Extracted duration ${dur} for video ${video.id}`);
+                }
             }
         }
     } catch (err) {
-        console.error('[thumbnail] Error during thumbnail backfill:', err.message);
+        console.error('[backfill] Error during metadata backfill:', err.message);
     }
+}
+
+/**
+ * Gets video duration using ffprobe (comes with ffmpeg).
+ * Lightweight — reads only container metadata, no decoding.
+ * 
+ * @param {string} videoFilename Filename in uploads/videos
+ * @returns {Promise<string|null>} Duration as "H:MM:SS" or "M:SS", null if failed
+ */
+function getVideoDuration(videoFilename) {
+    return new Promise((resolve) => {
+        const inputPath = path.join(videosDir, videoFilename);
+
+        if (!fs.existsSync(inputPath)) {
+            return resolve(null);
+        }
+
+        const args = [
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'csv=p=0',
+            inputPath
+        ];
+
+        execFile('ffprobe', args, { timeout: 10000, windowsHide: true }, (err, stdout) => {
+            if (err) {
+                return resolve(null);
+            }
+
+            const seconds = parseFloat(stdout.trim());
+            if (!isFinite(seconds) || seconds <= 0) {
+                return resolve(null);
+            }
+
+            // Format as H:MM:SS or M:SS
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+
+            if (h > 0) {
+                resolve(`${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`);
+            } else {
+                resolve(`${m}:${s < 10 ? '0' : ''}${s}`);
+            }
+        });
+    });
 }
 
 module.exports = {
     generateVideoThumbnail,
+    getVideoDuration,
     backfillMissingThumbnails,
     thumbnailsDir
 };

@@ -58,12 +58,12 @@ const upload = multer({
 });
 const STREAM_HIGH_WATER_MARK = 64 * 1024;
 
-const { generateVideoThumbnail } = require('../utils/thumbnail');
+const { generateVideoThumbnail, getVideoDuration } = require('../utils/thumbnail');
 
 // GET /dashboard — Video gallery
 router.get('/dashboard', isAuthenticated, (req, res) => {
     const videos = db.prepare(
-        'SELECT id, title, size, thumbnail, uploaded_at FROM videos ORDER BY uploaded_at DESC'
+        'SELECT id, title, size, duration, thumbnail, uploaded_at FROM videos ORDER BY uploaded_at DESC'
     ).all();
     res.render('dashboard', {
         user: req.session.user,
@@ -120,16 +120,20 @@ router.post('/upload', isAuthenticated, (req, res) => {
 
         // Generate video thumbnail (lightweight single-frame FFmpeg extraction)
         let thumbnail = null;
+        let duration = null;
         try {
-            thumbnail = await generateVideoThumbnail(req.file.filename, id);
+            [thumbnail, duration] = await Promise.all([
+                generateVideoThumbnail(req.file.filename, id),
+                getVideoDuration(req.file.filename)
+            ]);
         } catch (thumbErr) {
-            console.warn('[upload] Thumbnail generation error:', thumbErr.message);
+            console.warn('[upload] Metadata extraction error:', thumbErr.message);
         }
 
         try {
             db.prepare(
-                'INSERT INTO videos (id, title, filename, original_name, size, thumbnail) VALUES (?, ?, ?, ?, ?, ?)'
-            ).run(id, title || req.file.originalname, req.file.filename, req.file.originalname, req.file.size, thumbnail);
+                'INSERT INTO videos (id, title, filename, original_name, size, thumbnail, duration) VALUES (?, ?, ?, ?, ?, ?, ?)'
+            ).run(id, title || req.file.originalname, req.file.filename, req.file.originalname, req.file.size, thumbnail, duration);
         } catch (dbError) {
             return fail(500, 'Could not save video metadata.');
         }
@@ -165,9 +169,15 @@ router.post('/delete/:id', isAuthenticated, (req, res) => {
     const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(req.params.id);
 
     if (video) {
+        // Delete video file
         const filePath = getSafeVideoPath(video.filename);
         if (filePath && fs.existsSync(filePath)) {
             fs.promises.unlink(filePath).catch(() => {});
+        }
+        // Delete thumbnail file if exists
+        if (video.thumbnail) {
+            const thumbPath = path.join(__dirname, '..', 'uploads', 'thumbnails', path.basename(video.thumbnail));
+            fs.promises.unlink(thumbPath).catch(() => {});
         }
         db.prepare('DELETE FROM videos WHERE id = ?').run(req.params.id);
     }
@@ -348,5 +358,43 @@ async function handleStream(req, res) {
 // Stream video
 router.head('/stream/:videoKey', isAuthenticated, handleStream);
 router.get('/stream/:videoKey', isAuthenticated, handleStream);
+
+// Download video — serves file as attachment for browser download
+router.get('/download/:id', isAuthenticated, async (req, res) => {
+    const video = db.prepare('SELECT id, filename, original_name, title FROM videos WHERE id = ?').get(req.params.id);
+
+    if (!video) {
+        return res.status(404).send('File not found');
+    }
+
+    const filePath = getSafeVideoPath(video.filename);
+    if (!filePath) {
+        return res.status(404).send('File not found');
+    }
+
+    let stat;
+    try {
+        stat = await fs.promises.stat(filePath);
+    } catch (err) {
+        return res.status(404).send('File not found');
+    }
+
+    const ext = path.extname(video.filename).toLowerCase() || '.mp4';
+    const downloadName = safeHeaderFilename((video.original_name || video.title || 'video') + (video.original_name ? '' : ext));
+
+    res.writeHead(200, {
+        'Content-Type': getMimeType(video.filename),
+        'Content-Disposition': `attachment; filename="${downloadName}"`,
+        'Content-Length': stat.size,
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff'
+    });
+
+    if (req.method === 'HEAD') {
+        return res.end();
+    }
+
+    return pipeFile(res, filePath, { highWaterMark: STREAM_HIGH_WATER_MARK });
+});
 
 module.exports = router;

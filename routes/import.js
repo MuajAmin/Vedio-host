@@ -327,19 +327,23 @@ async function startDownload(job, outputPath, outputFilename) {
             const videoId = uuidv4();
             const title = job.customTitle || job.title || 'Imported Video';
 
-            // Generate thumbnail
+            // Generate thumbnail and extract duration
             let thumbnail = null;
+            let duration = null;
             try {
-                const { generateVideoThumbnail } = require('../utils/thumbnail');
-                thumbnail = await generateVideoThumbnail(finalFilename, videoId);
+                const { generateVideoThumbnail, getVideoDuration } = require('../utils/thumbnail');
+                [thumbnail, duration] = await Promise.all([
+                    generateVideoThumbnail(finalFilename, videoId),
+                    getVideoDuration(finalFilename)
+                ]);
             } catch (tErr) {
-                console.warn('[import] Thumbnail extraction error:', tErr.message);
+                console.warn('[import] Metadata extraction error:', tErr.message);
             }
 
             try {
                 db.prepare(
-                    'INSERT INTO videos (id, title, filename, original_name, size, thumbnail) VALUES (?, ?, ?, ?, ?, ?)'
-                ).run(videoId, title, finalFilename, title + '.mp4', fileSize, thumbnail);
+                    'INSERT INTO videos (id, title, filename, original_name, size, thumbnail, duration) VALUES (?, ?, ?, ?, ?, ?, ?)'
+                ).run(videoId, title, finalFilename, title + '.mp4', fileSize, thumbnail, duration);
 
                 job.status = 'done';
                 job.progress = 100;
