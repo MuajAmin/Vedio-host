@@ -339,7 +339,6 @@ function buildDownloadArgs(job, outputPath) {
         '--no-overwrites',
         // Speed optimizations
         '--buffer-size', '4M',
-        '--http-chunk-size', '10M',
         '--concurrent-fragments', '4',
         '--throttled-rate', '100K',
         '--retries', '3',
@@ -350,10 +349,12 @@ function buildDownloadArgs(job, outputPath) {
     if (formatId) {
         args.push('-f', formatId);
     } else {
+        // bv*+ba/b/best: try separate streams first, fall back to combined, then any best
+        // No --format-sort-force so sites with limited formats (xHamster etc.) still work
         const formatSort = job.quality === 'best'
             ? 'res,fps,size,br'
             : `res:${job.quality},fps,size,br`;
-        args.push('-f', 'bv*+ba/b', '-S', formatSort, '--format-sort-force');
+        args.push('-f', 'bv*+ba/b/best', '-S', formatSort);
     }
 
     args.push(job.url);
