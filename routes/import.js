@@ -280,6 +280,14 @@ const domainAliases = {
     'm.youtube.com': 'www.youtube.com',
     'music.youtube.com': 'www.youtube.com',
     'm.pornhub.com': 'www.pornhub.com',
+    // xHamster variants → base domain for cookie matching
+    'm.xhamster.com': 'xhamster.com',
+    'xhamster2.com': 'xhamster.com',
+    'xhamster3.com': 'xhamster.com',
+    'xhamster.desi': 'xhamster.com',
+    'xhday.com': 'xhamster.com',
+    'xhvid.com': 'xhamster.com',
+    'xhplus.live': 'xhamster.com',
 };
 
 function findCookiesFileForUrl(url) {
