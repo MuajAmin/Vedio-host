@@ -336,8 +336,14 @@ function buildDownloadArgs(job, outputPath) {
         '-o', outputPath,
         '--print', 'before_dl:%(title)s',
         '--no-mtime',
-        '--buffer-size', '1M',
-        '--no-overwrites'
+        '--no-overwrites',
+        // Speed optimizations
+        '--buffer-size', '4M',
+        '--http-chunk-size', '10M',
+        '--concurrent-fragments', '4',
+        '--throttled-rate', '100K',
+        '--retries', '3',
+        '--fragment-retries', '3'
     ];
 
     const formatId = sanitizeFormatId(job.formatId);
