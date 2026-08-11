@@ -209,9 +209,7 @@ const videoGrid = videos.length === 0
                     <line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
             </div>
-            <span>Upload</span>
         </a>
-        ${isAdmin ? '<a href="/admin" class="bottom-nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z"/><path d="M9 12l2 2 4-5"/></svg><span>Admin</span></a>' : ''}
         <form action="/logout" method="POST" class="bottom-nav-form">
             <input type="hidden" name="_csrf" value="${h(csrfToken)}">
             <button type="submit" class="bottom-nav-item">
