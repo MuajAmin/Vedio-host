@@ -927,15 +927,28 @@ async function fetchVideoInfo(url) {
 
         proc.on('close', (code) => {
             clearTimeout(timer);
+
+            // Try parsing JSON even if exit code is non-zero —
+            // some sites (xHamster etc.) output valid JSON but yt-dlp still reports warnings/errors
+            if (stdout.trim()) {
+                try {
+                    const info = JSON.parse(stdout);
+                    if (info && (info.formats || info.title || info.id)) {
+                        if (code !== 0) {
+                            console.warn('[import] fetchVideoInfo: yt-dlp exited with code', code, 'but got valid JSON — using it');
+                        }
+                        return resolve(info);
+                    }
+                } catch {
+                    // JSON parse failed, fall through to error handling
+                }
+            }
+
             if (code !== 0) {
                 return reject(new Error(buildErrorMessage(stderr)));
             }
 
-            try {
-                return resolve(JSON.parse(stdout));
-            } catch {
-                return reject(new Error('Could not read format information.'));
-            }
+            return reject(new Error('Could not read format information.'));
         });
     });
 }
