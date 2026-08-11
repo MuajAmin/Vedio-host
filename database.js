@@ -59,13 +59,18 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 `);
 
-// Migration: Check if thumbnail column exists in existing database
+// Migration: Ensure thumbnail and duration columns exist in older databases
 try {
     const tableInfo = db.prepare("PRAGMA table_info(videos)").all();
     const hasThumbnail = tableInfo.some(col => col.name === 'thumbnail');
     if (!hasThumbnail) {
         db.exec('ALTER TABLE videos ADD COLUMN thumbnail TEXT');
         console.log('[db] Migrated videos table: added thumbnail column.');
+    }
+    const hasDuration = tableInfo.some(col => col.name === 'duration');
+    if (!hasDuration) {
+        db.exec('ALTER TABLE videos ADD COLUMN duration TEXT');
+        console.log('[db] Migrated videos table: added duration column.');
     }
 } catch (err) {
     console.error('[db] Migration check error:', err.message);

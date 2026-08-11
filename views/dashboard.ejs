@@ -34,7 +34,7 @@ const videoGrid = videos.length === 0
     : `<div class="video-grid" id="videoGrid">${videos.map((v) => {
         const watchUrl = '/watch/' + encodeURIComponent(v.id);
         const thumbImg = v.thumbnail
-            ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="thumb-img" loading="lazy" onerror="this.classList.add('thumb-error');" />`
+            ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="thumb-img" loading="lazy" />`
             : '';
         return `<a href="${watchUrl}" class="video-card" data-title="${h(v.title.toLowerCase())}">
             <div class="card-thumbnail">

@@ -20,6 +20,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const prefersReducedMotion = window.matchMedia &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    // Thumbnail error fallback — replaces inline onerror blocked by CSP
+    document.addEventListener('error', (e) => {
+        if (e.target.matches && e.target.matches('.thumb-img')) {
+            e.target.classList.add('thumb-error');
+        }
+    }, true); // capture phase — img error events don't bubble
+
     document.addEventListener('submit', (e) => {
         const form = e.target;
         if (!(form instanceof HTMLFormElement)) return;

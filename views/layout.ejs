@@ -12,21 +12,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
-    <script>
-        (function () {
-            var savedTheme = 'cinematic';
-            try {
-                savedTheme = localStorage.getItem('videohosk_theme') || savedTheme;
-            } catch (err) { }
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        })();
-    </script>
-    <link rel="stylesheet" href="/css/style.css?v=1.6">
+    <script src="/js/theme-init.js"></script>
+    <link rel="stylesheet" href="/css/style.css?v=1.7">
 </head>
 
 <body>
     <%- body %>
-        <script src="/js/app.js?v=1.6"></script>
+        <script src="/js/app.js?v=1.7"></script>
 </body>
 
 </html>

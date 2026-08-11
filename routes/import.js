@@ -3,6 +3,8 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const dns = require('dns');
+const net = require('net');
 const { v4: uuidv4 } = require('uuid');
 const { spawn } = require('child_process');
 const { isAuthenticated } = require('../middleware/auth');
@@ -25,15 +27,37 @@ if (!fs.existsSync(uploadsDir)) {
 // Active import jobs (keyed by job ID)
 const activeJobs = new Map();
 
-// Validate URL — blocks internal/private IPs to prevent SSRF
-function isValidUrl(str) {
+// Check if an IP address falls within private/reserved ranges
+function isPrivateIP(ip) {
+    // IPv4 private/reserved ranges
+    const parts = ip.split('.').map(Number);
+    if (parts.length === 4) {
+        if (parts[0] === 127) return true;                                    // 127.0.0.0/8
+        if (parts[0] === 10) return true;                                     // 10.0.0.0/8
+        if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12
+        if (parts[0] === 192 && parts[1] === 168) return true;                // 192.168.0.0/16
+        if (parts[0] === 169 && parts[1] === 254) return true;                // 169.254.0.0/16
+        if (parts[0] === 0) return true;                                       // 0.0.0.0/8
+        if (ip === '255.255.255.255') return true;                             // broadcast
+    }
+    // IPv6 loopback and private
+    if (ip === '::1' || ip === '::') return true;
+    const lower = ip.toLowerCase();
+    if (lower.startsWith('fe80:')) return true;   // link-local
+    if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // unique local
+    return false;
+}
+
+// Validate URL format — blocks obviously bad hostnames (sync, fast check)
+function isValidUrlFormat(str) {
     try {
         const url = new URL(str);
         if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
 
-        const hostname = url.hostname.toLowerCase();
+        // Normalize: strip trailing dots (e.g. "localhost." → "localhost")
+        const hostname = url.hostname.toLowerCase().replace(/\.+$/, '');
 
-        // Block localhost, IPv6 loopback, and private/link-local ranges
+        // Block localhost, loopback, and private/link-local patterns
         const blockedPatterns = [
             /^localhost$/i,
             /^127\./,
@@ -54,14 +78,39 @@ function isValidUrl(str) {
             if (pattern.test(hostname)) return false;
         }
 
+        // Block raw IP addresses that are private
+        if (net.isIP(hostname) && isPrivateIP(hostname)) return false;
+
         return true;
     } catch {
         return false;
     }
 }
 
+// Full URL safety check — resolves DNS to prevent rebinding attacks
+async function validateUrlSafety(str) {
+    if (!isValidUrlFormat(str)) return false;
+
+    try {
+        const url = new URL(str);
+        const hostname = url.hostname.toLowerCase().replace(/\.+$/, '');
+
+        // Skip DNS check for raw IP addresses (already checked in isValidUrlFormat)
+        if (net.isIP(hostname)) return true;
+
+        // Resolve hostname and check the actual IP
+        const { address } = await dns.promises.lookup(hostname);
+        if (isPrivateIP(address)) return false;
+
+        return true;
+    } catch {
+        // DNS resolution failure — treat as invalid
+        return false;
+    }
+}
+
 // POST /import-url — Start a video import from URL
-router.post('/import-url', isAuthenticated, (req, res) => {
+router.post('/import-url', isAuthenticated, async (req, res) => {
     console.log('[import] POST /import-url received, body:', JSON.stringify(req.body));
     // Manual CSRF check since we skip global CSRF for this route
     let csrfOk = false;
@@ -84,7 +133,7 @@ router.post('/import-url', isAuthenticated, (req, res) => {
         return res.status(400).json({ error: 'No URL provided.' });
     }
 
-    if (!isValidUrl(url)) {
+    if (!await validateUrlSafety(url)) {
         return res.status(400).json({ error: 'Invalid URL. Must start with http:// or https://' });
     }
 

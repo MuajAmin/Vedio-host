@@ -5,6 +5,7 @@ const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
 const { attachLocals, requireCsrf } = require('./utils/security');
+const { isAuthenticated } = require('./middleware/auth');
 const SQLiteSessionStore = require('./utils/sessionStore');
 const db = require('./database');
 
@@ -76,10 +77,10 @@ app.use(express.static(path.join(__dirname, 'public'), {
     immutable: isProduction,
     maxAge: isProduction ? '7d' : 0
 }));
-app.use('/thumbnails', express.static(path.join(__dirname, 'uploads', 'thumbnails'), {
-    etag: true,
-    maxAge: isProduction ? '7d' : 0
-}));
+// Health check — before session middleware to avoid creating sessions
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', uptime: Math.floor(process.uptime()) });
+});
 
 // Session
 app.use(session({
@@ -98,6 +99,19 @@ app.use(session({
     }
 }));
 app.use(attachLocals);
+
+// Serve thumbnails behind authentication (prevents unauthenticated access to private thumbnails)
+app.get('/thumbnails/:file', isAuthenticated, (req, res) => {
+    const filename = path.basename(req.params.file); // prevent path traversal
+    const filePath = path.join(__dirname, 'uploads', 'thumbnails', filename);
+    res.sendFile(filePath, {
+        headers: {
+            'Cache-Control': isProduction ? 'private, max-age=604800' : 'no-cache'
+        }
+    }, (err) => {
+        if (err && !res.headersSent) res.status(404).end();
+    });
+});
 
 app.use((req, res, next) => {
     if (req.path === '/upload' && req.method === 'POST') {
@@ -120,10 +134,7 @@ app.use('/', videoRoutes);
 app.use('/', commentRoutes);
 app.use('/', importRoutes);
 
-// Health check endpoint for monitoring / reverse proxy
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok', uptime: Math.floor(process.uptime()) });
-});
+
 
 // Error handling
 app.use((req, res) => {
