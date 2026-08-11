@@ -224,20 +224,21 @@ async function startDownload(job, outputPath, outputFilename) {
     }
 
     // Build format string based on quality selection
+    // Using simple fallback chains — --merge-output-format mp4 handles conversion
     let formatStr;
     switch (job.quality) {
         case 'best':
-            formatStr = 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best';
+            formatStr = 'bestvideo+bestaudio/best';
             break;
         case '480':
-            formatStr = 'best[height<=480][ext=mp4]/best[height<=480]/bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]';
+            formatStr = 'bestvideo[height<=480]+bestaudio/best[height<=480]/best';
             break;
         case '360':
-            formatStr = 'best[height<=360][ext=mp4]/best[height<=360]/bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]';
+            formatStr = 'bestvideo[height<=360]+bestaudio/best[height<=360]/best';
             break;
         case '720':
         default:
-            formatStr = 'best[height<=720][ext=mp4]/best[height<=720]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]';
+            formatStr = 'bestvideo[height<=720]+bestaudio/best[height<=720]/best';
             break;
     }
 
