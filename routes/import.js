@@ -2,10 +2,19 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 const { spawn } = require('child_process');
 const { isAuthenticated } = require('../middleware/auth');
 const { requireCsrf } = require('../utils/security');
+
+// Ensure deno is on PATH for yt-dlp JS challenge solving (YouTube requires it)
+const denoBinPaths = [
+    path.join(os.homedir(), '.deno', 'bin'),          // Windows/Linux deno install
+    '/usr/local/bin',                                  // Linux global
+    '/usr/bin',                                        // Linux system
+];
+const extendedPath = [...denoBinPaths, process.env.PATH || process.env.Path || ''].join(path.delimiter);
 const db = require('../database');
 
 const uploadsDir = path.join(__dirname, '..', 'uploads', 'videos');
@@ -237,6 +246,7 @@ async function startDownload(job, outputPath, outputFilename) {
         '--no-check-certificates',
         '--no-playlist',
         '--merge-output-format', 'mp4',
+        '--remote-components', 'ejs:github',  // Required for YouTube JS challenge solving (yt-dlp 2026.07+)
         '-f', formatStr,
         '--newline',
         '--progress',
@@ -257,7 +267,8 @@ async function startDownload(job, outputPath, outputFilename) {
     const proc = spawn(pythonCmd.cmd, args, {
         cwd: uploadsDir,
         windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, PATH: extendedPath, Path: extendedPath }
     });
 
     let gotTitle = false;
