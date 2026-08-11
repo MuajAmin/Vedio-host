@@ -589,7 +589,14 @@ async function startDownload(job) {
                 downloaded = null;
             }
 
-            if (code === 0 && downloaded) {
+            // Accept download if file exists and is reasonably sized (>100KB),
+            // even when yt-dlp exits non-zero (e.g. merge/remux failure on xHamster etc.)
+            const MIN_VALID_SIZE = 100 * 1024; // 100 KB
+            if (downloaded && downloaded.fileSize >= MIN_VALID_SIZE) {
+                if (code !== 0) {
+                    console.warn('[import] yt-dlp exited with code', code, 'but file found — treating as success');
+                }
+
                 const videoId = uuidv4();
                 const title = job.customTitle || job.title || 'Imported Video';
 
