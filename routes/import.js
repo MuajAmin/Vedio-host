@@ -236,27 +236,12 @@ async function startDownload(job, outputPath, outputFilename) {
         return;
     }
 
-    // Build format string based on quality selection
-    // Using simple fallback chains — --merge-output-format mp4 handles conversion
-    let formatStr;
-    switch (job.quality) {
-        case 'best':
-            formatStr = 'bestvideo+bestaudio/best';
-            break;
-        case '480':
-            formatStr = 'bestvideo[height<=480]+bestaudio/best[height<=480]/best';
-            break;
-        case '360':
-            formatStr = 'bestvideo[height<=360]+bestaudio/best[height<=360]/best';
-            break;
-        case '720':
-        default:
-            formatStr = 'bestvideo[height<=720]+bestaudio/best[height<=720]/best';
-            break;
-    }
-
-    // --format-sort ensures quality preference even on sites without height metadata
-    const formatSort = job.quality === 'best' ? 'res' : `res:${job.quality}`;
+    // Let yt-dlp choose the best available stream at or below the requested height.
+    // If the site only exposes one format, yt-dlp cannot create lower quality without transcoding.
+    const formatStr = 'bv*+ba/b';
+    const formatSort = job.quality === 'best'
+        ? 'res,fps,size,br'
+        : `res:${job.quality},fps,size,br`;
 
     // yt-dlp arguments — optimized for low-resource VPS (1 core, 1GB RAM)
     const ytdlpArgs = [
@@ -266,6 +251,7 @@ async function startDownload(job, outputPath, outputFilename) {
         '--remote-components', 'ejs:github',  // Required for YouTube JS challenge solving (yt-dlp 2026.07+)
         '-f', formatStr,
         '-S', formatSort,
+        '--format-sort-force',
         '--newline',
         '--progress',
         '--progress-template', '%(progress._percent_str)s|||%(progress._speed_str)s|||%(progress._eta_str)s',
