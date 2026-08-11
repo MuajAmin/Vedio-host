@@ -48,6 +48,8 @@ app.use(compression({
     level: 6,
     threshold: 1024,
     filter: (req, res) => {
+        // SSE progress events are tiny streaming writes; gzip can buffer them until the job ends.
+        if (req.path.startsWith('/import-progress/')) return false;
         // Don't compress video streams — they're already binary and chunked
         if (req.path.startsWith('/stream/')) return false;
         return compression.filter(req, res);

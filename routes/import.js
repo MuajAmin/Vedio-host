@@ -125,18 +125,16 @@ router.get('/import-progress/:jobId', isAuthenticated, (req, res) => {
     // Set up SSE
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no'
     });
-
-    // Send current state immediately
-    sendSSE(res, job);
 
     // Keepalive ping every 15s — prevents nginx/proxy from killing idle SSE connections
     const keepalive = setInterval(() => {
         try {
             res.write(': keepalive\n\n');
+            if (typeof res.flush === 'function') res.flush();
         } catch (e) {
             clearInterval(keepalive);
         }
@@ -145,6 +143,9 @@ router.get('/import-progress/:jobId', isAuthenticated, (req, res) => {
     // Register listener for updates
     const listener = () => sendSSE(res, job);
     job.listeners.add(listener);
+
+    // Send current state immediately after registering, so no update is lost during setup.
+    sendSSE(res, job);
 
     // Cleanup on disconnect
     req.on('close', () => {
@@ -169,6 +170,7 @@ function sendSSE(res, job) {
             videoId: job.videoId
         };
         res.write(`data: ${JSON.stringify(data)}\n\n`);
+        if (typeof res.flush === 'function') res.flush();
     } catch (err) {
         // Client disconnected
     }
@@ -293,6 +295,7 @@ async function startDownload(job, outputPath, outputFilename) {
     let gotTitle = false;
     let gotStdoutProgress = false;
     let stderrBuffer = '';
+    let stdoutBuffer = '';
 
     // File size monitor — fallback progress for sites where yt-dlp doesn't output progress
     const fileSizeMonitor = setInterval(async () => {
@@ -319,38 +322,52 @@ async function startDownload(job, outputPath, outputFilename) {
         } catch (e) {}
     }, 500);
 
-    proc.stdout.on('data', (data) => {
-        const lines = data.toString().split('\n').filter(l => l.trim());
+    function handleStdoutLine(line) {
+        const trimmed = line.trim();
+        if (!trimmed) return;
 
-        for (const line of lines) {
-            const trimmed = line.trim();
-
-            // Check if it's a title line (first output from --print)
-            if (!gotTitle && trimmed && !trimmed.includes('|||') && !trimmed.includes('%')) {
-                gotTitle = true;
-                if (!job.customTitle) {
-                    job.title = trimmed.slice(0, 180);
-                }
-                notifyListeners(job);
-                continue;
+        // Check if it's a title line (first output from --print)
+        if (!gotTitle && !trimmed.includes('|||') && !trimmed.includes('%')) {
+            gotTitle = true;
+            if (!job.customTitle) {
+                job.title = trimmed.slice(0, 180);
             }
+            notifyListeners(job);
+            return;
+        }
 
-            // Parse progress: "  45.2%|||2.5MiB/s|||00:23"
-            if (trimmed.includes('|||')) {
-                const parts = trimmed.split('|||');
-                const percentStr = (parts[0] || '').replace(/[^0-9.]/g, '');
-                const percent = parseFloat(percentStr);
+        // Parse progress: "  45.2%|||2.5MiB/s|||00:23"
+        if (trimmed.includes('|||')) {
+            const parts = trimmed.split('|||');
+            const percentStr = (parts[0] || '').replace(/[^0-9.]/g, '');
+            const percent = parseFloat(percentStr);
 
-                if (!isNaN(percent)) {
-                    gotStdoutProgress = true;
-                    job.progress = Math.min(99, Math.round(percent));
-                    job.speed = (parts[1] || '').trim().replace('Unknown', '');
-                    job.eta = (parts[2] || '').trim().replace('Unknown', '');
-                    job.status = 'downloading';
-                    notifyListeners(job);
-                }
+            if (!isNaN(percent)) {
+                gotStdoutProgress = true;
+                job.progress = Math.min(99, Math.round(percent));
+                job.speed = (parts[1] || '').trim().replace('Unknown', '');
+                job.eta = (parts[2] || '').trim().replace('Unknown', '');
+                job.status = 'downloading';
+                notifyListeners(job);
             }
         }
+    }
+
+    proc.stdout.on('data', (data) => {
+        stdoutBuffer += data.toString();
+        const lines = stdoutBuffer.split(/\r?\n/);
+        stdoutBuffer = lines.pop() || '';
+
+        for (const line of lines) {
+            handleStdoutLine(line);
+        }
+    });
+
+    proc.stdout.on('end', () => {
+        if (stdoutBuffer.trim()) {
+            handleStdoutLine(stdoutBuffer);
+        }
+        stdoutBuffer = '';
     });
 
     proc.stderr.on('data', (data) => {
@@ -473,6 +490,7 @@ async function startDownload(job, outputPath, outputFilename) {
     });
 
     proc.on('error', (err) => {
+        clearInterval(fileSizeMonitor);
         job.status = 'error';
         job.error = 'Could not start download process. Install: sudo apt install python3-pip && pip3 install yt-dlp';
         notifyListeners(job);
