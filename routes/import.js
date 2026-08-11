@@ -62,10 +62,11 @@ function isValidUrl(str) {
 
 // POST /import-url — Start a video import from URL
 router.post('/import-url', isAuthenticated, (req, res) => {
+    console.log('[import] POST /import-url received, body:', JSON.stringify(req.body));
     // Manual CSRF check since we skip global CSRF for this route
     let csrfOk = false;
     requireCsrf(req, res, () => { csrfOk = true; });
-    if (!csrfOk) return;
+    if (!csrfOk) { console.log('[import] CSRF check failed'); return; }
 
     // Only allow 1 concurrent import to save RAM on small VPS
     const activeDownloads = [...activeJobs.values()].filter(j => j.status === 'downloading' || j.status === 'starting');
@@ -132,12 +133,22 @@ router.get('/import-progress/:jobId', isAuthenticated, (req, res) => {
     // Send current state immediately
     sendSSE(res, job);
 
+    // Keepalive ping every 15s — prevents nginx/proxy from killing idle SSE connections
+    const keepalive = setInterval(() => {
+        try {
+            res.write(': keepalive\n\n');
+        } catch (e) {
+            clearInterval(keepalive);
+        }
+    }, 15000);
+
     // Register listener for updates
     const listener = () => sendSSE(res, job);
     job.listeners.add(listener);
 
     // Cleanup on disconnect
     req.on('close', () => {
+        clearInterval(keepalive);
         job.listeners.delete(listener);
         // If no listeners and job is done, clean up
         if (job.listeners.size === 0 && (job.status === 'done' || job.status === 'error')) {
@@ -242,6 +253,9 @@ async function startDownload(job, outputPath, outputFilename) {
             break;
     }
 
+    // --format-sort ensures quality preference even on sites without height metadata
+    const formatSort = job.quality === 'best' ? 'res' : `res:${job.quality}`;
+
     // yt-dlp arguments — optimized for low-resource VPS (1 core, 1GB RAM)
     const ytdlpArgs = [
         '--no-check-certificates',
@@ -249,6 +263,7 @@ async function startDownload(job, outputPath, outputFilename) {
         '--merge-output-format', 'mp4',
         '--remote-components', 'ejs:github',  // Required for YouTube JS challenge solving (yt-dlp 2026.07+)
         '-f', formatStr,
+        '-S', formatSort,
         '--newline',
         '--progress',
         '--progress-template', '%(progress._percent_str)s|||%(progress._speed_str)s|||%(progress._eta_str)s',
@@ -261,6 +276,7 @@ async function startDownload(job, outputPath, outputFilename) {
     ];
 
     const args = [...pythonCmd.prefix, ...ytdlpArgs];
+    console.log('[import] Spawning:', pythonCmd.cmd, args.join(' '));
 
     job.status = 'downloading';
     notifyListeners(job);
@@ -272,8 +288,36 @@ async function startDownload(job, outputPath, outputFilename) {
         env: { ...process.env, PATH: extendedPath, Path: extendedPath }
     });
 
+    console.log('[import] Process spawned, pid:', proc.pid);
+
     let gotTitle = false;
+    let gotStdoutProgress = false;
     let stderrBuffer = '';
+
+    // File size monitor — fallback progress for sites where yt-dlp doesn't output progress
+    const fileSizeMonitor = setInterval(async () => {
+        if (gotStdoutProgress) return; // stdout progress is working, no need for file monitor
+        try {
+            // Check all files starting with job id (yt-dlp may use .part extension)
+            const files = await fs.promises.readdir(uploadsDir);
+            const jobFiles = files.filter(f => f.startsWith(job.id));
+            let totalSize = 0;
+            for (const f of jobFiles) {
+                try {
+                    const stat = await fs.promises.stat(path.join(uploadsDir, f));
+                    totalSize += stat.size;
+                } catch (e) {}
+            }
+            if (totalSize > 0) {
+                const mb = (totalSize / (1024 * 1024)).toFixed(1);
+                job.speed = mb + ' MB downloaded';
+                job.status = 'downloading';
+                // Pulse progress between 5-90% based on file size (cap at 90%)
+                job.progress = Math.min(90, Math.max(5, Math.floor(totalSize / (1024 * 1024))));
+                notifyListeners(job);
+            }
+        } catch (e) {}
+    }, 500);
 
     proc.stdout.on('data', (data) => {
         const lines = data.toString().split('\n').filter(l => l.trim());
@@ -298,6 +342,7 @@ async function startDownload(job, outputPath, outputFilename) {
                 const percent = parseFloat(percentStr);
 
                 if (!isNaN(percent)) {
+                    gotStdoutProgress = true;
                     job.progress = Math.min(99, Math.round(percent));
                     job.speed = (parts[1] || '').trim().replace('Unknown', '');
                     job.eta = (parts[2] || '').trim().replace('Unknown', '');
@@ -309,12 +354,24 @@ async function startDownload(job, outputPath, outputFilename) {
     });
 
     proc.stderr.on('data', (data) => {
+        const chunk = data.toString();
+        console.log('[import] STDERR:', chunk.trim().slice(0, 200));
         if (stderrBuffer.length < 10000) {
-            stderrBuffer += data.toString();
+            stderrBuffer += chunk;
         }
     });
 
     proc.on('close', async (code) => {
+        clearInterval(fileSizeMonitor);
+        console.log('[import] Process closed with code:', code, 'stderr:', stderrBuffer.slice(0, 300));
+
+        // Immediately tell frontend we're processing — don't leave at 0%
+        job.progress = 99;
+        job.speed = '';
+        job.eta = '';
+        job.status = 'downloading';
+        notifyListeners(job);
+
         // Find the actual output file — yt-dlp may create file with different extension
         let finalPath = outputPath;
         let finalFilename = outputFilename;
@@ -322,11 +379,12 @@ async function startDownload(job, outputPath, outputFilename) {
         // Look for any file starting with the jobId
         try {
             const files = (await fs.promises.readdir(uploadsDir)).filter(f => f.startsWith(job.id));
+            console.log('[import] Files found:', files);
             if (files.length > 0) {
                 finalFilename = files[0];
                 finalPath = path.join(uploadsDir, finalFilename);
             }
-        } catch (err) { }
+        } catch (err) { console.log('[import] readdir error:', err.message); }
 
         let fileExists = false;
         let fileSize = 0;
@@ -334,21 +392,26 @@ async function startDownload(job, outputPath, outputFilename) {
             const stat = await fs.promises.stat(finalPath);
             fileExists = true;
             fileSize = stat.size;
-        } catch (err) { }
+            console.log('[import] File exists, size:', fileSize);
+        } catch (err) { console.log('[import] File not found:', finalPath); }
 
         if (code === 0 && fileExists) {
             // Save to database
             const videoId = uuidv4();
             const title = job.customTitle || job.title || 'Imported Video';
 
-            // Generate thumbnail and extract duration
+            // Generate thumbnail and extract duration (with 30s timeout so it can't hang)
             let thumbnail = null;
             let duration = null;
             try {
                 const { generateVideoThumbnail, getVideoDuration } = require('../utils/thumbnail');
-                [thumbnail, duration] = await Promise.all([
-                    generateVideoThumbnail(finalFilename, videoId),
-                    getVideoDuration(finalFilename)
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Thumbnail timeout')), 30000));
+                [thumbnail, duration] = await Promise.race([
+                    Promise.all([
+                        generateVideoThumbnail(finalFilename, videoId),
+                        getVideoDuration(finalFilename)
+                    ]),
+                    timeoutPromise
                 ]);
             } catch (tErr) {
                 console.warn('[import] Metadata extraction error:', tErr.message);
@@ -363,8 +426,10 @@ async function startDownload(job, outputPath, outputFilename) {
                 job.progress = 100;
                 job.videoId = videoId;
                 job.title = title;
+                console.log('[import] SUCCESS — saved as', videoId);
                 notifyListeners(job);
             } catch (dbErr) {
+                console.log('[import] DB error:', dbErr.message);
                 job.status = 'error';
                 job.error = 'Downloaded but failed to save to library.';
                 notifyListeners(job);
@@ -387,6 +452,8 @@ async function startDownload(job, outputPath, outputFilename) {
                     errorMsg = errorMatch[1].trim().slice(0, 200);
                 }
             }
+
+            console.log('[import] FAILED:', errorMsg);
 
             // Clean up partial files
             try {
