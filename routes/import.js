@@ -345,10 +345,10 @@ function buildDownloadArgs(job, outputPath) {
         '--print', 'before_dl:%(title)s',
         '--no-mtime',
         '--no-overwrites',
-        // Speed optimizations
+        // Keep source files if merge/remux fails — prevents file deletion at 99%
+        '--keep-video',
+        // General optimization (no YouTube-specific flags like --concurrent-fragments or --throttled-rate)
         '--buffer-size', '4M',
-        '--concurrent-fragments', '4',
-        '--throttled-rate', '100K',
         '--retries', '3',
         '--fragment-retries', '3'
     ];
@@ -357,12 +357,12 @@ function buildDownloadArgs(job, outputPath) {
     if (formatId) {
         args.push('-f', formatId);
     } else {
-        // bv*+ba/b/best: try separate streams first, fall back to combined, then any best
-        // No --format-sort-force so sites with limited formats (xHamster etc.) still work
+        // b/bv*+ba/best: prefer combined streams first (works on all sites),
+        // then try separate video+audio, then any best as last resort
         const formatSort = job.quality === 'best'
             ? 'res,fps,size,br'
             : `res:${job.quality},fps,size,br`;
-        args.push('-f', 'bv*+ba/b/best', '-S', formatSort);
+        args.push('-f', 'b/bv*+ba/best', '-S', formatSort);
     }
 
     args.push(job.url);
@@ -585,7 +585,13 @@ async function startDownload(job) {
             try {
                 downloaded = await findDownloadedFile(job.id, outputPath, outputFilename);
                 console.log('[import] File found:', downloaded.finalFilename, downloaded.fileSize);
-            } catch {
+            } catch (findErr) {
+                console.log('[import] findDownloadedFile failed:', findErr.message);
+                // List all files in uploads dir starting with job id for debugging
+                try {
+                    const allFiles = (await fs.promises.readdir(uploadsDir)).filter(f => f.startsWith(job.id));
+                    console.log('[import] Files matching job id:', allFiles.length ? allFiles.join(', ') : '(none)');
+                } catch {}
                 downloaded = null;
             }
 
