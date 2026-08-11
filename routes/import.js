@@ -268,17 +268,67 @@ async function detectPythonCmd() {
     });
 }
 
-function getYtdlpBaseArgs() {
-    return [
+const cookiesDir = path.join(__dirname, '..', 'data');
+
+/**
+ * Find the best matching cookies file for a given URL.
+ * Looks for files like: www.youtube.com_cookies.txt, www.pornhub.com_cookies.txt
+ * in the data/ directory and matches against the URL's hostname.
+ */
+const domainAliases = {
+    'youtu.be': 'www.youtube.com',
+    'm.youtube.com': 'www.youtube.com',
+    'music.youtube.com': 'www.youtube.com',
+    'm.pornhub.com': 'www.pornhub.com',
+};
+
+function findCookiesFileForUrl(url) {
+    try {
+        let hostname = new URL(String(url || '')).hostname.toLowerCase();
+        hostname = domainAliases[hostname] || hostname;
+        if (!fs.existsSync(cookiesDir)) return null;
+
+        const files = fs.readdirSync(cookiesDir).filter(f => f.endsWith('_cookies.txt'));
+        for (const file of files) {
+            // Extract domain from filename: "www.youtube.com_cookies.txt" → "www.youtube.com"
+            const fileDomain = file.replace('_cookies.txt', '').toLowerCase();
+            if (hostname === fileDomain || hostname.endsWith('.' + fileDomain) || fileDomain.endsWith('.' + hostname)) {
+                const fullPath = path.join(cookiesDir, file);
+                if (fs.existsSync(fullPath) && fs.statSync(fullPath).size > 50) {
+                    return fullPath;
+                }
+            }
+        }
+    } catch {}
+    return null;
+}
+
+function getYtdlpBaseArgs(url) {
+    const args = [
         '--no-check-certificates',
         '--no-playlist',
         '--socket-timeout', '20'
     ];
+
+    // Auto-select cookies file based on URL domain (e.g. youtube → youtube cookies, pornhub → pornhub cookies)
+    const matchedCookies = url ? findCookiesFileForUrl(url) : null;
+    const fallbackFile = (process.env.YTDLP_COOKIES_FILE || '').trim();
+    const cookiesBrowser = (process.env.YTDLP_COOKIES_BROWSER || '').trim().toLowerCase();
+
+    if (matchedCookies) {
+        args.push('--cookies', matchedCookies);
+    } else if (fallbackFile && fs.existsSync(fallbackFile)) {
+        args.push('--cookies', fallbackFile);
+    } else if (cookiesBrowser) {
+        args.push('--cookies-from-browser', cookiesBrowser);
+    }
+
+    return args;
 }
 
 function buildDownloadArgs(job, outputPath) {
     const args = [
-        ...getYtdlpBaseArgs(),
+        ...getYtdlpBaseArgs(job.url),
         '--merge-output-format', 'mp4',
         '--newline',
         '--progress',
@@ -383,6 +433,9 @@ function buildErrorMessage(stderrBuffer) {
     }
     if (stderrBuffer.includes('HTTP Error 403') || stderrBuffer.includes('HTTP Error 401')) {
         return 'Access denied. The site blocked the download.';
+    }
+    if (stderrBuffer.includes('HTTP Error 410')) {
+        return 'This video has been permanently removed (HTTP 410 Gone). It is no longer available on the site.';
     }
     if (stderrBuffer.includes('HTTP Error 404') || stderrBuffer.includes('not found')) {
         return 'Video not found at this URL.';
@@ -811,7 +864,7 @@ async function fetchVideoInfo(url) {
 
     const args = [
         ...pythonCmd.prefix,
-        ...getYtdlpBaseArgs(),
+        ...getYtdlpBaseArgs(url),
         '--dump-single-json',
         '--no-warnings',
         url

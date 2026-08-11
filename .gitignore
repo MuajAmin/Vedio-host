@@ -13,6 +13,13 @@ data/*.db-shm
 data/*.sqlite
 data/*.sqlite3
 
+# Cookie files (SENSITIVE — contain auth tokens)
+data/*cookies*
+data/*.txt
+
+# Temporary scripts
+extract_cookies.py
+
 # Uploaded Files / Media
 uploads/
 
