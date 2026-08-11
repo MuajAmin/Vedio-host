@@ -36,6 +36,8 @@ db.exec(`
         size INTEGER DEFAULT 0,
         duration TEXT,
         thumbnail TEXT,
+        source_url TEXT,
+        import_quality TEXT,
         uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -54,23 +56,46 @@ db.exec(`
         expires_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS watch_progress (
+        video_id TEXT NOT NULL,
+        user TEXT NOT NULL,
+        position_seconds REAL NOT NULL DEFAULT 0,
+        duration_seconds REAL DEFAULT 0,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (video_id, user),
+        FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_at ON videos(uploaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_watch_progress_user_updated ON watch_progress(user, updated_at DESC);
 `);
 
-// Migration: Ensure thumbnail and duration columns exist in older databases
+// Migrations for older SQLite files.
 try {
     const tableInfo = db.prepare("PRAGMA table_info(videos)").all();
-    const hasThumbnail = tableInfo.some(col => col.name === 'thumbnail');
-    if (!hasThumbnail) {
-        db.exec('ALTER TABLE videos ADD COLUMN thumbnail TEXT');
-        console.log('[db] Migrated videos table: added thumbnail column.');
-    }
-    const hasDuration = tableInfo.some(col => col.name === 'duration');
-    if (!hasDuration) {
-        db.exec('ALTER TABLE videos ADD COLUMN duration TEXT');
-        console.log('[db] Migrated videos table: added duration column.');
+
+    const ensureColumn = (name, definition) => {
+        const exists = tableInfo.some(col => col.name === name);
+        if (!exists) {
+            db.exec(`ALTER TABLE videos ADD COLUMN ${definition}`);
+            console.log(`[db] Migrated videos table: added ${name} column.`);
+        }
+    };
+
+    ensureColumn('original_name', 'original_name TEXT');
+    ensureColumn('size', 'size INTEGER DEFAULT 0');
+    ensureColumn('duration', 'duration TEXT');
+    ensureColumn('thumbnail', 'thumbnail TEXT');
+    ensureColumn('source_url', 'source_url TEXT');
+    ensureColumn('import_quality', 'import_quality TEXT');
+
+    const progressInfo = db.prepare("PRAGMA table_info(watch_progress)").all();
+    const hasDurationSeconds = progressInfo.some(col => col.name === 'duration_seconds');
+    if (!hasDurationSeconds) {
+        db.exec('ALTER TABLE watch_progress ADD COLUMN duration_seconds REAL DEFAULT 0');
+        console.log('[db] Migrated watch_progress table: added duration_seconds column.');
     }
 } catch (err) {
     console.error('[db] Migration check error:', err.message);

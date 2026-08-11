@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const { isAuthenticated, isMuaj } = require('../middleware/auth');
+const { isAuthenticated } = require('../middleware/auth');
 const { requireCsrf } = require('../utils/security');
 const db = require('../database');
 
@@ -12,6 +12,10 @@ const db = require('../database');
 const uploadsDir = path.join(__dirname, '..', 'uploads', 'videos');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
+}
+const thumbnailsDir = path.join(__dirname, '..', 'uploads', 'thumbnails');
+if (!fs.existsSync(thumbnailsDir)) {
+    fs.mkdirSync(thumbnailsDir, { recursive: true });
 }
 
 // Multer config
@@ -56,6 +60,31 @@ const upload = multer({
     limits: { fileSize: maxSize },
     fileFilter
 });
+
+const thumbnailUpload = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            cb(null, thumbnailsDir);
+        },
+        filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase();
+            cb(null, `${req.params.id}-${Date.now()}${ext}`);
+        }
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const mimeType = String(file.mimetype || '').toLowerCase();
+        const allowedImageExt = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+        const allowedImageMime = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+        if (allowedImageExt.has(ext) && allowedImageMime.has(mimeType)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only JPG, PNG, or WebP thumbnails are allowed.'));
+        }
+    }
+});
 const STREAM_HIGH_WATER_MARK = 64 * 1024;
 
 const { generateVideoThumbnail, getVideoDuration } = require('../utils/thumbnail');
@@ -63,11 +92,35 @@ const { generateVideoThumbnail, getVideoDuration } = require('../utils/thumbnail
 // GET /dashboard — Video gallery
 router.get('/dashboard', isAuthenticated, (req, res) => {
     const videos = db.prepare(
-        'SELECT id, title, size, duration, thumbnail, uploaded_at FROM videos ORDER BY uploaded_at DESC'
-    ).all();
+        `SELECT
+            v.id,
+            v.title,
+            v.size,
+            v.duration,
+            v.thumbnail,
+            v.uploaded_at,
+            wp.position_seconds,
+            wp.duration_seconds,
+            wp.updated_at AS progress_updated_at
+        FROM videos v
+        LEFT JOIN watch_progress wp
+            ON wp.video_id = v.id AND wp.user = ?
+        ORDER BY v.uploaded_at DESC`
+    ).all(req.session.user);
+
+    const continueVideos = videos
+        .filter((video) => {
+            const position = Number(video.position_seconds || 0);
+            const duration = Number(video.duration_seconds || 0);
+            return position >= 10 && (!duration || position < duration - 15);
+        })
+        .sort((a, b) => new Date(b.progress_updated_at || 0) - new Date(a.progress_updated_at || 0))
+        .slice(0, 6);
+
     res.render('dashboard', {
         user: req.session.user,
-        videos
+        videos,
+        continueVideos
     });
 });
 
@@ -157,10 +210,16 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
         'SELECT * FROM comments WHERE video_id = ? ORDER BY created_at DESC'
     ).all(req.params.id);
 
+    const progress = db.prepare(
+        'SELECT position_seconds, duration_seconds, updated_at FROM watch_progress WHERE video_id = ? AND user = ?'
+    ).get(req.params.id, req.session.user) || null;
+
     res.render('watch', {
         user: req.session.user,
         video,
-        comments
+        comments,
+        progress,
+        thumbnail: String(req.query.thumbnail || '').slice(0, 120)
     });
 });
 
@@ -176,13 +235,136 @@ router.post('/delete/:id', isAuthenticated, (req, res) => {
         }
         // Delete thumbnail file if exists
         if (video.thumbnail) {
-            const thumbPath = path.join(__dirname, '..', 'uploads', 'thumbnails', path.basename(video.thumbnail));
-            fs.promises.unlink(thumbPath).catch(() => {});
+            const thumbPath = getSafeThumbnailPath(video.thumbnail);
+            if (thumbPath) {
+                fs.promises.unlink(thumbPath).catch(() => {});
+            }
         }
         db.prepare('DELETE FROM videos WHERE id = ?').run(req.params.id);
     }
 
-    res.redirect('/dashboard');
+res.redirect('/dashboard');
+});
+
+// POST /watch-progress/:id - Save per-user playback position
+router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
+    const video = db.prepare('SELECT id FROM videos WHERE id = ?').get(req.params.id);
+    if (!video) {
+        return res.status(404).json({ error: 'Video not found.' });
+    }
+
+    const position = Number(req.body.position);
+    const duration = Number(req.body.duration);
+    const ended = req.body.ended === true || req.body.ended === 'true';
+
+    if (!Number.isFinite(position) || position < 0) {
+        return res.status(400).json({ error: 'Invalid position.' });
+    }
+
+    const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
+    const nearEnd = safeDuration > 0 && position >= safeDuration - 10;
+
+    if (ended || position < 5 || nearEnd) {
+        db.prepare('DELETE FROM watch_progress WHERE video_id = ? AND user = ?').run(req.params.id, req.session.user);
+        return res.json({ success: true, cleared: true });
+    }
+
+    db.prepare(
+        `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
+         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(video_id, user) DO UPDATE SET
+            position_seconds = excluded.position_seconds,
+            duration_seconds = excluded.duration_seconds,
+            updated_at = CURRENT_TIMESTAMP`
+    ).run(req.params.id, req.session.user, Math.floor(position), Math.floor(safeDuration));
+
+    res.json({ success: true });
+});
+
+// POST /thumbnail/:id - Upload a custom thumbnail for a video
+router.post('/thumbnail/:id', isAuthenticated, (req, res) => {
+    thumbnailUpload.single('thumbnail')(req, res, (err) => {
+        const video = db.prepare('SELECT id, thumbnail FROM videos WHERE id = ?').get(req.params.id);
+        const watchUrl = `/watch/${encodeURIComponent(req.params.id)}`;
+
+        const fail = (message) => {
+            if (req.file) {
+                fs.promises.unlink(path.join(thumbnailsDir, req.file.filename)).catch(() => {});
+            }
+            return res.redirect(`${watchUrl}?thumbnail=${encodeURIComponent(message)}`);
+        };
+
+        if (!video) {
+            return fail('Video not found.');
+        }
+
+        if (err) {
+            return fail(err.message || 'Thumbnail upload failed.');
+        }
+
+        let csrfOk = false;
+        requireCsrf(req, res, () => {
+            csrfOk = true;
+        });
+        if (!csrfOk) {
+            if (req.file) {
+                fs.promises.unlink(path.join(thumbnailsDir, req.file.filename)).catch(() => {});
+            }
+            return;
+        }
+
+        if (!req.file) {
+            return fail('No thumbnail selected.');
+        }
+
+        if (video.thumbnail && video.thumbnail !== req.file.filename) {
+            const oldPath = getSafeThumbnailPath(video.thumbnail);
+            if (oldPath) {
+                fs.promises.unlink(oldPath).catch(() => {});
+            }
+        }
+
+        db.prepare('UPDATE videos SET thumbnail = ? WHERE id = ?').run(req.file.filename, req.params.id);
+        return res.redirect(`${watchUrl}?thumbnail=updated`);
+    });
+});
+
+// POST /thumbnail/:id/regenerate - Rebuild thumbnail from the video file
+router.post('/thumbnail/:id/regenerate', isAuthenticated, async (req, res) => {
+    let csrfOk = false;
+    requireCsrf(req, res, () => {
+        csrfOk = true;
+    });
+    if (!csrfOk) return;
+
+    const video = db.prepare('SELECT id, filename, thumbnail FROM videos WHERE id = ?').get(req.params.id);
+    const watchUrl = `/watch/${encodeURIComponent(req.params.id)}`;
+
+    if (!video) {
+        return res.status(404).render('error', {
+            user: req.session.user,
+            message: 'Video not found.'
+        });
+    }
+
+    try {
+        const thumbFilename = await generateVideoThumbnail(video.filename, video.id);
+        if (!thumbFilename) {
+            return res.redirect(`${watchUrl}?thumbnail=${encodeURIComponent('Could not generate thumbnail.')}`);
+        }
+
+        if (video.thumbnail && video.thumbnail !== thumbFilename) {
+            const oldPath = getSafeThumbnailPath(video.thumbnail);
+            if (oldPath) {
+                fs.promises.unlink(oldPath).catch(() => {});
+            }
+        }
+
+        db.prepare('UPDATE videos SET thumbnail = ? WHERE id = ?').run(thumbFilename, video.id);
+        return res.redirect(`${watchUrl}?thumbnail=updated`);
+    } catch (err) {
+        return res.redirect(`${watchUrl}?thumbnail=${encodeURIComponent('Could not generate thumbnail.')}`);
+    }
 });
 
 function getMimeType(filename) {
@@ -217,6 +399,18 @@ function formatContentDisposition(filename, type = 'attachment') {
 function getSafeVideoPath(filename) {
     const baseDir = path.resolve(uploadsDir);
     const resolved = path.resolve(baseDir, filename);
+    const relative = path.relative(baseDir, resolved);
+
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+        return null;
+    }
+
+    return resolved;
+}
+
+function getSafeThumbnailPath(filename) {
+    const baseDir = path.resolve(thumbnailsDir);
+    const resolved = path.resolve(baseDir, path.basename(filename || ''));
     const relative = path.relative(baseDir, resolved);
 
     if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {

@@ -40,6 +40,9 @@ const videoId = encodeURIComponent(video.id);
 const streamUrl = '/stream/' + videoId;
 const sourceType = mimeTypeFor(video.filename || video.original_name);
 const posterAttr = video.thumbnail ? `poster="/thumbnails/${h(video.thumbnail)}"` : '';
+const savedProgress = progress || {};
+const savedPosition = Number(savedProgress.position_seconds || 0);
+const thumbMessage = typeof thumbnail !== 'undefined' ? thumbnail : '';
 const deleteForm = `<form action="/delete/${videoId}" method="POST" data-confirm="Delete this video? This cannot be undone."><input type="hidden" name="_csrf" value="${h(csrfToken)}"><button type="submit" class="btn btn-danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Delete</span></button></form>`;
 
 const commentsHtml = comments.length === 0
@@ -135,7 +138,7 @@ const commentsHtml = comments.length === 0
             </div>
 
             <!-- The Video Element -->
-            <video id="vpVideo" ${posterAttr} preload="metadata" playsinline muted data-video-id="${h(video.id)}" data-stream-url="${h(streamUrl)}" data-source-type="${h(sourceType)}">
+            <video id="vpVideo" ${posterAttr} preload="metadata" playsinline muted data-video-id="${h(video.id)}" data-stream-url="${h(streamUrl)}" data-source-type="${h(sourceType)}" data-saved-position="${h(savedPosition)}" data-progress-url="/watch-progress/${videoId}" data-csrf-token="${h(csrfToken)}">
                 <source src="${h(streamUrl)}" type="${h(sourceType)}">
             </video>
 
@@ -327,6 +330,27 @@ const commentsHtml = comments.length === 0
                 </div>
             </div>
         </div>
+
+        <section class="thumbnail-manager">
+            <div class="thumbnail-preview-box">
+                ${video.thumbnail ? `<img src="/thumbnails/${h(video.thumbnail)}" alt="${h(video.title)} thumbnail" class="thumb-img" loading="lazy">` : '<div class="thumb-placeholder"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40"><rect x="6" y="10" width="36" height="28" rx="4"/><polygon points="20,18 32,24 20,30" fill="currentColor"/></svg></div>'}
+            </div>
+            <div class="thumbnail-manager-body">
+                <div>
+                    <h2>Thumbnail</h2>
+                    <p>${thumbMessage === 'updated' ? 'Thumbnail updated.' : 'Upload a custom JPG, PNG, or WebP image.'}</p>
+                </div>
+                <form action="/thumbnail/${videoId}" method="POST" enctype="multipart/form-data" class="thumbnail-form">
+                    <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                    <input type="file" name="thumbnail" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="form-input thumbnail-input" required>
+                    <button type="submit" class="btn btn-primary btn-sm">Upload Thumbnail</button>
+                </form>
+                <form action="/thumbnail/${videoId}/regenerate" method="POST" class="thumbnail-form-inline">
+                    <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                    <button type="submit" class="btn btn-ghost btn-sm">Regenerate</button>
+                </form>
+            </div>
+        </section>
 
         <!-- Download Confirmation Modal -->
         <div class="theme-modal-backdrop" id="downloadModal">

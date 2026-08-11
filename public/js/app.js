@@ -48,6 +48,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    document.querySelectorAll('.thumb-img').forEach((img) => {
+        img.addEventListener('error', () => {
+            img.classList.add('thumb-error');
+        });
+    });
+
     // ---- Password Toggle ----
     const toggleBtn = document.getElementById('togglePassword');
     const passwordInput = document.getElementById('password');
@@ -1240,7 +1246,38 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Resume Feature ---
         if (videoId) {
             const savedPosKey = 'videohosk_pos_' + videoId;
-            const savedTime = parseFloat(storage.getItem(savedPosKey) || '0');
+            const progressUrl = vid.getAttribute('data-progress-url');
+            const csrf = vid.getAttribute('data-csrf-token') || '';
+            const dbSavedTime = parseFloat(vid.getAttribute('data-saved-position') || '0');
+            const localSavedTime = parseFloat(storage.getItem(savedPosKey) || '0');
+            const savedTime = Math.max(
+                Number.isFinite(dbSavedTime) ? dbSavedTime : 0,
+                Number.isFinite(localSavedTime) ? localSavedTime : 0
+            );
+
+            function saveWatchProgress(options = {}) {
+                if (!progressUrl) return;
+
+                const ended = options.ended === true || vid.ended;
+                const position = Number.isFinite(vid.currentTime) ? Math.floor(vid.currentTime) : 0;
+                const duration = Number.isFinite(vid.duration) ? Math.floor(vid.duration) : 0;
+
+                if (ended || position < 5) {
+                    storage.removeItem(savedPosKey);
+                } else {
+                    storage.setItem(savedPosKey, String(position));
+                }
+
+                fetch(progressUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-csrf-token': csrf
+                    },
+                    body: JSON.stringify({ position, duration, ended }),
+                    keepalive: options.keepalive === true
+                }).catch(() => {});
+            }
 
             vid.addEventListener('loadedmetadata', () => {
                 if (savedTime > 5 && savedTime < vid.duration - 10) {
@@ -1254,29 +1291,41 @@ document.addEventListener('DOMContentLoaded', () => {
                             vid.currentTime = savedTime;
                             playVideo();
                             resumeToast.style.display = 'none';
-                        });
+                        }, { once: true });
 
                         document.getElementById('btnResumeNo')?.addEventListener('click', () => {
                             storage.removeItem(savedPosKey);
+                            saveWatchProgress({ ended: true });
                             resumeToast.style.display = 'none';
                             playVideo();
-                        });
+                        }, { once: true });
                     }
                 }
             });
 
-            // Save position periodically
             let lastPositionSave = 0;
             vid.addEventListener('timeupdate', () => {
                 const now = Date.now();
                 if (vid.currentTime > 2 && !vid.ended && now - lastPositionSave > 5000) {
                     lastPositionSave = now;
-                    storage.setItem(savedPosKey, String(Math.floor(vid.currentTime)));
+                    saveWatchProgress();
+                }
+            });
+
+            vid.addEventListener('pause', () => {
+                if (!vid.ended && vid.currentTime > 2) {
+                    saveWatchProgress();
                 }
             });
 
             vid.addEventListener('ended', () => {
-                storage.removeItem(savedPosKey);
+                saveWatchProgress({ ended: true });
+            });
+
+            window.addEventListener('beforeunload', () => {
+                if (!vid.ended && vid.currentTime > 2) {
+                    saveWatchProgress({ keepalive: true });
+                }
             });
         }
 
@@ -1716,6 +1765,297 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    // ---- URL Import Queue ----
+    const importQueueBtn = document.getElementById('importQueueBtn');
+    if (importQueueBtn) {
+        const importUrlInput = document.getElementById('importUrl');
+        const importTitleInput = document.getElementById('importTitle');
+        const importQualitySelect = document.getElementById('importQuality');
+        const analyzeQualityBtn = document.getElementById('analyzeQualityBtn');
+        const qualityAnalyzeStatus = document.getElementById('qualityAnalyzeStatus');
+        const importQueueSection = document.getElementById('importQueueSection');
+        const importQueueList = document.getElementById('importQueueList');
+        const importProgressSection = document.getElementById('importProgressSection');
+        const importResult = document.getElementById('importResult');
+        const importResultCard = document.getElementById('importResultCard');
+        const importResultIcon = document.getElementById('importResultIcon');
+        const importResultText = document.getElementById('importResultText');
+        const importResultBtn = document.getElementById('importResultBtn');
+        const importWatchBtn = document.getElementById('importWatchBtn');
+        const importSpinner = document.getElementById('importSpinner');
+        const importStatusTitle = document.getElementById('importStatusTitle');
+        const importStatusDetail = document.getElementById('importStatusDetail');
+        const importProgressFill = document.getElementById('importProgressFill');
+        const importPercent = document.getElementById('importPercent');
+        const importSpeed = document.getElementById('importSpeed');
+        const importEta = document.getElementById('importEta');
+        const importJobs = new Map();
+        const eventSources = new Map();
+
+        function getImportCsrf() {
+            return document.getElementById('importCsrfToken')?.value ||
+                document.querySelector('input[name="_csrf"]')?.value ||
+                '';
+        }
+
+        function getImportUrls() {
+            if (!importUrlInput) return [];
+            return importUrlInput.value.split(/\r?\n/).map(url => url.trim()).filter(Boolean);
+        }
+
+        function escapeText(value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function setImportQueueButton(label, disabled) {
+            importQueueBtn.disabled = disabled === true;
+            importQueueBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>' + label + '</span>';
+        }
+
+        function jobDetail(job) {
+            if (job.status === 'queued') return 'Waiting in queue #' + (job.queuePosition || 1);
+            if (job.status === 'starting') return 'Starting download...';
+            if (job.status === 'downloading') return 'Downloading video...';
+            if (job.status === 'done') return 'Imported successfully';
+            if (job.status === 'canceled') return 'Canceled';
+            return job.error || 'Import failed';
+        }
+
+        function updateImportSummary(job) {
+            if (!job) return;
+            if (importProgressSection) importProgressSection.style.display = 'block';
+            if (importStatusTitle) importStatusTitle.textContent = job.title || 'Import job';
+            if (importStatusDetail) importStatusDetail.textContent = jobDetail(job);
+            if (importProgressFill) importProgressFill.style.width = Math.max(0, job.progress || 0) + '%';
+            if (importPercent) importPercent.textContent = (job.progress || 0) + '%';
+            if (importSpeed) importSpeed.textContent = job.speed || '';
+            if (importEta) importEta.textContent = job.eta ? 'ETA: ' + job.eta : '';
+            if (importSpinner) {
+                importSpinner.className = 'import-spinner';
+                if (job.status === 'done') importSpinner.classList.add('done');
+                if (job.status === 'error' || job.status === 'canceled') importSpinner.classList.add('error');
+            }
+        }
+
+        function renderImportQueue() {
+            const jobs = Array.from(importJobs.values()).sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+            if (importQueueSection) importQueueSection.style.display = jobs.length ? 'block' : 'none';
+
+            if (importQueueList) {
+                importQueueList.innerHTML = jobs.map(job => {
+                    const progress = Math.max(0, Math.min(100, Number(job.progress || 0)));
+                    const canCancel = ['queued', 'starting', 'downloading'].includes(job.status);
+                    const canRetry = ['error', 'canceled'].includes(job.status);
+                    const watch = job.videoId ? '<a class="btn btn-primary btn-sm" href="/watch/' + encodeURIComponent(job.videoId) + '">Watch</a>' : '';
+                    const cancel = canCancel ? '<button type="button" class="btn btn-ghost btn-sm" data-import-cancel="' + escapeText(job.id) + '">Cancel</button>' : '';
+                    const retry = canRetry ? '<button type="button" class="btn btn-ghost btn-sm" data-import-retry="' + escapeText(job.id) + '">Retry</button>' : '';
+
+                    return '<div class="import-queue-item status-' + escapeText(job.status) + '">' +
+                        '<div class="import-queue-main"><strong>' + escapeText(job.title || job.url || 'Import job') + '</strong><span>' + escapeText(jobDetail(job)) + '</span></div>' +
+                        '<div class="import-queue-progress"><div class="admin-mini-bar"><span style="width:' + progress + '%"></span></div><em>' + progress + '%</em></div>' +
+                        '<div class="import-queue-actions">' + watch + cancel + retry + '</div>' +
+                    '</div>';
+                }).join('');
+            }
+
+            const active = jobs.find(job => ['downloading', 'starting'].includes(job.status)) ||
+                jobs.find(job => job.status === 'queued') ||
+                jobs[jobs.length - 1];
+            updateImportSummary(active);
+
+            const allComplete = jobs.length > 0 && jobs.every(job => ['done', 'error', 'canceled'].includes(job.status));
+            if (allComplete) {
+                setImportQueueButton('Import More', false);
+                const doneJobs = jobs.filter(job => job.status === 'done');
+                if (importResult && importResultCard && importResultIcon && importResultText) {
+                    importResult.style.display = 'block';
+                    importResultCard.className = doneJobs.length ? 'import-result-card success' : 'import-result-card error';
+                    importResultIcon.textContent = doneJobs.length ? 'OK' : '!';
+                    importResultText.textContent = doneJobs.length ? doneJobs.length + ' import(s) completed.' : 'No imports completed. Check the queue errors.';
+                    if (importResultBtn) importResultBtn.style.display = doneJobs.length ? 'inline-flex' : 'none';
+                    if (importWatchBtn) {
+                        const singleDone = doneJobs.length === 1 ? doneJobs[0] : null;
+                        importWatchBtn.style.display = singleDone && singleDone.videoId ? 'inline-flex' : 'none';
+                        if (singleDone && singleDone.videoId) importWatchBtn.href = '/watch/' + singleDone.videoId;
+                    }
+                }
+            }
+        }
+
+        function connectImportJob(job) {
+            if (!job || !job.id || eventSources.has(job.id)) return;
+            const source = new EventSource('/import-progress/' + encodeURIComponent(job.id));
+            eventSources.set(job.id, source);
+
+            source.onmessage = (event) => {
+                try {
+                    const nextJob = JSON.parse(event.data);
+                    importJobs.set(nextJob.id, nextJob);
+                    renderImportQueue();
+                    if (['done', 'error', 'canceled'].includes(nextJob.status)) {
+                        source.close();
+                        eventSources.delete(nextJob.id);
+                    }
+                } catch {}
+            };
+
+            source.onerror = () => {
+                source.close();
+                eventSources.delete(job.id);
+            };
+        }
+
+        async function loadImportJobs() {
+            try {
+                const response = await fetch('/import-jobs');
+                if (!response.ok) return;
+                const data = await response.json();
+                (data.jobs || []).forEach(job => {
+                    importJobs.set(job.id, job);
+                    if (!['done', 'error', 'canceled'].includes(job.status)) connectImportJob(job);
+                });
+                renderImportQueue();
+            } catch {}
+        }
+
+        if (analyzeQualityBtn && importQualitySelect) {
+            analyzeQualityBtn.addEventListener('click', async () => {
+                const urls = getImportUrls();
+                if (urls.length !== 1) {
+                    if (qualityAnalyzeStatus) qualityAnalyzeStatus.textContent = 'Paste exactly one URL to analyze.';
+                    return;
+                }
+
+                analyzeQualityBtn.disabled = true;
+                if (qualityAnalyzeStatus) qualityAnalyzeStatus.textContent = 'Analyzing...';
+
+                try {
+                    const response = await fetch('/import-formats', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-csrf-token': getImportCsrf()
+                        },
+                        body: JSON.stringify({ url: urls[0] })
+                    });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || 'Could not analyze this URL.');
+
+                    importQualitySelect.innerHTML = '';
+                    (data.formats || []).forEach((format, index) => {
+                        const option = document.createElement('option');
+                        option.value = format.quality || 'best';
+                        option.dataset.formatId = format.formatId || '';
+                        option.dataset.qualityLabel = format.label || option.value;
+                        option.textContent = (format.label || option.value) + (format.detail ? ' - ' + format.detail : '');
+                        option.selected = index === 0;
+                        importQualitySelect.appendChild(option);
+                    });
+                    if (data.title && importTitleInput && !importTitleInput.value.trim()) {
+                        importTitleInput.value = data.title.slice(0, 180);
+                    }
+                    if (qualityAnalyzeStatus) qualityAnalyzeStatus.textContent = 'Available qualities loaded.';
+                } catch (err) {
+                    if (qualityAnalyzeStatus) qualityAnalyzeStatus.textContent = err.message || 'Analyze failed.';
+                } finally {
+                    analyzeQualityBtn.disabled = false;
+                }
+            });
+        }
+
+        importQueueBtn.addEventListener('click', async () => {
+            const urls = getImportUrls();
+            const selected = importQualitySelect ? importQualitySelect.options[importQualitySelect.selectedIndex] : null;
+            const quality = importQualitySelect ? importQualitySelect.value : '720';
+            const formatId = urls.length === 1 && selected ? (selected.dataset.formatId || '') : '';
+            const qualityLabel = selected ? (selected.dataset.qualityLabel || selected.textContent || quality) : quality;
+            const title = importTitleInput && urls.length === 1 ? importTitleInput.value.trim() : '';
+
+            if (urls.length === 0) {
+                importUrlInput.focus();
+                importUrlInput.classList.add('shake');
+                setTimeout(() => importUrlInput.classList.remove('shake'), 500);
+                return;
+            }
+
+            setImportQueueButton('Queueing...', true);
+            if (importProgressSection) importProgressSection.style.display = 'block';
+            if (importResult) importResult.style.display = 'none';
+            if (importStatusTitle) importStatusTitle.textContent = 'Queueing import...';
+            if (importStatusDetail) importStatusDetail.textContent = 'Adding URL(s) to queue...';
+            if (importProgressFill) importProgressFill.style.width = '0%';
+            if (importPercent) importPercent.textContent = '0%';
+            if (importSpeed) importSpeed.textContent = '';
+            if (importEta) importEta.textContent = '';
+            if (importSpinner) importSpinner.className = 'import-spinner';
+
+            try {
+                const response = await fetch('/import-url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-csrf-token': getImportCsrf()
+                    },
+                    body: JSON.stringify({
+                        url: urls.join('\n'),
+                        title,
+                        quality,
+                        formatId,
+                        qualityLabel
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Import failed');
+
+                (data.jobs || []).forEach(job => {
+                    importJobs.set(job.id, job);
+                    connectImportJob(job);
+                });
+                renderImportQueue();
+                importUrlInput.value = '';
+                if (importTitleInput) importTitleInput.value = '';
+                setImportQueueButton('Import More', false);
+            } catch (err) {
+                if (importResult) importResult.style.display = 'block';
+                if (importResultCard) importResultCard.className = 'import-result-card error';
+                if (importResultIcon) importResultIcon.textContent = '!';
+                if (importResultText) importResultText.textContent = err.message || 'Could not start import.';
+                if (importResultBtn) importResultBtn.style.display = 'none';
+                if (importWatchBtn) importWatchBtn.style.display = 'none';
+                setImportQueueButton('Try Again', false);
+            }
+        });
+
+        if (importQueueList) {
+            importQueueList.addEventListener('click', async (event) => {
+                const cancelBtn = event.target.closest('[data-import-cancel]');
+                const retryBtn = event.target.closest('[data-import-retry]');
+                const jobId = cancelBtn?.getAttribute('data-import-cancel') || retryBtn?.getAttribute('data-import-retry');
+                if (!jobId) return;
+
+                const response = await fetch((cancelBtn ? '/import-cancel/' : '/import-retry/') + encodeURIComponent(jobId), {
+                    method: 'POST',
+                    headers: { 'x-csrf-token': getImportCsrf() }
+                }).catch(() => null);
+                if (!response || !response.ok) return;
+
+                const data = await response.json().catch(() => ({}));
+                if (data.job) {
+                    importJobs.set(data.job.id, data.job);
+                    connectImportJob(data.job);
+                }
+                await loadImportJobs();
+            });
+        }
+
+        loadImportJobs();
+    }
+
     // ========================================
     // Hajera Romantic Dashboard Features
     // ========================================

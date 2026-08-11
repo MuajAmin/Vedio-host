@@ -8,6 +8,8 @@ node_modules/
 
 # Databases & Dynamic Data
 data/*.db
+data/*.db-wal
+data/*.db-shm
 data/*.sqlite
 data/*.sqlite3
 

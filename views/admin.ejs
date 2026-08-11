@@ -1,0 +1,202 @@
+<%
+const h = escapeHtml;
+
+function formatBytes(value) {
+    const bytes = Number(value || 0);
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
+    if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function formatDate(value) {
+    if (!value) return '-';
+    return new Date(value).toLocaleString('bn-BD', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+const activeJobs = stats.importJobs.filter(job => ['queued', 'starting', 'downloading'].includes(job.status));
+const failedJobs = stats.importJobs.filter(job => ['error', 'canceled'].includes(job.status)).slice(0, 8);
+const recentVideos = stats.videos.slice(0, 10);
+const cleanupHtml = cleanupResult
+    ? `<div class="alert admin-alert"><span>${h(cleanupResult.deleted)} files deleted, ${h(formatBytes(cleanupResult.bytesFreed))} freed.</span></div>`
+    : '';
+
+const jobRows = activeJobs.length === 0
+    ? '<div class="admin-empty">No active import jobs.</div>'
+    : activeJobs.map(job => `
+        <div class="admin-job-row">
+            <div>
+                <strong>${h(job.title || 'Import job')}</strong>
+                <span>${h(job.status)}${job.queuePosition ? ' - queue #' + h(job.queuePosition) : ''}</span>
+            </div>
+            <div class="admin-job-progress">
+                <div class="admin-mini-bar"><span style="width:${h(job.progress || 0)}%"></span></div>
+                <em>${h(job.progress || 0)}%</em>
+            </div>
+        </div>
+    `).join('');
+
+const failedRows = failedJobs.length === 0
+    ? '<div class="admin-empty">No failed imports in memory.</div>'
+    : failedJobs.map(job => `
+        <div class="admin-job-row failed">
+            <div>
+                <strong>${h(job.title || job.url || 'Import job')}</strong>
+                <span>${h(job.error || job.status)}</span>
+            </div>
+            <em>${h(formatDate(job.finishedAt || job.createdAt))}</em>
+        </div>
+    `).join('');
+
+const videoRows = recentVideos.length === 0
+    ? '<tr><td colspan="5">No videos yet.</td></tr>'
+    : recentVideos.map(video => `
+        <tr>
+            <td><a href="/watch/${encodeURIComponent(video.id)}">${h(video.title)}</a></td>
+            <td>${h(formatBytes(video.size))}</td>
+            <td>${h(video.duration || '-')}</td>
+            <td>${h(video.import_quality || 'Upload')}</td>
+            <td>${h(formatDate(video.uploaded_at))}</td>
+        </tr>
+    `).join('');
+%>
+<%- include('layout', { pageTitle: 'Admin', body: `
+<div class="app-container">
+    <div class="ambient-background">
+        <div class="ambient-orb orb-1"></div>
+        <div class="ambient-orb orb-2"></div>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="/dashboard" class="nav-logo">
+                <div class="logo-icon-wrapper">
+                    <svg viewBox="0 0 48 48" fill="none" width="24" height="24">
+                        <rect x="4" y="8" width="40" height="32" rx="6" stroke="currentColor" stroke-width="2.5"/>
+                        <polygon points="20,16 34,24 20,32" fill="currentColor"/>
+                    </svg>
+                </div>
+                <span>Video<em>Host</em></span>
+            </a>
+        </div>
+        <div class="nav-right">
+            <a href="/dashboard" class="btn btn-ghost">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <line x1="19" y1="12" x2="5" y2="12"/>
+                    <polyline points="12 19 5 12 12 5"/>
+                </svg>
+                <span>Library</span>
+            </a>
+            <form action="/logout" method="POST" class="nav-form desktop-only-logout">
+                <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                <button type="submit" class="btn btn-ghost">
+                    <span>Logout</span>
+                </button>
+            </form>
+        </div>
+    </nav>
+
+    <main class="main-content admin-page">
+        <div class="dashboard-header-bar">
+            <div class="header-titles">
+                <span class="header-pill">Admin Control</span>
+                <h1>System Dashboard</h1>
+                <p class="subtitle">${h(stats.videos.length)} videos, ${h(formatBytes(stats.storageBytes))} stored</p>
+            </div>
+            <form action="/admin/cleanup" method="POST" data-confirm="Delete orphan upload files that are not in the database?">
+                <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                <button type="submit" class="btn btn-danger">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <path d="M3 6h18"/>
+                        <path d="M8 6V4h8v2"/>
+                        <path d="M19 6l-1 14H6L5 6"/>
+                    </svg>
+                    <span>Cleanup Orphans</span>
+                </button>
+            </form>
+        </div>
+
+        ${cleanupHtml}
+
+        <section class="admin-stat-grid">
+            <div class="admin-stat"><span>Videos</span><strong>${h(stats.videos.length)}</strong></div>
+            <div class="admin-stat"><span>Storage</span><strong>${h(formatBytes(stats.storageBytes))}</strong></div>
+            <div class="admin-stat"><span>Comments</span><strong>${h(stats.commentsCount)}</strong></div>
+            <div class="admin-stat"><span>Sessions</span><strong>${h(stats.sessionCount)}</strong></div>
+            <div class="admin-stat"><span>Watch Progress</span><strong>${h(stats.progressCount)}</strong></div>
+            <div class="admin-stat"><span>Orphan Files</span><strong>${h(stats.orphanVideos.length + stats.orphanThumbnails.length)}</strong></div>
+        </section>
+
+        <section class="admin-grid">
+            <div class="admin-panel">
+                <div class="admin-panel-header">
+                    <h2>Import Queue</h2>
+                    <span>${h(activeJobs.length)} active</span>
+                </div>
+                ${jobRows}
+            </div>
+
+            <div class="admin-panel">
+                <div class="admin-panel-header">
+                    <h2>Failed Imports</h2>
+                    <span>${h(failedJobs.length)} recent</span>
+                </div>
+                ${failedRows}
+            </div>
+        </section>
+
+        <section class="admin-panel">
+            <div class="admin-panel-header">
+                <h2>Recent Videos</h2>
+                <span>${h(formatBytes(stats.videoBytes))} video files</span>
+            </div>
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Size</th>
+                            <th>Duration</th>
+                            <th>Quality</th>
+                            <th>Added</th>
+                        </tr>
+                    </thead>
+                    <tbody>${videoRows}</tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <nav class="mobile-bottom-bar">
+        <a href="/dashboard" class="bottom-nav-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+                <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+                <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+                <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+            </svg>
+            <span>Library</span>
+        </a>
+        <a href="/upload" class="bottom-nav-item">
+            <div class="upload-fab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="22" height="22">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+            </div>
+            <span>Upload</span>
+        </a>
+        <a href="/admin" class="bottom-nav-item active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z"/>
+                <path d="M9 12l2 2 4-5"/>
+            </svg>
+            <span>Admin</span>
+        </a>
+    </nav>
+</div>
+` }) %>
