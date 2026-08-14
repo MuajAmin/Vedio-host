@@ -11,13 +11,74 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
-    <script src="/js/theme-init.js?v=4.3"></script>
-    <link rel="stylesheet" href="/css/style.css?v=4.3">
+    <script src="/js/theme-init.js?v=4.5"></script>
+    <link rel="stylesheet" href="/css/style.css?v=4.5">
 </head>
 
 <body>
     <%- body %>
-        <script src="/js/app.js?v=4.3"></script>
+
+    <% if (typeof user !== 'undefined' && user) { %>
+    <!-- Profile Photo Modal -->
+    <div class="theme-modal-backdrop" id="profileModal" style="display:none;">
+        <div class="theme-modal profile-modal-card">
+            <div class="theme-modal-header">
+                <h3>👤 Profile Picture</h3>
+                <button type="button" class="theme-close-btn" id="profileCloseBtn">&times;</button>
+            </div>
+            <div class="profile-modal-body">
+                <div class="profile-avatar-preview-wrap">
+                    <div class="profile-avatar-big" id="profileAvatarBig">
+                        <%- typeof renderAvatar === 'function' ? renderAvatar(user, 'profile-avatar-large') : '' %>
+                    </div>
+                    <label for="profileAvatarInput" class="avatar-upload-badge-btn" title="Choose new photo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                            <circle cx="12" cy="13" r="4"/>
+                        </svg>
+                    </label>
+                </div>
+                <div class="profile-user-info">
+                    <h4><%= user === 'muaj' ? 'Muaj (Admin)' : 'Hajera (Viewer)' %></h4>
+                    <p class="profile-meta-text">Tap the camera icon or button below to upload a new profile photo.</p>
+                </div>
+
+                <form action="/profile/avatar" method="POST" enctype="multipart/form-data" id="profileAvatarForm" class="profile-avatar-form">
+                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                    <input type="file" name="avatar" id="profileAvatarInput" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" style="display:none;">
+                    
+                    <button type="button" class="btn btn-primary btn-choose-avatar" id="profileChooseBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                            <circle cx="12" cy="13" r="4"/>
+                        </svg>
+                        <span id="chooseBtnText">Choose Profile Photo</span>
+                    </button>
+
+                    <div class="profile-form-actions" id="profileUploadActions" style="display:none;">
+                        <button type="submit" class="btn btn-primary" id="profileSaveBtn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Save Photo</span>
+                        </button>
+                        <button type="button" class="btn btn-ghost" id="profileCancelPickBtn">Cancel</button>
+                    </div>
+                </form>
+
+                <% if (typeof userAvatar !== 'undefined' && userAvatar) { %>
+                <form action="/profile/avatar/remove" method="POST" class="profile-remove-form" data-confirm="Remove your profile picture and use default letter avatar?">
+                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                    <button type="submit" class="btn btn-ghost btn-sm btn-remove-avatar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        <span>Remove Photo</span>
+                    </button>
+                </form>
+                <% } %>
+            </div>
+        </div>
+    </div>
+    <% } %>
+
+    <script src="/js/app.js?v=4.4"></script>
 </body>
 
 </html>

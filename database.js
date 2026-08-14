@@ -66,6 +66,12 @@ db.exec(`
         FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS user_profiles (
+        username TEXT PRIMARY KEY,
+        avatar TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_at ON videos(uploaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
@@ -100,5 +106,43 @@ try {
 } catch (err) {
     console.error('[db] Migration check error:', err.message);
 }
+
+function getUserAvatar(username) {
+    if (!username) return null;
+    try {
+        const row = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?').get(username);
+        return row ? row.avatar : null;
+    } catch {
+        return null;
+    }
+}
+
+function getAllUserAvatars() {
+    try {
+        const rows = db.prepare('SELECT username, avatar FROM user_profiles').all();
+        const map = {};
+        rows.forEach(r => { if (r.avatar) map[r.username] = r.avatar; });
+        return map;
+    } catch {
+        return {};
+    }
+}
+
+function setUserAvatar(username, avatarFilename) {
+    db.prepare(`
+        INSERT INTO user_profiles (username, avatar, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(username) DO UPDATE SET avatar = excluded.avatar, updated_at = CURRENT_TIMESTAMP
+    `).run(username, avatarFilename);
+}
+
+function deleteUserAvatar(username) {
+    db.prepare('DELETE FROM user_profiles WHERE username = ?').run(username);
+}
+
+db.getUserAvatar = getUserAvatar;
+db.getAllUserAvatars = getAllUserAvatars;
+db.setUserAvatar = setUserAvatar;
+db.deleteUserAvatar = deleteUserAvatar;
 
 module.exports = db;

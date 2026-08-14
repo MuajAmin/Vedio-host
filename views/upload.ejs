@@ -2,6 +2,9 @@
 const h = escapeHtml;
 const isAdmin = user === 'muaj';
 const isHajera = user === 'hajera';
+const renderAvatar = (typeof locals !== 'undefined' && typeof locals.renderAvatar === 'function') 
+    ? locals.renderAvatar 
+    : (uname, cls) => `<div class="avatar-letter ${uname === 'muaj' ? 'avatar-admin' : 'avatar-viewer'} ${h(cls || '')}">${uname === 'muaj' ? 'M' : 'H'}</div>`;
 const errorHtml = error
     ? `<div class="alert alert-error"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>${h(error)}</span></div>`
     : '';
@@ -36,6 +39,10 @@ const errorHtml = error
                 </svg>
                 <span>Back</span>
             </a>
+            <div class="user-badge ${isAdmin ? 'badge-admin' : 'badge-viewer'} user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture">
+                <div class="badge-avatar">${renderAvatar(user, 'nav-avatar')}</div>
+                <span class="user-name">${user === 'muaj' ? 'Muaj' : 'Hajera'}</span>
+            </div>
         </div>
     </nav>
 

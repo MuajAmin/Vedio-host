@@ -3,6 +3,9 @@ const h = escapeHtml;
 const isAdmin = user === 'muaj';
 const isHajera = user === 'hajera';
 const displayName = isAdmin ? 'Muaj' : 'Hajera';
+const renderAvatar = (typeof locals !== 'undefined' && typeof locals.renderAvatar === 'function') 
+    ? locals.renderAvatar 
+    : (uname, cls) => `<div class="avatar-letter ${uname === 'muaj' ? 'avatar-admin' : 'avatar-viewer'} ${h(cls || '')}">${uname === 'muaj' ? 'M' : 'H'}</div>`;
 
 function formatDate(value, withTime) {
     if (!value) return '';
@@ -53,7 +56,7 @@ const commentsHtml = comments.length === 0
             ? `<form action="/comment/delete/${encodeURIComponent(c.id)}" method="POST" class="comment-delete-form"><input type="hidden" name="_csrf" value="${h(csrfToken)}"><button type="submit" class="btn-icon" title="Delete comment"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></form>`
             : '';
 
-        return `<div class="comment-item"><div class="comment-avatar ${c.user === 'muaj' ? 'avatar-admin' : 'avatar-viewer'}">${c.user === 'muaj' ? 'M' : 'H'}</div><div class="comment-body"><div class="comment-header"><span class="comment-author">${c.user === 'muaj' ? 'Muaj' : 'Hajera'}</span><span class="comment-time">${h(formatDate(c.created_at, true))}</span>${commentDeleteForm}</div><p class="comment-text">${h(c.text)}</p></div></div>`;
+        return `<div class="comment-item"><div class="comment-avatar">${renderAvatar(c.user, 'comment-avatar-img')}</div><div class="comment-body"><div class="comment-header"><span class="comment-author">${c.user === 'muaj' ? 'Muaj' : 'Hajera'}</span><span class="comment-time">${h(formatDate(c.created_at, true))}</span>${commentDeleteForm}</div><p class="comment-text">${h(c.text)}</p></div></div>`;
     }).join('');
 %>
 <%- include('layout', { pageTitle: video.title, body: `
@@ -92,8 +95,8 @@ const commentsHtml = comments.length === 0
                     <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
                 </svg>
             </button>
-            <div class="user-badge ${isAdmin ? 'badge-admin' : 'badge-viewer'}">
-                <div class="badge-avatar">${isAdmin ? 'M' : 'H'}</div>
+            <div class="user-badge ${isAdmin ? 'badge-admin' : 'badge-viewer'} user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture">
+                <div class="badge-avatar">${renderAvatar(user, 'nav-avatar')}</div>
                 <span>${displayName}</span>
             </div>
         </div>

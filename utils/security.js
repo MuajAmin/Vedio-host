@@ -21,10 +21,33 @@ function getCsrfToken(req) {
     return req.session.csrfToken;
 }
 
+function renderAvatar(username, extraClass = '', userAvatars = {}) {
+    const avatar = userAvatars[username];
+    const cleanClass = escapeHtml(extraClass);
+    const cleanUser = escapeHtml(username || '');
+    if (avatar) {
+        return `<img src="/avatars/${escapeHtml(avatar)}" alt="${cleanUser}" class="avatar-img ${cleanClass}" loading="lazy" />`;
+    }
+    const letter = (username === 'muaj') ? 'M' : 'H';
+    const roleClass = (username === 'muaj') ? 'avatar-admin' : 'avatar-viewer';
+    return `<div class="avatar-letter ${roleClass} ${cleanClass}">${letter}</div>`;
+}
+
 function attachLocals(req, res, next) {
-    res.locals.user = req.session ? req.session.user : null;
+    const user = req.session ? req.session.user : null;
+    let db;
+    try {
+        db = require('../database');
+    } catch {}
+
+    const avatars = db && typeof db.getAllUserAvatars === 'function' ? db.getAllUserAvatars() : {};
+
+    res.locals.user = user;
     res.locals.csrfToken = req.session ? getCsrfToken(req) : '';
     res.locals.escapeHtml = escapeHtml;
+    res.locals.userAvatars = avatars;
+    res.locals.userAvatar = user ? (avatars[user] || null) : null;
+    res.locals.renderAvatar = (uname, cls) => renderAvatar(uname, cls, avatars);
     next();
 }
 
@@ -52,6 +75,7 @@ module.exports = {
     attachLocals,
     escapeHtml,
     getCsrfToken,
+    renderAvatar,
     requireCsrf,
     timingSafeCompare
 };

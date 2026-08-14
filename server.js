@@ -4,12 +4,13 @@ const session = require('express-session');
 const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
-const { attachLocals, requireCsrf } = require('./utils/security');
+const { attachLocals, requireCsrf, renderAvatar } = require('./utils/security');
 const { isAuthenticated } = require('./middleware/auth');
 const SQLiteSessionStore = require('./utils/sessionStore');
 const db = require('./database');
 
 const app = express();
+app.locals.renderAvatar = renderAvatar;
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const useSecureCookies = process.env.COOKIE_SECURE === 'true';
@@ -100,10 +101,29 @@ app.use(session({
 }));
 app.use(attachLocals);
 
+// Ensure avatars directory exists
+const avatarsDir = path.join(__dirname, 'uploads', 'avatars');
+if (!fs.existsSync(avatarsDir)) {
+    fs.mkdirSync(avatarsDir, { recursive: true });
+}
+
 // Serve thumbnails behind authentication (prevents unauthenticated access to private thumbnails)
 app.get('/thumbnails/:file', isAuthenticated, (req, res) => {
     const filename = path.basename(req.params.file); // prevent path traversal
     const filePath = path.join(__dirname, 'uploads', 'thumbnails', filename);
+    res.sendFile(filePath, {
+        headers: {
+            'Cache-Control': isProduction ? 'private, max-age=604800' : 'no-cache'
+        }
+    }, (err) => {
+        if (err && !res.headersSent) res.status(404).end();
+    });
+});
+
+// Serve user profile avatars behind authentication
+app.get('/avatars/:file', isAuthenticated, (req, res) => {
+    const filename = path.basename(req.params.file); // prevent path traversal
+    const filePath = path.join(__dirname, 'uploads', 'avatars', filename);
     res.sendFile(filePath, {
         headers: {
             'Cache-Control': isProduction ? 'private, max-age=604800' : 'no-cache'
@@ -123,6 +143,9 @@ app.use((req, res, next) => {
     if (req.path.startsWith('/thumbnail/') && req.method === 'POST') {
         return next();
     }
+    if (req.path === '/profile/avatar' && req.method === 'POST') {
+        return next();
+    }
     return requireCsrf(req, res, next);
 });
 
@@ -132,12 +155,14 @@ const videoRoutes = require('./routes/videos');
 const commentRoutes = require('./routes/comments');
 const importRoutes = require('./routes/import');
 const adminRoutes = require('./routes/admin');
+const profileRoutes = require('./routes/profile');
 
 app.use('/', authRoutes);
 app.use('/', videoRoutes);
 app.use('/', commentRoutes);
 app.use('/', importRoutes);
 app.use('/', adminRoutes);
+app.use('/', profileRoutes);
 
 
 

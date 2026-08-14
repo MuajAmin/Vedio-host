@@ -5,6 +5,9 @@ const isHajera = user === 'hajera';
 const displayName = isAdmin ? 'Muaj' : 'Hajera';
 const roleName = isAdmin ? 'Admin' : 'Viewer';
 const videoCountText = videos.length > 0 ? videos.length + ' videos' : 'No videos yet';
+const renderAvatar = (typeof locals !== 'undefined' && typeof locals.renderAvatar === 'function') 
+    ? locals.renderAvatar 
+    : (uname, cls) => `<div class="avatar-letter ${uname === 'muaj' ? 'avatar-admin' : 'avatar-viewer'} ${h(cls || '')}">${uname === 'muaj' ? 'M' : 'H'}</div>`;
 
 function formatDate(value) {
     if (!value) return '';
@@ -73,8 +76,8 @@ function renderVideoCard(v, extraClass) {
             ${progressHtml}
         </div>
         <div class="card-info">
-            <div class="card-avatar ${user === 'muaj' ? 'avatar-admin' : 'avatar-viewer'}">
-                ${user === 'muaj' ? 'M' : 'H'}
+            <div class="card-avatar">
+                ${renderAvatar(user, 'card-avatar-img')}
             </div>
             <div class="card-details">
                 <h3 class="card-title">${h(v.title)}</h3>
@@ -145,8 +148,8 @@ const videoGrid = videos.length === 0
                     <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
                 </svg>
             </button>
-            <div class="user-badge ${isAdmin ? 'badge-admin' : 'badge-viewer'}">
-                <div class="badge-avatar">${isAdmin ? 'M' : 'H'}</div>
+            <div class="user-badge ${isAdmin ? 'badge-admin' : 'badge-viewer'} user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture">
+                <div class="badge-avatar">${renderAvatar(user, 'nav-avatar')}</div>
                 <span class="user-name">${displayName}</span>
                 <span class="badge-role">${roleName}</span>
             </div>

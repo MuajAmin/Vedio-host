@@ -613,6 +613,181 @@ input, textarea {
     color: var(--text-primary);
 }
 
+/* ========================================
+   AVATAR & PROFILE MODAL
+   ======================================== */
+.avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+}
+
+.avatar-letter {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+}
+
+.badge-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.bottom-nav-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2px;
+}
+
+.comment-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.card-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.user-profile-trigger {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.user-profile-trigger:hover {
+    transform: scale(1.04);
+}
+
+.profile-modal-card {
+    max-width: 400px;
+    text-align: center;
+    padding: 30px 24px 28px 24px;
+}
+
+.profile-avatar-preview-wrap {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    margin: 0 auto 16px auto;
+}
+
+.profile-avatar-big {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid var(--accent-gold);
+    box-shadow: 0 0 25px var(--accent-gold-glow);
+    background: var(--bg-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    font-weight: 800;
+}
+
+.avatar-upload-badge-btn {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--accent-gold);
+    color: #08080c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 2px solid var(--bg-card);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.avatar-upload-badge-btn:hover {
+    transform: scale(1.1);
+    background: var(--accent-gold-bright);
+}
+
+.profile-user-info h4 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+}
+
+.profile-meta-text {
+    font-size: 0.86rem;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    line-height: 1.4;
+}
+
+.btn-choose-avatar {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 0.92rem;
+}
+
+.profile-form-actions {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+.profile-form-actions .btn {
+    flex: 1;
+    justify-content: center;
+}
+
+.profile-remove-form {
+    margin-top: 14px;
+}
+
+.btn-remove-avatar {
+    width: 100%;
+    justify-content: center;
+    color: #f43f5e;
+    border-color: rgba(244, 63, 94, 0.25);
+    font-size: 0.85rem;
+}
+
+.btn-remove-avatar:hover {
+    background: rgba(244, 63, 94, 0.12);
+    border-color: #f43f5e;
+    color: #fda4af;
+}
+
 .theme-options-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);

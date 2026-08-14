@@ -1475,6 +1475,82 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ---- Profile Picture Modal Controller ----
+    const profileModal = document.getElementById('profileModal');
+    const profileCloseBtn = document.getElementById('profileCloseBtn');
+    const profileTriggers = document.querySelectorAll('.user-profile-trigger');
+    const profileAvatarInput = document.getElementById('profileAvatarInput');
+    const profileChooseBtn = document.getElementById('profileChooseBtn');
+    const profileUploadActions = document.getElementById('profileUploadActions');
+    const profileCancelPickBtn = document.getElementById('profileCancelPickBtn');
+    const profileAvatarBig = document.getElementById('profileAvatarBig');
+    let originalAvatarBigHtml = profileAvatarBig ? profileAvatarBig.innerHTML : '';
+
+    if (profileModal) {
+        const openProfileModal = () => {
+            profileModal.style.display = 'flex';
+            requestAnimationFrame(() => profileModal.classList.add('active'));
+        };
+        const closeProfileModal = () => {
+            profileModal.classList.remove('active');
+            setTimeout(() => {
+                if (!profileModal.classList.contains('active')) {
+                    profileModal.style.display = 'none';
+                }
+            }, 250);
+            resetAvatarPicker();
+        };
+
+        const resetAvatarPicker = () => {
+            if (profileAvatarInput) profileAvatarInput.value = '';
+            if (profileAvatarBig && originalAvatarBigHtml) profileAvatarBig.innerHTML = originalAvatarBigHtml;
+            if (profileUploadActions) profileUploadActions.style.display = 'none';
+            if (profileChooseBtn) profileChooseBtn.style.display = '';
+        };
+
+        profileTriggers.forEach(trigger => {
+            trigger.addEventListener('click', (e) => {
+                e.preventDefault();
+                openProfileModal();
+            });
+        });
+
+        if (profileCloseBtn) profileCloseBtn.addEventListener('click', closeProfileModal);
+        profileModal.addEventListener('click', (e) => {
+            if (e.target === profileModal) closeProfileModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && profileModal.classList.contains('active')) {
+                closeProfileModal();
+            }
+        });
+
+        if (profileChooseBtn && profileAvatarInput) {
+            profileChooseBtn.addEventListener('click', () => profileAvatarInput.click());
+        }
+
+        if (profileAvatarInput) {
+            profileAvatarInput.addEventListener('change', () => {
+                const file = profileAvatarInput.files && profileAvatarInput.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    if (profileAvatarBig) {
+                        profileAvatarBig.innerHTML = `<img src="${e.target.result}" alt="Preview" class="avatar-img profile-avatar-large" />`;
+                    }
+                    if (profileUploadActions) profileUploadActions.style.display = 'flex';
+                    if (profileChooseBtn) profileChooseBtn.style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        if (profileCancelPickBtn) {
+            profileCancelPickBtn.addEventListener('click', resetAvatarPicker);
+        }
+    }
+
     // ---- AJAX Comment Submit ----
     const commentForm = document.querySelector('.comment-form');
     if (commentForm) {

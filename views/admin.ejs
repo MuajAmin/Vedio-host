@@ -1,5 +1,8 @@
 <%
 const h = escapeHtml;
+const renderAvatar = (typeof locals !== 'undefined' && typeof locals.renderAvatar === 'function') 
+    ? locals.renderAvatar 
+    : (uname, cls) => `<div class="avatar-letter ${uname === 'muaj' ? 'avatar-admin' : 'avatar-viewer'} ${h(cls || '')}">${uname === 'muaj' ? 'M' : 'H'}</div>`;
 
 function formatBytes(value) {
     const bytes = Number(value || 0);
@@ -93,6 +96,10 @@ const videoRows = recentVideos.length === 0
                 </svg>
                 <span>Library</span>
             </a>
+            <div class="user-badge badge-admin user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture">
+                <div class="badge-avatar">${renderAvatar(user, 'nav-avatar')}</div>
+                <span class="user-name">Muaj</span>
+            </div>
             <form action="/logout" method="POST" class="nav-form desktop-only-logout">
                 <input type="hidden" name="_csrf" value="${h(csrfToken)}">
                 <button type="submit" class="btn btn-ghost">
