@@ -60,6 +60,11 @@ const errorHtml = error
             <div class="upload-header">
                 <h1>Add Video</h1>
                 <p>Upload a file or import from URL</p>
+                <div class="upload-as-badge">
+                    <span class="upload-as-label">Uploading as</span>
+                    <div class="badge-avatar">${renderAvatar(user, 'upload-author-avatar')}</div>
+                    <span class="upload-as-name">${user === 'muaj' ? 'Muaj' : 'Hajera'}</span>
+                </div>
             </div>
 
             ${errorHtml}

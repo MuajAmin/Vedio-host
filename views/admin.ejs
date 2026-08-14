@@ -67,16 +67,20 @@ const failedRows = failedJobs.length === 0
     `).join('');
 
 const videoRows = recentVideos.length === 0
-    ? '<tr><td colspan="5">No videos yet.</td></tr>'
-    : recentVideos.map(video => `
+    ? '<tr><td colspan="6">No videos yet.</td></tr>'
+    : recentVideos.map(video => {
+        const uploader = video.uploaded_by || 'muaj';
+        const uploaderName = uploader === 'hajera' ? 'Hajera' : (uploader === 'muaj' ? 'Muaj' : uploader);
+        return `
         <tr>
             <td><a href="/watch/${encodeURIComponent(video.id)}">${h(video.title)}</a></td>
+            <td><div class="admin-user-cell"><div class="badge-avatar">${renderAvatar(uploader, 'admin-row-avatar')}</div><span>${h(uploaderName)}</span></div></td>
             <td>${h(formatBytes(video.size))}</td>
             <td>${h(video.duration || '-')}</td>
             <td>${h(video.import_quality || 'Upload')}</td>
             <td>${h(formatDate(video.uploaded_at))}</td>
         </tr>
-    `).join('');
+    `;}).join('');
 %>
 <%- include('layout', { pageTitle: 'Admin', body: `
 <div class="app-container">
@@ -177,6 +181,7 @@ const videoRows = recentVideos.length === 0
                     <thead>
                         <tr>
                             <th>Title</th>
+                            <th>Uploader</th>
                             <th>Size</th>
                             <th>Duration</th>
                             <th>Quality</th>

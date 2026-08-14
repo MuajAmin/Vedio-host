@@ -65,6 +65,8 @@ function renderVideoCard(v, extraClass) {
         : '';
     const isNew = isNewVideo(v);
     const badgeText = isNew ? 'NEW' : (progress ? 'RESUME' : '');
+    const uploader = v.uploaded_by || 'muaj';
+    const uploaderName = uploader === 'hajera' ? 'Hajera' : (uploader === 'muaj' ? 'Muaj' : uploader);
 
     return `<a href="${watchUrl}" class="video-card ${extraClass || ''}" data-title="${h(String(v.title || '').toLowerCase())}">
         <div class="card-thumbnail">
@@ -85,13 +87,13 @@ function renderVideoCard(v, extraClass) {
             ${progressHtml}
         </div>
         <div class="card-info">
-            <div class="card-avatar">
-                ${renderAvatar(user, 'card-avatar-img')}
+            <div class="card-avatar" title="Uploaded by ${h(uploaderName)}">
+                ${renderAvatar(uploader, 'card-avatar-img')}
             </div>
             <div class="card-details">
                 <h3 class="card-title">${h(v.title)}</h3>
                 <div class="card-meta">
-                    <span class="meta-author">${user === 'muaj' ? 'Muaj' : 'Hajera'}</span>
+                    <span class="meta-author" title="Uploaded by ${h(uploaderName)}">${h(uploaderName)}</span>
                     <span class="meta-dot">•</span>
                     <span class="meta-size">${h(formatSize(v.size))}</span>
                     <span class="meta-dot">•</span>

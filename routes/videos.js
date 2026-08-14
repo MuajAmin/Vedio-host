@@ -99,6 +99,7 @@ router.get('/dashboard', isAuthenticated, (req, res) => {
             v.size,
             v.duration,
             v.thumbnail,
+            v.uploaded_by,
             v.uploaded_at,
             wp.position_seconds,
             wp.duration_seconds,
@@ -176,6 +177,7 @@ router.post('/upload', isAuthenticated, (req, res) => {
 
         const id = uuidv4();
         const title = String(req.body.title || req.file.originalname).trim().slice(0, MAX_TITLE_LENGTH);
+        const uploader = req.session.user || 'muaj';
 
         // Generate video thumbnail (lightweight single-frame FFmpeg extraction)
         let thumbnail = null;
@@ -191,8 +193,8 @@ router.post('/upload', isAuthenticated, (req, res) => {
 
         try {
             db.prepare(
-                'INSERT INTO videos (id, title, filename, original_name, size, thumbnail, duration) VALUES (?, ?, ?, ?, ?, ?, ?)'
-            ).run(id, title || req.file.originalname, req.file.filename, req.file.originalname, req.file.size, thumbnail, duration);
+                'INSERT INTO videos (id, title, filename, original_name, size, thumbnail, duration, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            ).run(id, title || req.file.originalname, req.file.filename, req.file.originalname, req.file.size, thumbnail, duration, uploader);
         } catch (dbError) {
             return fail(500, 'Could not save video metadata.');
         }

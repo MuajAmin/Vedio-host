@@ -38,6 +38,7 @@ db.exec(`
         thumbnail TEXT,
         source_url TEXT,
         import_quality TEXT,
+        uploaded_by TEXT DEFAULT 'muaj',
         uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -96,6 +97,9 @@ try {
     ensureColumn('thumbnail', 'thumbnail TEXT');
     ensureColumn('source_url', 'source_url TEXT');
     ensureColumn('import_quality', 'import_quality TEXT');
+    ensureColumn('uploaded_by', "uploaded_by TEXT DEFAULT 'muaj'");
+
+    db.exec('CREATE INDEX IF NOT EXISTS idx_videos_uploaded_by ON videos(uploaded_by)');
 
     const progressInfo = db.prepare("PRAGMA table_info(watch_progress)").all();
     const hasDurationSeconds = progressInfo.some(col => col.name === 'duration_seconds');

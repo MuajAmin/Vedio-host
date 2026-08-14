@@ -675,8 +675,8 @@ async function startDownload(job) {
                     const ext = path.extname(downloaded.finalFilename).toLowerCase() || '.mp4';
                     db.prepare(
                         `INSERT INTO videos
-                            (id, title, filename, original_name, size, thumbnail, duration, source_url, import_quality)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                            (id, title, filename, original_name, size, thumbnail, duration, source_url, import_quality, uploaded_by)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
                     ).run(
                         videoId,
                         title,
@@ -686,7 +686,8 @@ async function startDownload(job) {
                         thumbnail,
                         duration,
                         job.url,
-                        job.qualityLabel || job.quality
+                        job.qualityLabel || job.quality,
+                        job.uploadedBy || 'muaj'
                     );
 
                     job.status = 'done';
@@ -770,6 +771,7 @@ router.post('/import-url', isAuthenticated, async (req, res) => {
             quality,
             formatId: urls.length === 1 ? formatId : '',
             qualityLabel: urls.length === 1 ? qualityLabel : quality,
+            uploadedBy: req.session.user || 'muaj',
             status: 'queued',
             progress: 0,
             speed: '',
@@ -877,6 +879,7 @@ router.post('/import-retry/:jobId', isAuthenticated, async (req, res) => {
         quality: oldJob.quality,
         formatId: oldJob.formatId,
         qualityLabel: oldJob.qualityLabel,
+        uploadedBy: oldJob.uploadedBy || req.session.user || 'muaj',
         status: 'queued',
         progress: 0,
         speed: '',

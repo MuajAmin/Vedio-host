@@ -36,7 +36,7 @@ function getImportJobs() {
 
 function collectAdminStats() {
     const videos = db.prepare(
-        'SELECT id, title, filename, thumbnail, size, duration, uploaded_at, import_quality FROM videos ORDER BY uploaded_at DESC'
+        'SELECT id, title, filename, thumbnail, size, duration, uploaded_by, uploaded_at, import_quality FROM videos ORDER BY uploaded_at DESC'
     ).all();
     const commentsCount = db.prepare('SELECT COUNT(*) AS count FROM comments').get().count;
     const progressCount = db.prepare('SELECT COUNT(*) AS count FROM watch_progress').get().count;
