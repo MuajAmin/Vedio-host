@@ -31,36 +31,59 @@ function generateVideoThumbnail(videoFilename, videoId) {
             return resolve(null);
         }
 
-        // Try extracting frame at 2 seconds. If video is very short, try at 0 second.
-        const runFfmpeg = (seekTime) => {
-            const args = [
-                '-y',
-                '-ss', seekTime,
-                '-i', inputPath,
-                '-vframes', '1',
-                '-vf', 'scale=480:-1',
-                '-q:v', '3',
-                outputPath
-            ];
+        // Step 1: Get video duration via ffprobe so we can seek to the middle
+        const probeArgs = [
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'csv=p=0',
+            inputPath
+        ];
 
-            execFile('ffmpeg', args, { timeout: 15000, windowsHide: true }, (err) => {
-                if (err) {
-                    if (seekTime === '00:00:02') {
-                        // Retry at 0 second in case video is < 2s
-                        return runFfmpeg('00:00:00');
+        execFile('ffprobe', probeArgs, { timeout: 10000, windowsHide: true }, (probeErr, probeStdout) => {
+            let seekTime = '00:00:02'; // fallback if ffprobe fails
+
+            if (!probeErr) {
+                const totalSeconds = parseFloat(probeStdout.trim());
+                if (isFinite(totalSeconds) && totalSeconds > 0) {
+                    // Seek to exact middle of the video
+                    const midSeconds = Math.floor(totalSeconds / 2);
+                    const hh = String(Math.floor(midSeconds / 3600)).padStart(2, '0');
+                    const mm = String(Math.floor((midSeconds % 3600) / 60)).padStart(2, '0');
+                    const ss = String(midSeconds % 60).padStart(2, '0');
+                    seekTime = `${hh}:${mm}:${ss}`;
+                }
+            }
+
+            const runFfmpeg = (time) => {
+                const args = [
+                    '-y',
+                    '-ss', time,
+                    '-i', inputPath,
+                    '-vframes', '1',
+                    '-vf', 'scale=480:-1',
+                    '-q:v', '3',
+                    outputPath
+                ];
+
+                execFile('ffmpeg', args, { timeout: 15000, windowsHide: true }, (err) => {
+                    if (err) {
+                        if (time !== '00:00:00') {
+                            // Retry at 0 second in case seek position is invalid
+                            return runFfmpeg('00:00:00');
+                        }
+                        console.warn(`[thumbnail] FFmpeg extraction failed for ${videoFilename}:`, err.message);
+                        return resolve(null);
                     }
-                    console.warn(`[thumbnail] FFmpeg extraction failed for ${videoFilename}:`, err.message);
+
+                    if (fs.existsSync(outputPath)) {
+                        return resolve(thumbFilename);
+                    }
                     return resolve(null);
-                }
+                });
+            };
 
-                if (fs.existsSync(outputPath)) {
-                    return resolve(thumbFilename);
-                }
-                return resolve(null);
-            });
-        };
-
-        runFfmpeg('00:00:02');
+            runFfmpeg(seekTime);
+        });
     });
 }
 
