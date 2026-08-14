@@ -1061,12 +1061,26 @@ input, textarea {
     margin: 0 auto;
 }
 
-/* Video Grid */
+/* Video Grid - YouTube Feed Style */
 .video-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 10px;
-    animation: fade-in-up 0.6s var(--ease-out) both 0.15s;
+    gap: 22px;
+    animation: fade-in-up 0.5s var(--ease-out) both 0.1s;
+}
+
+@media (min-width: 600px) {
+    .video-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+    }
+}
+
+@media (min-width: 960px) {
+    .video-grid {
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 24px;
+    }
 }
 
 .continue-section {
@@ -1090,7 +1104,7 @@ input, textarea {
 .continue-rail {
     display: grid;
     grid-auto-flow: column;
-    grid-auto-columns: minmax(250px, 320px);
+    grid-auto-columns: minmax(260px, 320px);
     gap: 18px;
     overflow-x: auto;
     padding-bottom: 10px;
@@ -1104,90 +1118,33 @@ input, textarea {
 .video-card {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    border-radius: 12px;
+    border-radius: 14px;
     overflow: hidden;
-    transition: all 0.2s ease;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
     display: flex;
-    flex-direction: row;
-    min-height: 112px;
+    flex-direction: column;
+    text-decoration: none;
     position: relative;
     contain: layout paint;
 }
 
-/* Animated gradient border on hover */
-.video-card::before {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: calc(var(--radius-lg) + 1px);
-    background: linear-gradient(
-        135deg,
-        var(--accent-gold-dim),
-        transparent 40%,
-        transparent 60%,
-        var(--accent-gold-dim)
-    );
-    z-index: -1;
-    opacity: 0;
-    transition: opacity 0.4s ease;
-}
-
-.video-card:hover::before {
-    opacity: 1;
-}
-
-/* Shine sweep effect on hover */
-.video-card::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 60%;
-    height: 100%;
-    background: linear-gradient(
-        90deg,
-        transparent 0%,
-        rgba(255, 255, 255, 0.04) 40%,
-        rgba(255, 255, 255, 0.08) 50%,
-        rgba(255, 255, 255, 0.04) 60%,
-        transparent 100%
-    );
-    z-index: 2;
-    transition: left 0.7s var(--ease-out);
-    pointer-events: none;
-}
-
-.video-card:hover::after {
-    left: 130%;
-}
-
 .video-card:hover {
-    transform: none;
-    box-shadow: 0 1px 0 var(--border-subtle);
+    transform: translateY(-4px);
+    border-color: var(--border-accent);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 20px var(--accent-gold-glow);
+    background: var(--bg-card-hover);
 }
 
 .video-card:active {
-    transform: scale(0.98);
-    opacity: 0.9;
+    transform: scale(0.985);
+    opacity: 0.95;
 }
 
-@keyframes card-stagger-in {
-    from {
-        opacity: 0;
-        transform: translateY(20px) scale(0.97);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
+/* 16:9 Full-width Thumbnail */
 .card-thumbnail {
     position: relative;
-    flex: 0 0 42%;
-    width: 42%;
-    min-height: 112px;
-    aspect-ratio: auto;
+    width: 100%;
+    aspect-ratio: 16 / 9;
     background: linear-gradient(145deg, #181828, #0e0e1a);
     display: flex;
     align-items: center;
@@ -1203,11 +1160,11 @@ input, textarea {
     object-fit: cover;
     object-position: center;
     z-index: 1;
-    transition: transform 0.45s var(--ease-out);
+    transition: transform 0.35s var(--ease-out);
 }
 
 .video-card:hover .thumb-img {
-    transform: scale(1.06);
+    transform: scale(1.04);
 }
 
 .thumb-img.thumb-error {
@@ -1221,7 +1178,7 @@ input, textarea {
     align-items: center;
     justify-content: center;
     color: var(--text-muted);
-    opacity: 0.7;
+    opacity: 0.6;
     z-index: 0;
     transition: opacity 0.3s ease;
 }
@@ -1234,55 +1191,37 @@ input, textarea {
     opacity: 0.7 !important;
 }
 
-.card-thumbnail::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at 30% 60%, var(--accent-gold-glow) 0%, transparent 50%),
-                radial-gradient(circle at 70% 30%, var(--accent-gold-glow) 0%, transparent 50%);
-}
-
-/* Film-strip decoration on thumbnail */
-.card-thumbnail::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 6px;
-    background: repeating-linear-gradient(
-        to bottom,
-        var(--accent-gold-dim) 0px,
-        var(--accent-gold-dim) 4px,
-        transparent 4px,
-        transparent 8px
-    );
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.video-card:hover .card-thumbnail::after {
-    opacity: 0.5;
-}
-
 .card-badge {
     position: absolute;
-    top: 12px;
-    left: 12px;
+    top: 8px;
+    left: 8px;
     padding: 3px 8px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.82);
     border: 1px solid var(--border-accent);
-    border-radius: 4px;
+    border-radius: 6px;
     font-size: 0.7rem;
     font-weight: 800;
     color: var(--accent-gold-bright);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     backdrop-filter: blur(8px);
+    z-index: 3;
+}
+
+.card-badge.badge-new {
+    background: linear-gradient(135deg, #e11d48, #be123c);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+.card-badge.badge-resume {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
 }
 
 .play-overlay {
-    width: 58px;
-    height: 58px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     background: var(--accent-gold-glow);
     backdrop-filter: blur(10px);
@@ -1290,52 +1229,41 @@ input, textarea {
     align-items: center;
     justify-content: center;
     color: var(--accent-gold-bright);
-    transition: all 0.35s var(--ease-out);
+    transition: all 0.3s var(--ease-out);
     border: 1.5px solid var(--border-accent);
     z-index: 2;
-    position: relative;
-}
-
-/* Ring around play button on hover */
-.play-overlay::before {
-    content: '';
     position: absolute;
-    inset: -6px;
-    border-radius: 50%;
-    border: 2px solid var(--accent-gold);
     opacity: 0;
-    transition: all 0.3s ease;
-}
-
-.video-card:hover .play-overlay::before {
-    opacity: 0.5;
-    transform: scale(1.1);
-}
-
-.play-overlay svg {
-    margin-left: 3px;
+    transform: scale(0.85);
 }
 
 .video-card:hover .play-overlay {
+    opacity: 1;
+    transform: scale(1);
     background: linear-gradient(135deg, var(--accent-gold-bright), var(--accent-warm));
     color: #08080c;
-    transform: scale(1.12);
-    box-shadow: 0 0 35px var(--accent-gold-glow-strong);
+    box-shadow: 0 0 25px var(--accent-gold-glow-strong);
     border-color: transparent;
+}
+
+.play-overlay svg {
+    margin-left: 2px;
 }
 
 .card-duration {
     position: absolute;
-    bottom: 10px;
-    right: 10px;
-    padding: 4px 10px;
-    background: rgba(8, 8, 14, 0.85);
-    border-radius: var(--radius-sm);
+    bottom: 8px;
+    right: 8px;
+    padding: 3px 8px;
+    background: rgba(0, 0, 0, 0.85);
+    border-radius: 6px;
     font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--text-primary);
+    font-weight: 700;
+    color: #ffffff;
     backdrop-filter: blur(6px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 3;
+    letter-spacing: 0.02em;
 }
 
 .card-watch-progress {
@@ -1343,7 +1271,7 @@ input, textarea {
     left: 0;
     right: 0;
     bottom: 0;
-    height: 5px;
+    height: 4px;
     z-index: 5;
     background: rgba(0, 0, 0, 0.55);
 }
@@ -1352,29 +1280,51 @@ input, textarea {
     display: block;
     height: 100%;
     background: linear-gradient(90deg, var(--accent-gold), var(--accent-gold-bright));
-    box-shadow: 0 0 12px var(--accent-gold-glow-strong);
+    box-shadow: 0 0 10px var(--accent-gold-glow-strong);
 }
 
+/* Card Info Section (Below Thumbnail) */
 .card-info {
-    padding: 12px;
-    flex: 1;
+    padding: 12px 14px 14px 14px;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    gap: 12px;
+    align-items: flex-start;
+    flex: 1;
+}
+
+.card-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
     justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.card-details {
+    flex: 1;
+    min-width: 0;
 }
 
 .card-title {
     font-family: var(--font-display);
-    font-size: 0.95rem;
+    font-size: 0.98rem;
     font-weight: 700;
-    margin-bottom: 8px;
-    line-height: 1.4;
+    margin-bottom: 5px;
+    line-height: 1.36;
     letter-spacing: -0.01em;
     color: var(--text-primary);
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    word-break: break-word;
+    transition: color 0.2s ease;
 }
 
 .video-card:hover .card-title {
@@ -1384,9 +1334,20 @@ input, textarea {
 .card-meta {
     display: flex;
     align-items: center;
-    gap: 14px;
-    font-size: 0.82rem;
+    gap: 5px;
+    font-size: 0.8rem;
     color: var(--text-muted);
+    flex-wrap: wrap;
+    line-height: 1.3;
+}
+
+.card-meta .meta-author {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.card-meta .meta-dot {
+    opacity: 0.45;
 }
 
 .meta-date {
@@ -4576,37 +4537,32 @@ h3,
 @media (max-width: 560px) {
     .video-grid {
         grid-template-columns: 1fr;
-        gap: 10px;
+        gap: 20px;
     }
 
     .video-card {
-        min-height: 112px;
-        flex-direction: row;
-        border-radius: 12px;
+        border-radius: 14px;
     }
 
     .card-thumbnail {
-        flex: 0 0 42%;
-        width: 42%;
-        min-height: 112px;
-        aspect-ratio: auto;
+        width: 100%;
+        aspect-ratio: 16 / 9;
     }
 
     .card-info {
-        justify-content: center;
-        padding: 12px;
+        padding: 12px 10px 14px 10px;
     }
 
     .card-title {
         font-size: 0.95rem;
-        -webkit-line-clamp: 3;
+        -webkit-line-clamp: 2;
     }
 
     .card-duration {
         right: 8px;
         bottom: 8px;
         padding: 3px 7px;
-        font-size: 0.7rem;
+        font-size: 0.75rem;
     }
 
     .card-badge {
@@ -4675,11 +4631,6 @@ h3,
 
     .nav-logo span {
         display: none;
-    }
-
-    .card-thumbnail {
-        flex-basis: 38%;
-        width: 38%;
     }
 
     .vp-speed-group {

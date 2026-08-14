@@ -52,19 +52,18 @@ function renderVideoCard(v, extraClass) {
         ? `<div class="card-watch-progress" title="Continue from ${h(formatWatchPosition(v))}"><span style="width:${h(progress)}%"></span></div>`
         : '';
     const isNew = isNewVideo(v);
-    const badgeText = isNew ? 'NEW' : (progress ? 'RESUME' : 'HD');
-    const badgeClass = isNew ? 'card-badge badge-new' : 'card-badge';
+    const badgeText = isNew ? 'NEW' : (progress ? 'RESUME' : '');
 
     return `<a href="${watchUrl}" class="video-card ${extraClass || ''}" data-title="${h(String(v.title || '').toLowerCase())}">
         <div class="card-thumbnail">
             ${thumbImg}
             <div class="thumb-placeholder ${v.thumbnail ? 'has-thumb' : ''}">
-                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
+                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
                     <rect x="6" y="10" width="36" height="28" rx="4"/>
                     <polygon points="20,18 32,24 20,30" fill="currentColor"/>
                 </svg>
             </div>
-            <div class="${badgeClass}">${badgeText}</div>
+            ${badgeText ? `<div class="card-badge ${isNew ? 'badge-new' : 'badge-resume'}">${badgeText}</div>` : ''}
             <div class="play-overlay">
                 <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
                     <polygon points="6,4 20,12 6,20"/>
@@ -74,14 +73,18 @@ function renderVideoCard(v, extraClass) {
             ${progressHtml}
         </div>
         <div class="card-info">
-            <h3 class="card-title">${h(v.title)}</h3>
-            <div class="card-meta">
-                <span class="meta-date">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    ${h(formatDate(v.uploaded_at))}
-                </span>
-                ${isNew ? '<span class="meta-new">✨ New</span>' : ''}
-                ${progress ? `<span class="meta-date">Continue ${h(formatWatchPosition(v))}</span>` : ''}
+            <div class="card-avatar ${user === 'muaj' ? 'avatar-admin' : 'avatar-viewer'}">
+                ${user === 'muaj' ? 'M' : 'H'}
+            </div>
+            <div class="card-details">
+                <h3 class="card-title">${h(v.title)}</h3>
+                <div class="card-meta">
+                    <span class="meta-author">${user === 'muaj' ? 'Muaj' : 'Hajera'}</span>
+                    <span class="meta-dot">•</span>
+                    <span class="meta-size">${h(formatSize(v.size))}</span>
+                    <span class="meta-dot">•</span>
+                    <span class="meta-date">${h(formatDate(v.uploaded_at))}</span>
+                </div>
             </div>
         </div>
     </a>`;
