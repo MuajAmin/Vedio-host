@@ -1599,7 +1599,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Escape text for safe insertion
                     const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-                    const commentHtml = `<div class="comment-item" style="opacity:0;transform:translateY(-8px);transition:all 0.3s ease"><div class="comment-avatar ${avatarClass}">${initial}</div><div class="comment-body"><div class="comment-header"><span class="comment-author">${displayName}</span><span class="comment-time">${timeStr}</span></div><p class="comment-text">${escaped}</p></div></div>`;
+                    const avatarHtml = data.comment && data.comment.avatar
+                        ? `<img src="/avatars/${encodeURIComponent(data.comment.avatar)}" alt="${displayName}" class="avatar-img comment-avatar-img" loading="lazy" />`
+                        : `<div class="avatar-letter ${avatarClass}">${initial}</div>`;
+
+                    const commentHtml = `<div class="comment-item" style="opacity:0;transform:translateY(-8px);transition:all 0.3s ease"><div class="comment-avatar">${avatarHtml}</div><div class="comment-body"><div class="comment-header"><span class="comment-author">${displayName}</span><span class="comment-time">${timeStr}</span></div><p class="comment-text">${escaped}</p></div></div>`;
 
                     if (commentsList) {
                         commentsList.insertAdjacentHTML('afterbegin', commentHtml);

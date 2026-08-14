@@ -5,9 +5,18 @@ const isHajera = user === 'hajera';
 const displayName = isAdmin ? 'Muaj' : 'Hajera';
 const roleName = isAdmin ? 'Admin' : 'Viewer';
 const videoCountText = videos.length > 0 ? videos.length + ' videos' : 'No videos yet';
-const renderAvatar = (typeof locals !== 'undefined' && typeof locals.renderAvatar === 'function') 
-    ? locals.renderAvatar 
-    : (uname, cls) => `<div class="avatar-letter ${uname === 'muaj' ? 'avatar-admin' : 'avatar-viewer'} ${h(cls || '')}">${uname === 'muaj' ? 'M' : 'H'}</div>`;
+const avatars = (typeof userAvatars !== 'undefined' && userAvatars) ? userAvatars : ((typeof locals !== 'undefined' && locals.userAvatars) ? locals.userAvatars : {});
+function renderAvatar(uname, extraCls = '') {
+    const avatar = avatars[uname];
+    const cleanCls = h(extraCls || '');
+    const cleanUname = h(uname || '');
+    if (avatar) {
+        return `<img src="/avatars/${h(avatar)}" alt="${cleanUname}" class="avatar-img ${cleanCls}" loading="lazy" />`;
+    }
+    const letter = (uname === 'muaj') ? 'M' : 'H';
+    const roleClass = (uname === 'muaj') ? 'avatar-admin' : 'avatar-viewer';
+    return `<div class="avatar-letter ${roleClass} ${cleanCls}">${letter}</div>`;
+}
 
 function formatDate(value) {
     if (!value) return '';

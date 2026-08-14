@@ -38,11 +38,14 @@ router.post('/comment/:videoId', isAuthenticated, (req, res) => {
         'INSERT INTO comments (video_id, user, text) VALUES (?, ?, ?)'
     ).run(videoId, user, truncated);
 
+    const avatar = db.getUserAvatar ? db.getUserAvatar(user) : null;
+
     if (isAjax) {
         return res.json({
             success: true,
             comment: {
                 user,
+                avatar: avatar || null,
                 text: truncated,
                 created_at: new Date().toISOString()
             }

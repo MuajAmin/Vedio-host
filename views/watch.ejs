@@ -3,9 +3,18 @@ const h = escapeHtml;
 const isAdmin = user === 'muaj';
 const isHajera = user === 'hajera';
 const displayName = isAdmin ? 'Muaj' : 'Hajera';
-const renderAvatar = (typeof locals !== 'undefined' && typeof locals.renderAvatar === 'function') 
-    ? locals.renderAvatar 
-    : (uname, cls) => `<div class="avatar-letter ${uname === 'muaj' ? 'avatar-admin' : 'avatar-viewer'} ${h(cls || '')}">${uname === 'muaj' ? 'M' : 'H'}</div>`;
+const avatars = (typeof userAvatars !== 'undefined' && userAvatars) ? userAvatars : ((typeof locals !== 'undefined' && locals.userAvatars) ? locals.userAvatars : {});
+function renderAvatar(uname, extraCls = '') {
+    const avatar = avatars[uname];
+    const cleanCls = h(extraCls || '');
+    const cleanUname = h(uname || '');
+    if (avatar) {
+        return `<img src="/avatars/${h(avatar)}" alt="${cleanUname}" class="avatar-img ${cleanCls}" loading="lazy" />`;
+    }
+    const letter = (uname === 'muaj') ? 'M' : 'H';
+    const roleClass = (uname === 'muaj') ? 'avatar-admin' : 'avatar-viewer';
+    return `<div class="avatar-letter ${roleClass} ${cleanCls}">${letter}</div>`;
+}
 
 function formatDate(value, withTime) {
     if (!value) return '';
@@ -400,7 +409,7 @@ const commentsHtml = comments.length === 0
             <form action="/comment/${videoId}" method="POST" class="comment-form">
                 <input type="hidden" name="_csrf" value="${h(csrfToken)}">
                 <div class="comment-input-wrapper">
-                    <div class="comment-avatar ${isAdmin ? 'avatar-admin' : 'avatar-viewer'}">${isAdmin ? 'M' : 'H'}</div>
+                    <div class="comment-avatar">${renderAvatar(user, 'comment-avatar-img')}</div>
                     <div class="comment-input-group">
                         <textarea name="text" placeholder="Write a comment..." rows="2" required maxlength="2000" class="comment-input"></textarea>
                         <button type="submit" class="btn btn-primary btn-comment">
