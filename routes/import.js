@@ -23,6 +23,11 @@ if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+const thumbnailsDir = path.join(__dirname, '..', 'uploads', 'thumbnails');
+if (!fs.existsSync(thumbnailsDir)) {
+    fs.mkdirSync(thumbnailsDir, { recursive: true });
+}
+
 const MAX_QUEUE_SIZE = 20;
 const COMPLETED_JOB_TTL_MS = 5 * 60 * 1000;
 const LEGACY_QUALITIES = new Set(['best', '720', '480', '360']);
@@ -342,6 +347,7 @@ function buildDownloadArgs(job, outputPath) {
         '--progress',
         '--progress-template', '%(progress._percent_str)s|||%(progress._speed_str)s|||%(progress._eta_str)s',
         '-o', outputPath,
+        '--write-thumbnail',
         '--print', 'before_dl:%(title)s',
         '--no-mtime',
         '--no-overwrites',
@@ -369,6 +375,32 @@ function buildDownloadArgs(job, outputPath) {
 
     args.push(job.url);
     return args;
+}
+
+async function findAndSaveSourceThumbnail(jobId, videoId) {
+    try {
+        const files = await fs.promises.readdir(uploadsDir);
+        // Look for image files starting with jobId downloaded by yt-dlp
+        const thumbCandidate = files.find(file => 
+            file.startsWith(jobId) && 
+            ['.jpg', '.jpeg', '.webp', '.png'].includes(path.extname(file).toLowerCase())
+        );
+
+        if (thumbCandidate) {
+            const srcPath = path.join(uploadsDir, thumbCandidate);
+            const ext = path.extname(thumbCandidate).toLowerCase();
+            const targetFilename = `${videoId}${ext}`;
+            const targetPath = path.join(thumbnailsDir, targetFilename);
+
+            // Move thumbnail to thumbnails directory
+            await fs.promises.rename(srcPath, targetPath);
+            console.log(`[import] Saved official source thumbnail for video ${videoId} -> ${targetFilename}`);
+            return targetFilename;
+        }
+    } catch (err) {
+        console.warn('[import] Could not process source thumbnail:', err.message);
+    }
+    return null;
 }
 
 async function cleanupJobFiles(jobId) {
@@ -613,13 +645,25 @@ async function startDownload(job) {
                 try {
                     const { generateVideoThumbnail, getVideoDuration } = require('../utils/thumbnail');
                     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Thumbnail timeout')), 30000));
-                    [thumbnail, duration] = await Promise.race([
-                        Promise.all([
-                            generateVideoThumbnail(downloaded.finalFilename, videoId),
-                            getVideoDuration(downloaded.finalFilename)
-                        ]),
+
+                    // 1. Try to grab official source thumbnail downloaded by yt-dlp
+                    thumbnail = await findAndSaveSourceThumbnail(job.id, videoId);
+
+                    // 2. Fetch duration & fallback to FFmpeg thumbnail only if source thumbnail wasn't found
+                    const tasks = [getVideoDuration(downloaded.finalFilename)];
+                    if (!thumbnail) {
+                        tasks.push(generateVideoThumbnail(downloaded.finalFilename, videoId));
+                    }
+
+                    const results = await Promise.race([
+                        Promise.all(tasks),
                         timeoutPromise
                     ]);
+
+                    duration = results[0];
+                    if (!thumbnail && results[1]) {
+                        thumbnail = results[1];
+                    }
                 } catch (err) {
                     console.warn('[import] Metadata extraction error:', err.message);
                 }
