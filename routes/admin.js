@@ -39,9 +39,11 @@ function collectAdminStats() {
         'SELECT id, title, filename, thumbnail, size, duration, uploaded_at, import_quality FROM videos ORDER BY uploaded_at DESC'
     ).all();
     const commentsCount = db.prepare('SELECT COUNT(*) AS count FROM comments').get().count;
+    const progressCount = db.prepare('SELECT COUNT(*) AS count FROM watch_progress').get().count;
     const sessionCount = db.prepare(
         'SELECT COUNT(*) AS count FROM sessions WHERE expires_at > ? AND sess LIKE \'%"user":%\''
     ).get(Date.now()).count;
+    const importJobs = getImportJobs().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
     const videoFiles = listFiles(videosDir);
     const thumbnailFiles = listFiles(thumbnailsDir);
