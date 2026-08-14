@@ -1344,25 +1344,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             vid.addEventListener('loadedmetadata', () => {
                 if (savedTime > 5 && savedTime < vid.duration - 10) {
-                    const resumeToast = document.getElementById('resumeToast');
-                    const resumeTimeStr = document.getElementById('resumeTimeStr');
-                    if (resumeToast && resumeTimeStr) {
-                        resumeTimeStr.textContent = fmtTime(savedTime);
-                        resumeToast.style.display = 'flex';
-
-                        document.getElementById('btnResumeYes')?.addEventListener('click', () => {
-                            vid.currentTime = savedTime;
-                            playVideo();
-                            resumeToast.style.display = 'none';
-                        }, { once: true });
-
-                        document.getElementById('btnResumeNo')?.addEventListener('click', () => {
-                            storage.removeItem(savedPosKey);
-                            saveWatchProgress({ ended: true });
-                            resumeToast.style.display = 'none';
-                            playVideo();
-                        }, { once: true });
-                    }
+                    vid.currentTime = savedTime;
                 }
             });
 
