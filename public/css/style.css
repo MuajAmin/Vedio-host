@@ -2470,7 +2470,7 @@ input, textarea {
 }
 
 /* ========================================
-   CONTROLS BAR
+   MODERN MOBILE-FIRST CONTROLS BAR
    ======================================== */
 .vp-controls {
     position: absolute;
@@ -2478,10 +2478,10 @@ input, textarea {
     left: 0;
     right: 0;
     z-index: 10;
-    padding: 0 16px 14px;
+    padding: 0 10px 8px;
     opacity: 0;
-    transform: translateY(8px);
-    transition: opacity 0.25s ease, transform 0.25s ease;
+    transform: translateY(6px);
+    transition: opacity 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
     pointer-events: none;
 }
 
@@ -2491,21 +2491,23 @@ input, textarea {
     pointer-events: auto;
 }
 
-/* ---- Progress Bar ---- */
+/* ---- Modern Progress (Seek) Bar ---- */
 .vp-progress-wrap {
     position: relative;
     width: 100%;
-    height: 6px;
+    height: 5px;
     background: rgba(255, 255, 255, 0.16);
     border-radius: 999px;
     cursor: pointer;
-    margin-bottom: 10px;
-    transition: height 0.15s ease;
+    margin-bottom: 6px;
+    transition: height 0.18s ease;
     touch-action: none;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
 }
 
-.vp-progress-wrap:hover {
+.vp-progress-wrap:hover,
+.vp-progress-wrap.vp-dragging {
     height: 8px;
 }
 
@@ -2514,10 +2516,10 @@ input, textarea {
     top: 0;
     left: 0;
     height: 100%;
-    background: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.28);
     border-radius: inherit;
     pointer-events: none;
-    transition: width 0.15s ease;
+    transition: width 0.2s ease;
 }
 
 .vp-progress-played {
@@ -2525,23 +2527,25 @@ input, textarea {
     top: 0;
     left: 0;
     height: 100%;
-    background: linear-gradient(90deg, var(--accent-gold), var(--accent-gold-bright));
+    background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
     border-radius: inherit;
     pointer-events: none;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
     transition: width 0.05s linear;
 }
 
 .vp-progress-thumb {
     position: absolute;
-    right: -8px;
+    right: -7px;
     top: 50%;
     transform: translateY(-50%) scale(0);
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
-    background: var(--accent-gold-bright);
-    box-shadow: 0 0 8px var(--accent-gold-glow-strong), 0 2px 6px rgba(0,0,0,0.5);
-    transition: transform 0.15s var(--ease-spring);
+    background: #ffffff;
+    border: 2px solid #f59e0b;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.8), 0 2px 4px rgba(0, 0, 0, 0.6);
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .vp-progress-wrap:hover .vp-progress-thumb,
@@ -2551,46 +2555,49 @@ input, textarea {
 
 .vp-progress-hover-time {
     position: absolute;
-    top: -32px;
+    top: -28px;
     left: 0;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(10, 10, 16, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     color: #fff;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 4px;
+    padding: 2px 7px;
+    border-radius: 5px;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.15s ease;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .vp-progress-wrap:hover .vp-progress-hover-time {
     opacity: 1;
 }
 
-/* ---- Controls Row ---- */
+/* ---- Controls Dock Row ---- */
 .vp-controls-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    min-height: 50px;
-    padding: 5px 6px;
+    gap: 4px;
+    min-height: 42px;
+    padding: 3px 6px;
     border-radius: 12px;
-    background: linear-gradient(180deg, rgba(18, 18, 26, 0.82), rgba(6, 6, 10, 0.72));
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(20px) saturate(1.25);
-    -webkit-backdrop-filter: blur(20px) saturate(1.25);
+    background: rgba(12, 12, 20, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
 }
 
 .vp-controls-left,
 .vp-controls-right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 2px;
 }
 
 /* ---- Control Buttons ---- */
@@ -2599,115 +2606,73 @@ input, textarea {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.055);
-    border: 1px solid transparent;
-    color: #fff;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.9);
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+    transition: background 0.18s ease, color 0.18s ease, transform 0.12s ease;
     flex-shrink: 0;
+    padding: 0;
 }
 
 .vp-btn:hover {
-    background: rgba(255, 255, 255, 0.14);
-    border-color: rgba(255, 255, 255, 0.16);
-    color: var(--accent-gold-bright);
-}
-
-.vp-btn:focus-visible {
-    outline: 2px solid var(--accent-gold-bright);
-    outline-offset: 2px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
 }
 
 .vp-btn:active {
-    transform: scale(0.88);
+    transform: scale(0.9);
+    background: rgba(255, 255, 255, 0.18);
 }
 
-.vp-btn-muted {
-    color: #08080c;
-    background: linear-gradient(135deg, var(--accent-gold-bright), var(--accent-warm));
-    border-color: rgba(255, 255, 255, 0.18);
-    box-shadow: 0 0 18px var(--accent-gold-glow);
+/* Play button highlight */
+.vp-btn-play {
+    color: #f59e0b;
+}
+.vp-btn-play:hover {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.15);
 }
 
-.vp-btn-muted:hover {
-    color: #08080c;
-    background: linear-gradient(135deg, var(--accent-gold-bright), var(--accent-warm));
-    box-shadow: 0 0 24px var(--accent-gold-glow-strong);
-}
-
-/* Seek Buttons with label */
-.vp-btn-seek {
-    position: relative;
-    width: 46px;
-}
-
-.vp-seek-label {
-    position: absolute;
-    bottom: 2px;
-    right: 4px;
-    font-size: 0.58rem;
-    font-weight: 900;
-    color: #fff;
-    pointer-events: none;
-    line-height: 1;
-}
-
-/* Fullscreen button highlight */
-.vp-btn-fullscreen {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.vp-btn-fullscreen:hover {
-    background: var(--accent-gold);
-    color: #000;
-    border-color: var(--accent-gold);
-    box-shadow: 0 0 14px var(--accent-gold-glow-strong);
-}
-
-/* ---- Volume Group ---- */
+/* Volume Group */
 .vp-volume-group {
     display: flex;
     align-items: center;
-    gap: 2px;
-    height: 40px;
-    padding-right: 2px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    transition: background 0.2s ease, border-color 0.2s ease;
+    gap: 0;
+    height: 36px;
+    border-radius: 8px;
+    transition: background 0.18s ease;
 }
 
 .vp-volume-group:hover,
 .vp-volume-group:focus-within {
     background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.14);
 }
 
 .vp-volume-slider-wrap {
     width: 0;
     overflow: hidden;
-    transition: width 0.25s var(--ease-out), opacity 0.2s ease;
+    transition: width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.18s ease;
     opacity: 0;
 }
 
 .vp-volume-group:hover .vp-volume-slider-wrap,
 .vp-volume-group:focus-within .vp-volume-slider-wrap,
 .vp-volume-slider-wrap.vp-vol-open {
-    width: 86px;
+    width: 68px;
     opacity: 1;
 }
 
 .vp-volume-slider {
     -webkit-appearance: none;
     appearance: none;
-    width: 78px;
-    height: 4px;
+    width: 60px;
+    height: 3.5px;
     border-radius: 2px;
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.3);
     outline: none;
     cursor: pointer;
     margin: 0 4px;
@@ -2716,99 +2681,107 @@ input, textarea {
 .vp-volume-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    background: var(--accent-gold-bright);
-    box-shadow: 0 0 6px var(--accent-gold-glow-strong);
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
     cursor: pointer;
-    transition: transform 0.15s ease;
-}
-
-.vp-volume-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
 }
 
 .vp-volume-slider::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    background: var(--accent-gold-bright);
+    background: #f59e0b;
     border: none;
-    box-shadow: 0 0 6px var(--accent-gold-glow-strong);
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
     cursor: pointer;
 }
 
-/* ---- Time Display ---- */
+.vp-btn-muted {
+    color: #f59e0b;
+}
+
+/* Time display */
 .vp-time {
     display: flex;
     align-items: center;
     gap: 3px;
-    font-size: 0.82rem;
+    font-size: 0.76rem;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.85);
+    color: rgba(255, 255, 255, 0.92);
     font-variant-numeric: tabular-nums;
-    margin-left: 6px;
+    margin-left: 3px;
     white-space: nowrap;
     min-width: fit-content;
 }
 
 .vp-time-sep {
-    opacity: 0.45;
+    opacity: 0.35;
     margin: 0 1px;
 }
 
-/* ---- Speed Menu ---- */
+.vp-time-dur {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+/* Speed badge button */
 .vp-speed-group {
     position: relative;
 }
 
 .vp-speed-btn {
-    font-size: 0.82rem;
+    font-size: 0.74rem;
     font-weight: 800;
-    width: auto;
-    padding: 0 10px;
-    letter-spacing: 0.02em;
+    padding: 0 7px;
+    min-width: 32px;
+    height: 26px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.vp-speed-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
 .vp-speed-menu {
     position: absolute;
-    bottom: 44px;
+    bottom: 36px;
     right: 0;
-    background: rgba(10, 10, 18, 0.96);
-    border: 1px solid var(--border-accent);
-    border-radius: var(--radius-md);
-    padding: 6px;
+    background: rgba(14, 14, 22, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 5px;
     backdrop-filter: blur(20px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
-    min-width: 120px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.75);
+    min-width: 110px;
     display: none;
     z-index: 50;
 }
 
 .vp-speed-menu.vp-menu-open {
     display: block;
-    animation: vp-menu-enter 0.2s var(--ease-out);
-}
-
-@keyframes vp-menu-enter {
-    from { opacity: 0; transform: translateY(8px) scale(0.95); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+    animation: vp-menu-enter 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .vp-speed-option {
     display: block;
     width: 100%;
-    padding: 8px 14px;
+    padding: 7px 12px;
     background: none;
     border: none;
     color: rgba(255, 255, 255, 0.7);
-    font-size: 0.88rem;
+    font-size: 0.82rem;
     font-weight: 600;
     text-align: left;
     border-radius: 6px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.12s ease;
 }
 
 .vp-speed-option:hover {
@@ -2817,8 +2790,14 @@ input, textarea {
 }
 
 .vp-speed-option.active {
-    color: var(--accent-gold-bright);
-    background: var(--accent-gold-glow);
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.15);
+    font-weight: 700;
+}
+
+/* Fullscreen button */
+.vp-btn-fullscreen:hover {
+    color: #f59e0b;
 }
 
 /* Action Buttons & Video Meta */
