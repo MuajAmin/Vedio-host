@@ -1165,8 +1165,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 lastTapX = clickX;
 
                 tapTimer = setTimeout(() => {
-                    if (container.classList.contains('vp-controls-visible') && !vid.paused) {
-                        hideControls();
+                    if (container.classList.contains('vp-controls-visible')) {
+                        if (!vid.paused) {
+                            hideControls();
+                        } else {
+                            togglePlay();
+                            animateCenterBtn();
+                        }
                     } else {
                         showControls();
                         animateCenterBtn();
@@ -1253,7 +1258,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Prevent touch on controls from bubbling to video toggle
             const controlsBar = container.querySelector('.vp-controls');
-            const bottomGrad = container.querySelector('.vp-bottom-gradient');
 
             if (controlsBar) {
                 controlsBar.addEventListener('touchstart', (e) => {
@@ -1262,19 +1266,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, { passive: true });
                 controlsBar.addEventListener('touchend', () => {
                     setTimeout(unlockControls, 300);
-                }, { passive: true });
-            }
-
-            if (bottomGrad) {
-                bottomGrad.addEventListener('touchstart', (e) => {
-                    e.stopPropagation();
-                }, { passive: true });
-            }
-
-            // Center play/pause button should not toggle controls
-            if (centerBtn) {
-                centerBtn.addEventListener('touchstart', (e) => {
-                    e.stopPropagation();
                 }, { passive: true });
             }
 
