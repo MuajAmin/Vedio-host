@@ -1148,8 +1148,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const clickX = clientX - rect.left;
             const isLeftHalf = clickX < rect.width / 2;
 
-            if (now - lastTapTime < 320 && Math.abs(clickX - lastTapX) < 160) {
-                // Double tap / double click detected!
+            if (now - lastTapTime < 300 && Math.abs(clickX - lastTapX) < 140) {
+                // Double tap detected -> Seek 10s
                 clearTimeout(tapTimer);
                 lastTapTime = 0;
 
@@ -1160,22 +1160,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 showControls();
             } else {
-                // Single tap / single click
+                // Single tap detected
                 lastTapTime = now;
                 lastTapX = clickX;
 
                 tapTimer = setTimeout(() => {
-                    if (isTouch) {
-                        if (container.classList.contains('vp-controls-visible') && !vid.paused) {
-                            hideControls();
-                        } else {
-                            showControls();
-                        }
+                    if (container.classList.contains('vp-controls-visible') && !vid.paused) {
+                        hideControls();
                     } else {
-                        togglePlay();
+                        showControls();
                         animateCenterBtn();
                     }
-                }, 260);
+                }, 220);
             }
         }
 
@@ -1235,7 +1231,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (e.target.closest('.vp-controls') ||
                     e.target.closest('.resume-toast') ||
                     e.target.closest('.vp-speed-menu') ||
-                    e.target.closest('.vp-center-btn') ||
                     e.target.closest('.vp-loading-overlay')) return;
 
                 const touch = e.changedTouches[0];
@@ -1251,7 +1246,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (e.target.closest('.vp-controls') ||
                     e.target.closest('.resume-toast') ||
                     e.target.closest('.vp-speed-menu') ||
-                    e.target.closest('.vp-center-btn') ||
                     e.target.closest('.vp-loading-overlay')) return;
 
                 processTapGesture(e.clientX, false);
