@@ -2470,7 +2470,7 @@ input, textarea {
 }
 
 /* ========================================
-   MODERN MOBILE-FIRST CONTROLS BAR
+   PREMIUM FROSTED GLASS CONTROLS DOCK
    ======================================== */
 .vp-controls {
     position: absolute;
@@ -2478,10 +2478,10 @@ input, textarea {
     left: 0;
     right: 0;
     z-index: 10;
-    padding: 0 10px 8px;
+    padding: 0 12px 10px;
     opacity: 0;
-    transform: translateY(6px);
-    transition: opacity 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform: translateY(8px);
+    transition: opacity 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
     pointer-events: none;
 }
 
@@ -2491,16 +2491,16 @@ input, textarea {
     pointer-events: auto;
 }
 
-/* ---- Modern Progress (Seek) Bar ---- */
+/* ---- Modern Glowing Seek Bar ---- */
 .vp-progress-wrap {
     position: relative;
     width: 100%;
     height: 5px;
-    background: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.15);
     border-radius: 999px;
     cursor: pointer;
-    margin-bottom: 6px;
-    transition: height 0.18s ease;
+    margin-bottom: 8px;
+    transition: height 0.18s ease, background 0.18s ease;
     touch-action: none;
     display: flex;
     align-items: center;
@@ -2509,6 +2509,7 @@ input, textarea {
 .vp-progress-wrap:hover,
 .vp-progress-wrap.vp-dragging {
     height: 8px;
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .vp-progress-buffer {
@@ -2530,8 +2531,8 @@ input, textarea {
     background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
     border-radius: inherit;
     pointer-events: none;
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
-    transition: width 0.05s linear;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.65);
+    transition: width 0.04s linear;
 }
 
 .vp-progress-thumb {
@@ -2539,12 +2540,12 @@ input, textarea {
     right: -7px;
     top: 50%;
     transform: translateY(-50%) scale(0);
-    width: 14px;
-    height: 14px;
+    width: 15px;
+    height: 15px;
     border-radius: 50%;
     background: #ffffff;
-    border: 2px solid #f59e0b;
-    box-shadow: 0 0 10px rgba(245, 158, 11, 0.8), 0 2px 4px rgba(0, 0, 0, 0.6);
+    border: 2.5px solid #f59e0b;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.9), 0 2px 6px rgba(0, 0, 0, 0.6);
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -2555,52 +2556,52 @@ input, textarea {
 
 .vp-progress-hover-time {
     position: absolute;
-    top: -28px;
+    top: -30px;
     left: 0;
-    background: rgba(10, 10, 16, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(8, 8, 14, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.16);
     color: #fff;
     font-size: 0.72rem;
     font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 5px;
+    padding: 2px 8px;
+    border-radius: 6px;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.15s ease;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
 }
 
 .vp-progress-wrap:hover .vp-progress-hover-time {
     opacity: 1;
 }
 
-/* ---- Controls Dock Row ---- */
+/* ---- Frosted Glass Controls Dock ---- */
 .vp-controls-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 4px;
-    min-height: 42px;
-    padding: 3px 6px;
-    border-radius: 12px;
-    background: rgba(12, 12, 20, 0.82);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    gap: 6px;
+    min-height: 46px;
+    padding: 5px 8px;
+    border-radius: 14px;
+    background: rgba(10, 10, 18, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
 }
 
 .vp-controls-left,
 .vp-controls-right {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
 }
 
-/* ---- Control Buttons ---- */
+/* ---- Modern Icon Buttons ---- */
 .vp-btn {
     position: relative;
     display: inline-flex;
@@ -2608,18 +2609,19 @@ input, textarea {
     justify-content: center;
     width: 36px;
     height: 36px;
-    border-radius: 8px;
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.9);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.88);
     cursor: pointer;
-    transition: background 0.18s ease, color 0.18s ease, transform 0.12s ease;
+    transition: all 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
     flex-shrink: 0;
     padding: 0;
 }
 
 .vp-btn:hover {
     background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.12);
     color: #fff;
 }
 
@@ -2628,28 +2630,52 @@ input, textarea {
     background: rgba(255, 255, 255, 0.18);
 }
 
-/* Play button highlight */
+/* Featured Primary Action: Play/Pause Button */
 .vp-btn-play {
-    color: #f59e0b;
-}
-.vp-btn-play:hover {
+    background: rgba(245, 158, 11, 0.14);
+    border: 1px solid rgba(245, 158, 11, 0.35);
     color: #fbbf24;
-    background: rgba(245, 158, 11, 0.15);
+    width: 38px;
+    height: 38px;
 }
 
-/* Volume Group */
+.vp-btn-play:hover {
+    background: rgba(245, 158, 11, 0.28);
+    border-color: rgba(245, 158, 11, 0.5);
+    color: #fff;
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.45);
+}
+
+/* Rewind / Fast Forward 10s */
+.vp-btn-seek {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.vp-btn-seek:hover {
+    color: #fbbf24;
+}
+
+/* Volume Control Pill */
 .vp-volume-group {
     display: flex;
     align-items: center;
     gap: 0;
     height: 36px;
-    border-radius: 8px;
-    transition: background 0.18s ease;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    transition: all 0.18s ease;
 }
 
 .vp-volume-group:hover,
 .vp-volume-group:focus-within {
     background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.vp-volume-group .vp-btn-vol {
+    background: transparent;
+    border: none;
 }
 
 .vp-volume-slider-wrap {
@@ -2662,14 +2688,14 @@ input, textarea {
 .vp-volume-group:hover .vp-volume-slider-wrap,
 .vp-volume-group:focus-within .vp-volume-slider-wrap,
 .vp-volume-slider-wrap.vp-vol-open {
-    width: 68px;
+    width: 70px;
     opacity: 1;
 }
 
 .vp-volume-slider {
     -webkit-appearance: none;
     appearance: none;
-    width: 60px;
+    width: 62px;
     height: 3.5px;
     border-radius: 2px;
     background: rgba(255, 255, 255, 0.3);
@@ -2703,16 +2729,20 @@ input, textarea {
     color: #f59e0b;
 }
 
-/* Time display */
+/* Time Display Badge */
 .vp-time {
     display: flex;
     align-items: center;
     gap: 3px;
     font-size: 0.76rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.92);
+    font-weight: 700;
+    color: #ffffff;
     font-variant-numeric: tabular-nums;
-    margin-left: 3px;
+    margin-left: 2px;
+    padding: 4px 9px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     white-space: nowrap;
     min-width: fit-content;
 }
@@ -2723,10 +2753,11 @@ input, textarea {
 }
 
 .vp-time-dur {
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.58);
+    font-weight: 600;
 }
 
-/* Speed badge button */
+/* Playback Speed Pill */
 .vp-speed-group {
     position: relative;
 }
@@ -2734,32 +2765,32 @@ input, textarea {
 .vp-speed-btn {
     font-size: 0.74rem;
     font-weight: 800;
-    padding: 0 7px;
-    min-width: 32px;
-    height: 26px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.9);
+    padding: 0 9px;
+    min-width: 36px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #fbbf24;
 }
 
 .vp-speed-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(245, 158, 11, 0.16);
+    border-color: rgba(245, 158, 11, 0.35);
     color: #fff;
-    border-color: rgba(255, 255, 255, 0.2);
 }
 
 .vp-speed-menu {
     position: absolute;
-    bottom: 36px;
+    bottom: 40px;
     right: 0;
-    background: rgba(14, 14, 22, 0.95);
+    background: rgba(10, 10, 18, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 5px;
-    backdrop-filter: blur(20px);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.75);
-    min-width: 110px;
+    backdrop-filter: blur(24px);
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.8);
+    min-width: 115px;
     display: none;
     z-index: 50;
 }
@@ -2775,11 +2806,11 @@ input, textarea {
     padding: 7px 12px;
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.75);
     font-size: 0.82rem;
     font-weight: 600;
     text-align: left;
-    border-radius: 6px;
+    border-radius: 7px;
     cursor: pointer;
     transition: all 0.12s ease;
 }
@@ -2791,13 +2822,21 @@ input, textarea {
 
 .vp-speed-option.active {
     color: #f59e0b;
-    background: rgba(245, 158, 11, 0.15);
+    background: rgba(245, 158, 11, 0.18);
     font-weight: 700;
 }
 
-/* Fullscreen button */
+/* Fullscreen Button */
+.vp-btn-fullscreen {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
 .vp-btn-fullscreen:hover {
-    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
 }
 
 /* Action Buttons & Video Meta */
