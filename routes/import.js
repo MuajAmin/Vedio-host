@@ -347,7 +347,9 @@ function buildDownloadArgs(job, outputPath) {
         '--no-overwrites',
         // Keep source files if merge/remux fails — prevents file deletion at 99%
         '--keep-video',
-        // General optimization (no YouTube-specific flags like --concurrent-fragments or --throttled-rate)
+        // Parallel fragment downloads — works for DASH/HLS sites (PornHub etc.),
+        // silently ignored for direct HTTP downloads (XHamster etc.)
+        '--concurrent-fragments', '3',
         '--buffer-size', '4M',
         '--retries', '3',
         '--fragment-retries', '3'
