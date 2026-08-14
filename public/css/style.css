@@ -2358,61 +2358,52 @@ input, textarea {
 }
 
 .vp-center-btn {
-    width: 68px;
-    height: 68px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
-    background: rgba(10, 10, 18, 0.78);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 2px solid rgba(245, 158, 11, 0.55);
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fbbf24;
+    color: #fff;
     opacity: 0;
-    transform: scale(0.7);
-    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform: scale(0.8);
+    transition: opacity 0.2s ease, transform 0.2s ease;
     pointer-events: none;
     cursor: pointer;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.65), 0 0 20px rgba(245, 158, 11, 0.35);
 }
 
 .vp-center-btn svg {
-    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+    filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.4));
 }
 
 .vp-center-btn .vp-play-icon {
     margin-left: 3px;
 }
 
-/* Center play button shows when paused and controls visible */
-.vp-cinema:not(.vp-playing).vp-controls-visible .vp-center-btn {
+/* Center play button shows when paused (always, not just when controls visible) */
+.vp-cinema:not(.vp-playing) .vp-center-btn {
     opacity: 1;
     transform: scale(1);
     pointer-events: auto;
 }
 
-.vp-center-btn:hover {
-    background: rgba(245, 158, 11, 0.25);
-    border-color: rgba(245, 158, 11, 0.85);
-    color: #fff;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 28px rgba(245, 158, 11, 0.6);
-}
-
 .vp-center-btn:active {
     transform: scale(0.9);
+    opacity: 0.8;
 }
 
 .vp-center-btn.vp-animate {
     opacity: 1;
     transform: scale(1);
-    animation: vp-center-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    animation: vp-center-pop 0.45s ease forwards;
 }
 
 @keyframes vp-center-pop {
     0% { opacity: 0; transform: scale(0.5); }
-    40% { opacity: 1; transform: scale(1.15); }
-    100% { opacity: 0; transform: scale(1.3); }
+    35% { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 0; transform: scale(1.2); }
 }
 
 /* ---- Seek Ripple Indicators ---- */
