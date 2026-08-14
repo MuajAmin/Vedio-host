@@ -688,6 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (container) container.classList.remove('vp-playing');
         });
         if (playBtn) playBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
+        if (centerBtn) centerBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
 
         // --- Progress Bar ---
         let isDragging = false;
@@ -1197,7 +1198,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function scheduleHide() {
             clearTimeout(hideTimer);
             if (!vid.paused && !isDragging && !controlsLocked) {
-                hideTimer = setTimeout(hideControls, 1200);
+                hideTimer = setTimeout(hideControls, 3500);
             }
         }
 
