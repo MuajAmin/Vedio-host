@@ -1234,6 +1234,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     e.target.closest('.resume-toast') ||
                     e.target.closest('.vp-speed-menu') ||
                     e.target.closest('.vp-center-btn') ||
+                    e.target.closest('.vp-center-nav-btn') ||
                     e.target.closest('.vp-loading-overlay')) return;
 
                 const touch = e.changedTouches[0];
@@ -1250,6 +1251,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     e.target.closest('.resume-toast') ||
                     e.target.closest('.vp-speed-menu') ||
                     e.target.closest('.vp-center-btn') ||
+                    e.target.closest('.vp-center-nav-btn') ||
                     e.target.closest('.vp-loading-overlay')) return;
 
                 processTapGesture(e.clientX, false);

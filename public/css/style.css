@@ -2347,13 +2347,15 @@ input, textarea {
 }
 
 /* ---- Center Play/Pause Overlay ---- */
+/* ---- Center Play/Pause & Nav Overlay (YouTube Mobile Style) ---- */
 .vp-center-overlay {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 4;
+    gap: 32px;
+    z-index: 6;
     pointer-events: none;
 }
 
@@ -2361,7 +2363,7 @@ input, textarea {
     width: 64px;
     height: 64px;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.65);
     border: none;
     display: flex;
     align-items: center;
@@ -2382,11 +2384,55 @@ input, textarea {
     margin-left: 3px;
 }
 
-/* Center play/pause button shows whenever controls are visible OR when video is paused */
+/* Center Prev/Next Video Navigation Buttons on Screen */
+.vp-center-nav-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    text-decoration: none;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s ease;
+    pointer-events: none;
+    cursor: pointer;
+}
+
+.vp-center-nav-btn svg {
+    filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.4));
+}
+
+.vp-center-nav-btn:hover {
+    background: rgba(0, 0, 0, 0.85);
+}
+
+.vp-center-nav-btn:active {
+    transform: scale(0.75);
+}
+
+.vp-center-nav-btn.is-disabled {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    cursor: default;
+}
+
+/* Center elements show when controls are visible or paused */
 .vp-cinema.vp-controls-visible .vp-center-btn,
 .vp-cinema:not(.vp-playing) .vp-center-btn {
     opacity: 1;
     transform: scale(1);
+    pointer-events: auto;
+}
+
+.vp-cinema.vp-controls-visible .vp-center-nav-btn:not(.is-disabled),
+.vp-cinema:not(.vp-playing) .vp-center-nav-btn:not(.is-disabled) {
+    opacity: 0.9;
+    transform: scale(0.9);
     pointer-events: auto;
 }
 
@@ -2606,23 +2652,6 @@ input, textarea {
 
 .vp-btn-seek:hover {
     opacity: 1;
-}
-
-/* Previous / Next Video Skip */
-.vp-btn-skip {
-    text-decoration: none;
-    opacity: 0.85;
-}
-
-.vp-btn-skip:hover {
-    opacity: 1;
-}
-
-.vp-btn-skip.is-disabled,
-.vp-btn-skip:disabled {
-    opacity: 0.3;
-    pointer-events: none;
-    cursor: default;
 }
 
 /* Volume */

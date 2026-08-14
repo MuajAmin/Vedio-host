@@ -102,17 +102,44 @@ const commentsHtml = comments.length === 0
     <main class="main-content watch-page">
         <div class="vp-cinema vp-muted" id="playerContainer">
 
-            <!-- Center Play/Pause Overlay -->
+            <!-- Center Play/Pause & Video Navigation Overlay (YouTube Mobile Style) -->
             <div class="vp-center-overlay" id="vpCenterOverlay">
+                <!-- Previous Video on Screen -->
+                ${prevVideoId ? `
+                <a href="/watch/${encodeURIComponent(prevVideoId)}" class="vp-center-nav-btn vp-center-prev" title="Previous Video" aria-label="Previous video">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                    </svg>
+                </a>` : `
+                <div class="vp-center-nav-btn vp-center-prev is-disabled" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                    </svg>
+                </div>`}
+
+                <!-- Center Play/Pause Button -->
                 <div class="vp-center-btn" id="vpCenterPlayBtn">
                     <svg class="vp-play-icon" viewBox="0 0 24 24" fill="currentColor" width="44" height="44">
                         <polygon points="6,3 20,12 6,21"/>
                     </svg>
                     <svg class="vp-pause-icon" viewBox="0 0 24 24" fill="currentColor" width="44" height="44" style="display:none">
-                        <rect x="5" y="3" width="4" height="18" rx="1"/>
-                        <rect x="15" y="3" width="4" height="18" rx="1"/>
+                        <rect x="6" y="4" width="4" height="16" rx="1"/>
+                        <rect x="14" y="4" width="4" height="16" rx="1"/>
                     </svg>
                 </div>
+
+                <!-- Next Video on Screen -->
+                ${nextVideoId ? `
+                <a href="/watch/${encodeURIComponent(nextVideoId)}" class="vp-center-nav-btn vp-center-next" title="Next Video" aria-label="Next video">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                    </svg>
+                </a>` : `
+                <div class="vp-center-nav-btn vp-center-next is-disabled" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                    </svg>
+                </div>`}
             </div>
 
             <!-- Circular Loading / Buffering Spinner -->
@@ -129,7 +156,7 @@ const commentsHtml = comments.length === 0
             </div>
             <div class="vp-seek-ripple vp-seek-right" id="seekRippleRight">
                 <div class="vp-ripple-content">
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26"><polygon points="13,19 22,12 13,5"/><polygon points="2,19 11,12 2,5"/></svg>
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26"><polygon points="13,5 22,12 13,19"/><polygon points="2,5 11,12 2,19"/></svg>
                     <span>10s</span>
                 </div>
             </div>
@@ -184,32 +211,6 @@ const commentsHtml = comments.length === 0
                                 <rect x="14" y="4" width="4" height="16" rx="1"/>
                             </svg>
                         </button>
-
-                        <!-- Previous Video -->
-                        ${prevVideoId ? `
-                        <a href="/watch/${encodeURIComponent(prevVideoId)}" class="vp-btn vp-btn-skip" title="Previous Video" aria-label="Previous video">
-                            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
-                            </svg>
-                        </a>` : `
-                        <button type="button" class="vp-btn vp-btn-skip is-disabled" disabled title="No previous video" aria-label="No previous video">
-                            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
-                            </svg>
-                        </button>`}
-
-                        <!-- Next Video -->
-                        ${nextVideoId ? `
-                        <a href="/watch/${encodeURIComponent(nextVideoId)}" class="vp-btn vp-btn-skip" title="Next Video" aria-label="Next video">
-                            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
-                            </svg>
-                        </a>` : `
-                        <button type="button" class="vp-btn vp-btn-skip is-disabled" disabled title="No next video" aria-label="No next video">
-                            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
-                            </svg>
-                        </button>`}
 
                         <button type="button" class="vp-btn vp-btn-seek" id="vpRewindBtn" title="Rewind 10s" aria-label="Rewind 10 seconds">
                             <svg viewBox="0 0 24 24" width="22" height="22">
