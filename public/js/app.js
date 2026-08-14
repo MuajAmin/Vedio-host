@@ -1160,7 +1160,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 showControls();
             } else {
-                // Single tap detected
+                // Single tap = toggle controls visibility only
                 lastTapTime = now;
                 lastTapX = clickX;
 
@@ -1168,13 +1168,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (container.classList.contains('vp-controls-visible')) {
                         if (!vid.paused) {
                             hideControls();
-                        } else {
-                            togglePlay();
-                            animateCenterBtn();
                         }
+                        // If paused + controls visible, do nothing (user can tap center btn to play)
                     } else {
                         showControls();
-                        animateCenterBtn();
                     }
                 }, 220);
             }
@@ -1236,6 +1233,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (e.target.closest('.vp-controls') ||
                     e.target.closest('.resume-toast') ||
                     e.target.closest('.vp-speed-menu') ||
+                    e.target.closest('.vp-center-btn') ||
                     e.target.closest('.vp-loading-overlay')) return;
 
                 const touch = e.changedTouches[0];
@@ -1251,6 +1249,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (e.target.closest('.vp-controls') ||
                     e.target.closest('.resume-toast') ||
                     e.target.closest('.vp-speed-menu') ||
+                    e.target.closest('.vp-center-btn') ||
                     e.target.closest('.vp-loading-overlay')) return;
 
                 processTapGesture(e.clientX, false);
