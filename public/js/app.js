@@ -54,6 +54,69 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // ---- Inline Title Edit ----
+    const titleWrap = document.getElementById('videoTitleWrap');
+    const titleText = document.getElementById('videoTitleText');
+    const titleEditBtn = document.getElementById('titleEditBtn');
+    const titleEditForm = document.getElementById('titleEditForm');
+    const titleEditInput = document.getElementById('titleEditInput');
+    const titleSaveBtn = document.getElementById('titleSaveBtn');
+    const titleCancelBtn = document.getElementById('titleCancelBtn');
+
+    if (titleWrap && titleEditBtn && titleEditForm && titleEditInput) {
+        const renameUrl = titleWrap.getAttribute('data-rename-url');
+        const csrfToken = titleWrap.getAttribute('data-csrf');
+
+        function startEditing() {
+            titleEditInput.value = titleText.textContent;
+            titleWrap.classList.add('editing');
+            titleEditForm.style.display = '';
+            titleEditInput.focus();
+            titleEditInput.select();
+        }
+
+        function cancelEditing() {
+            titleWrap.classList.remove('editing');
+            titleEditForm.style.display = 'none';
+        }
+
+        function saveTitle() {
+            const newTitle = titleEditInput.value.trim();
+            if (!newTitle || newTitle === titleText.textContent) {
+                cancelEditing();
+                return;
+            }
+
+            titleSaveBtn.disabled = true;
+            fetch(renameUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: JSON.stringify({ title: newTitle })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    titleText.textContent = data.title;
+                    document.title = data.title;
+                    cancelEditing();
+                }
+            })
+            .catch(function() {})
+            .finally(function() { titleSaveBtn.disabled = false; });
+        }
+
+        titleEditBtn.addEventListener('click', startEditing);
+        titleCancelBtn.addEventListener('click', cancelEditing);
+        titleSaveBtn.addEventListener('click', saveTitle);
+        titleEditInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); saveTitle(); }
+            if (e.key === 'Escape') { cancelEditing(); }
+        });
+    }
+
     // ---- Password Toggle ----
     const toggleBtn = document.getElementById('togglePassword');
     const passwordInput = document.getElementById('password');

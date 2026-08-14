@@ -2908,6 +2908,116 @@ kbd {
     background-clip: text;
 }
 
+/* --- Inline Title Edit --- */
+.video-title-wrap {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.title-edit-btn {
+    flex-shrink: 0;
+    margin-top: 8px;
+    padding: 5px;
+    border-radius: 6px;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+    cursor: pointer;
+    background: none;
+    border: none;
+}
+
+.video-title-wrap:hover .title-edit-btn {
+    opacity: 1;
+}
+
+.title-edit-btn:hover {
+    color: var(--accent-gold-bright);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.video-title-wrap.editing .video-title,
+.video-title-wrap.editing .title-edit-btn {
+    display: none;
+}
+
+.title-edit-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.title-edit-input {
+    flex: 1;
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border-accent);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.title-edit-input:focus {
+    border-color: var(--accent-gold-bright);
+}
+
+.title-save-btn,
+.title-cancel-btn {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.title-save-btn {
+    background: rgba(72, 199, 142, 0.18);
+    color: #48c78e;
+}
+
+.title-save-btn:hover {
+    background: rgba(72, 199, 142, 0.3);
+}
+
+.title-cancel-btn {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+}
+
+.title-cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+/* --- NEW Badge --- */
+.badge-new {
+    background: rgba(72, 199, 142, 0.85) !important;
+    color: #fff !important;
+    border-color: rgba(72, 199, 142, 0.5) !important;
+    animation: badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.meta-new {
+    color: #48c78e;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
 .video-meta {
     display: flex;
     align-items: center;

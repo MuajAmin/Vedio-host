@@ -117,10 +117,15 @@ router.get('/dashboard', isAuthenticated, (req, res) => {
         .sort((a, b) => new Date(b.progress_updated_at || 0) - new Date(a.progress_updated_at || 0))
         .slice(0, 6);
 
+    // Track last visit for "NEW" badge — read before updating
+    const lastVisit = req.session.lastDashboardVisit || null;
+    req.session.lastDashboardVisit = new Date().toISOString();
+
     res.render('dashboard', {
         user: req.session.user,
         videos,
-        continueVideos
+        continueVideos,
+        lastVisit
     });
 });
 
@@ -221,6 +226,22 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
         progress,
         thumbnail: String(req.query.thumbnail || '').slice(0, 120)
     });
+});
+
+// POST /rename/:id — Rename video title (any authenticated user)
+router.post('/rename/:id', isAuthenticated, (req, res) => {
+    const video = db.prepare('SELECT id FROM videos WHERE id = ?').get(req.params.id);
+    if (!video) {
+        return res.status(404).json({ error: 'Video not found.' });
+    }
+
+    const newTitle = String(req.body.title || '').trim().slice(0, MAX_TITLE_LENGTH);
+    if (!newTitle) {
+        return res.status(400).json({ error: 'Title cannot be empty.' });
+    }
+
+    db.prepare('UPDATE videos SET title = ? WHERE id = ?').run(newTitle, req.params.id);
+    res.json({ success: true, title: newTitle });
 });
 
 // POST /delete/:id — Delete video (any authenticated user)

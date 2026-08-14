@@ -35,6 +35,13 @@ function formatWatchPosition(video) {
     return mins + ':' + (secs < 10 ? '0' : '') + secs;
 }
 
+const lastVisitDate = typeof lastVisit !== 'undefined' && lastVisit ? new Date(lastVisit) : null;
+
+function isNewVideo(v) {
+    if (!lastVisitDate || !v.uploaded_at) return false;
+    return new Date(v.uploaded_at) > lastVisitDate;
+}
+
 function renderVideoCard(v, extraClass) {
     const watchUrl = '/watch/' + encodeURIComponent(v.id);
     const thumbImg = v.thumbnail
@@ -44,6 +51,9 @@ function renderVideoCard(v, extraClass) {
     const progressHtml = progress
         ? `<div class="card-watch-progress" title="Continue from ${h(formatWatchPosition(v))}"><span style="width:${h(progress)}%"></span></div>`
         : '';
+    const isNew = isNewVideo(v);
+    const badgeText = isNew ? 'NEW' : (progress ? 'RESUME' : 'HD');
+    const badgeClass = isNew ? 'card-badge badge-new' : 'card-badge';
 
     return `<a href="${watchUrl}" class="video-card ${extraClass || ''}" data-title="${h(String(v.title || '').toLowerCase())}">
         <div class="card-thumbnail">
@@ -54,7 +64,7 @@ function renderVideoCard(v, extraClass) {
                     <polygon points="20,18 32,24 20,30" fill="currentColor"/>
                 </svg>
             </div>
-            <div class="card-badge">${progress ? 'RESUME' : 'HD'}</div>
+            <div class="${badgeClass}">${badgeText}</div>
             <div class="play-overlay">
                 <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
                     <polygon points="6,4 20,12 6,20"/>
@@ -70,6 +80,7 @@ function renderVideoCard(v, extraClass) {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                     ${h(formatDate(v.uploaded_at))}
                 </span>
+                ${isNew ? '<span class="meta-new">✨ New</span>' : ''}
                 ${progress ? `<span class="meta-date">Continue ${h(formatWatchPosition(v))}</span>` : ''}
             </div>
         </div>
