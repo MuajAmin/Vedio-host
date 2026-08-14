@@ -414,13 +414,16 @@ async function cleanupJobFiles(jobId) {
 
 async function findDownloadedFile(jobId, fallbackPath, fallbackFilename) {
     let candidates = [];
+    const nonVideoExts = new Set(['.jpg', '.jpeg', '.webp', '.png', '.gif', '.vtt', '.srt', '.json', '.part']);
     try {
         const files = (await fs.promises.readdir(uploadsDir)).filter(file => file.startsWith(jobId));
         for (const file of files) {
+            const ext = path.extname(file).toLowerCase();
+            const isNonVideo = nonVideoExts.has(ext);
             const filePath = path.join(uploadsDir, file);
             try {
                 const stat = await fs.promises.stat(filePath);
-                if (stat.isFile()) {
+                if (stat.isFile() && (!isNonVideo || file.endsWith('.part'))) {
                     candidates.push({ file, filePath, size: stat.size, part: file.endsWith('.part') });
                 }
             } catch {}
