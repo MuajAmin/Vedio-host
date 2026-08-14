@@ -718,6 +718,11 @@ document.addEventListener('DOMContentLoaded', () => {
         vid.addEventListener('durationchange', () => {
             if (durationEl) durationEl.textContent = fmtTime(vid.duration);
         });
+        // Show spinner immediately (loadstart may have already fired before JS runs)
+        if (container && vid.readyState < 3) {
+            container.classList.add('vp-buffering');
+        }
+
         vid.addEventListener('loadstart', () => {
             if (container) container.classList.add('vp-buffering');
         });
