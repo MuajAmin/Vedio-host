@@ -2382,7 +2382,8 @@ input, textarea {
     margin-left: 3px;
 }
 
-/* Center play button shows when paused (always, not just when controls visible) */
+/* Center play/pause button shows whenever controls are visible OR when video is paused */
+.vp-cinema.vp-controls-visible .vp-center-btn,
 .vp-cinema:not(.vp-playing) .vp-center-btn {
     opacity: 1;
     transform: scale(1);
@@ -2605,6 +2606,23 @@ input, textarea {
 
 .vp-btn-seek:hover {
     opacity: 1;
+}
+
+/* Previous / Next Video Skip */
+.vp-btn-skip {
+    text-decoration: none;
+    opacity: 0.85;
+}
+
+.vp-btn-skip:hover {
+    opacity: 1;
+}
+
+.vp-btn-skip.is-disabled,
+.vp-btn-skip:disabled {
+    opacity: 0.3;
+    pointer-events: none;
+    cursor: default;
 }
 
 /* Volume */

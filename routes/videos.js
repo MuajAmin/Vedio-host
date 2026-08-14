@@ -219,12 +219,22 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
         'SELECT position_seconds, duration_seconds, updated_at FROM watch_progress WHERE video_id = ? AND user = ?'
     ).get(req.params.id, req.session.user) || null;
 
+    // Next/Previous video navigation (ordered by uploaded_at DESC)
+    const prevVideo = db.prepare(
+        'SELECT id FROM videos WHERE uploaded_at > ? ORDER BY uploaded_at ASC LIMIT 1'
+    ).get(video.uploaded_at);
+    const nextVideo = db.prepare(
+        'SELECT id FROM videos WHERE uploaded_at < ? ORDER BY uploaded_at DESC LIMIT 1'
+    ).get(video.uploaded_at);
+
     res.render('watch', {
         user: req.session.user,
         video,
         comments,
         progress,
-        thumbnail: String(req.query.thumbnail || '').slice(0, 120)
+        thumbnail: String(req.query.thumbnail || '').slice(0, 120),
+        prevVideoId: prevVideo ? prevVideo.id : null,
+        nextVideoId: nextVideo ? nextVideo.id : null
     });
 });
 

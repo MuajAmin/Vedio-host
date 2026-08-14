@@ -185,6 +185,36 @@ const commentsHtml = comments.length === 0
                             </svg>
                         </button>
 
+                        <!-- Previous Video -->
+                        <% if (typeof prevVideoId !== 'undefined' && prevVideoId) { %>
+                        <a href="/watch/<%= prevVideoId %>" class="vp-btn vp-btn-skip" title="Previous Video" aria-label="Previous video">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                            </svg>
+                        </a>
+                        <% } else { %>
+                        <button type="button" class="vp-btn vp-btn-skip is-disabled" disabled title="No previous video" aria-label="No previous video">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                            </svg>
+                        </button>
+                        <% } %>
+
+                        <!-- Next Video -->
+                        <% if (typeof nextVideoId !== 'undefined' && nextVideoId) { %>
+                        <a href="/watch/<%= nextVideoId %>" class="vp-btn vp-btn-skip" title="Next Video" aria-label="Next video">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                            </svg>
+                        </a>
+                        <% } else { %>
+                        <button type="button" class="vp-btn vp-btn-skip is-disabled" disabled title="No next video" aria-label="No next video">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                            </svg>
+                        </button>
+                        <% } %>
+
                         <button type="button" class="vp-btn vp-btn-seek" id="vpRewindBtn" title="Rewind 10s" aria-label="Rewind 10 seconds">
                             <svg viewBox="0 0 24 24" width="22" height="22">
                                 <path d="M12 5V2L7 6l5 4V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" fill="currentColor"/>
