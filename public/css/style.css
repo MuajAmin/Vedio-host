@@ -686,15 +686,13 @@ input, textarea {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 36px;
-    background: rgba(10, 10, 16, 0.75);
-    backdrop-filter: blur(32px) saturate(1.6);
-    -webkit-backdrop-filter: blur(32px) saturate(1.6);
+    padding: 10px 14px;
+    background: rgba(8, 8, 14, 0.96);
     border-bottom: 1px solid var(--border-subtle);
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), inset 0 -1px 0 var(--accent-gold-glow);
+    box-shadow: 0 1px 0 var(--border-subtle);
 }
 
 .nav-left, .nav-right {
@@ -807,6 +805,7 @@ input, textarea {
 }
 
 .badge-role {
+    display: none;
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
@@ -924,7 +923,8 @@ input, textarea {
 .main-content {
     max-width: 1240px;
     margin: 0 auto;
-    padding: 36px 36px 80px;
+    width: 100%;
+    padding: 18px 14px calc(88px + env(safe-area-inset-bottom));
 }
 
 /* ========================================
@@ -1064,8 +1064,8 @@ input, textarea {
 /* Video Grid */
 .video-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-    gap: 24px;
+    grid-template-columns: 1fr;
+    gap: 10px;
     animation: fade-in-up 0.6s var(--ease-out) both 0.15s;
 }
 
@@ -1104,14 +1104,13 @@ input, textarea {
 .video-card {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
+    border-radius: 12px;
     overflow: hidden;
-    transition: all 0.4s var(--ease-out);
+    transition: all 0.2s ease;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    min-height: 112px;
     position: relative;
-    backdrop-filter: blur(16px);
-    animation: card-stagger-in 0.6s var(--ease-out) both;
     contain: layout paint;
 }
 
@@ -1163,14 +1162,13 @@ input, textarea {
 }
 
 .video-card:hover {
-    transform: translateY(-8px) scale(1.02);
-    border-color: var(--border-accent);
-    box-shadow: var(--shadow-md), var(--shadow-glow), 0 0 60px var(--accent-gold-glow);
-    background: var(--bg-card-hover);
+    transform: none;
+    box-shadow: 0 1px 0 var(--border-subtle);
 }
 
 .video-card:active {
-    transform: scale(0.97);
+    transform: scale(0.98);
+    opacity: 0.9;
 }
 
 @keyframes card-stagger-in {
@@ -1186,8 +1184,10 @@ input, textarea {
 
 .card-thumbnail {
     position: relative;
-    width: 100%;
-    aspect-ratio: 16 / 9;
+    flex: 0 0 42%;
+    width: 42%;
+    min-height: 112px;
+    aspect-ratio: auto;
     background: linear-gradient(145deg, #181828, #0e0e1a);
     display: flex;
     align-items: center;
@@ -1356,26 +1356,25 @@ input, textarea {
 }
 
 .card-info {
-    padding: 18px 20px;
+    padding: 12px;
     flex: 1;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: center;
 }
 
 .card-title {
     font-family: var(--font-display);
-    font-size: 1.05rem;
+    font-size: 0.95rem;
     font-weight: 700;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     line-height: 1.4;
     letter-spacing: -0.01em;
     color: var(--text-primary);
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    transition: color 0.3s ease;
 }
 
 .video-card:hover .card-title {
@@ -2921,7 +2920,7 @@ kbd {
     padding: 5px;
     border-radius: 6px;
     color: var(--text-muted);
-    opacity: 0;
+    opacity: 0.7;
     transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
     cursor: pointer;
     background: none;
@@ -3395,21 +3394,19 @@ kbd {
    MOBILE BOTTOM NAVIGATION BAR (ANDROID APP BAR)
    ======================================== */
 .mobile-bottom-bar {
-    display: none;
+    display: flex;
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    height: calc(66px + env(safe-area-inset-bottom));
+    height: calc(62px + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
-    background: rgba(8, 8, 14, 0.82);
-    backdrop-filter: blur(32px) saturate(1.5);
-    -webkit-backdrop-filter: blur(32px) saturate(1.5);
+    background: rgba(8, 8, 14, 0.96);
     border-top: 1px solid var(--border-subtle);
     z-index: 1000;
     align-items: center;
     justify-content: space-around;
-    box-shadow: 0 -8px 36px rgba(0, 0, 0, 0.6), inset 0 1px 0 var(--accent-gold-glow);
+    box-shadow: 0 -1px 0 var(--border-subtle);
 }
 
 .bottom-nav-item {
@@ -4645,6 +4642,331 @@ h3,
 
     .vp-speed-group {
         display: none;
+    }
+}
+
+/* ========================================
+   MOBILE-FIRST DEFAULTS
+   ======================================== */
+.desktop-only-logout {
+    display: none !important;
+}
+
+.btn-upload {
+    display: none;
+}
+
+.btn-text {
+    display: none;
+}
+
+#btnTheaterMode {
+    display: none;
+}
+
+.ambient-background {
+    display: none;
+}
+
+.video-card::before,
+.video-card::after {
+    display: none;
+}
+
+.video-card:hover .card-title {
+    color: var(--text-primary);
+}
+
+.video-card:hover .thumb-img {
+    transform: none;
+}
+
+.vp-volume-slider-wrap {
+    display: none;
+}
+
+.dashboard-header-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.search-box {
+    width: 100%;
+    min-width: unset;
+}
+
+.video-info-header {
+    flex-direction: column;
+    gap: 12px;
+}
+
+.video-action-buttons {
+    width: 100%;
+}
+
+.video-action-buttons .btn {
+    padding: 8px 12px;
+    font-size: 0.82rem;
+}
+
+.video-title {
+    font-size: 1.35rem;
+}
+
+.search-input,
+.form-input,
+.comment-input {
+    font-size: 16px;
+}
+
+.card-duration {
+    right: 8px;
+    bottom: 8px;
+    padding: 3px 7px;
+    font-size: 0.7rem;
+}
+
+.card-badge {
+    top: 8px;
+    left: 8px;
+}
+
+.play-overlay {
+    width: 38px;
+    height: 38px;
+}
+
+.play-overlay svg {
+    width: 20px;
+    height: 20px;
+}
+
+.vp-cinema {
+    border-radius: 12px;
+    margin-bottom: 18px;
+}
+
+.watch-page {
+    max-width: 100%;
+}
+
+.btn-comment {
+    width: 100%;
+    justify-content: center;
+}
+
+.theme-modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+}
+
+.theme-modal {
+    max-width: none;
+    border-radius: 20px 20px 0 0;
+    padding: 22px 16px calc(22px + env(safe-area-inset-bottom));
+}
+
+.theme-options-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.title-edit-input {
+    font-size: 1.1rem;
+}
+
+/* ========================================
+   DESKTOP RESTORE (min-width: 769px)
+   ======================================== */
+@media (min-width: 769px) {
+    .navbar {
+        padding: 16px 36px;
+        background: rgba(10, 10, 16, 0.75);
+        backdrop-filter: blur(32px) saturate(1.6);
+        -webkit-backdrop-filter: blur(32px) saturate(1.6);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), inset 0 -1px 0 var(--accent-gold-glow);
+    }
+
+    .desktop-only-logout {
+        display: flex !important;
+    }
+
+    .btn-upload {
+        display: inline-flex;
+    }
+
+    .btn-text {
+        display: inline;
+    }
+
+    #btnTheaterMode {
+        display: inline-flex;
+    }
+
+    .badge-role {
+        display: inline;
+    }
+
+    .ambient-background {
+        display: block;
+    }
+
+    .mobile-bottom-bar {
+        display: none;
+    }
+
+    .main-content {
+        padding: 36px 36px 80px;
+    }
+
+    .video-grid {
+        grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+        gap: 24px;
+    }
+
+    .video-card {
+        flex-direction: column;
+        min-height: auto;
+        border-radius: var(--radius-lg);
+        backdrop-filter: blur(16px);
+        animation: card-stagger-in 0.6s var(--ease-out) both;
+    }
+
+    .video-card::before,
+    .video-card::after {
+        display: block;
+    }
+
+    .video-card:hover {
+        transform: translateY(-8px) scale(1.02);
+        border-color: var(--border-accent);
+        box-shadow: var(--shadow-md), var(--shadow-glow), 0 0 60px var(--accent-gold-glow);
+        background: var(--bg-card-hover);
+    }
+
+    .video-card:hover .card-title {
+        color: var(--accent-gold-bright);
+    }
+
+    .video-card:hover .thumb-img {
+        transform: scale(1.06);
+    }
+
+    .video-card:active {
+        transform: scale(0.97);
+        opacity: 1;
+    }
+
+    .card-thumbnail {
+        flex: none;
+        width: 100%;
+        min-height: auto;
+        aspect-ratio: 16 / 9;
+    }
+
+    .card-info {
+        padding: 18px 20px;
+        justify-content: space-between;
+    }
+
+    .card-title {
+        font-size: 1.05rem;
+        margin-bottom: 12px;
+        -webkit-line-clamp: 2;
+    }
+
+    .card-duration {
+        right: 12px;
+        bottom: 12px;
+        padding: 4px 8px;
+        font-size: 0.72rem;
+    }
+
+    .card-badge {
+        top: 12px;
+        left: 12px;
+    }
+
+    .play-overlay {
+        width: 58px;
+        height: 58px;
+    }
+
+    .play-overlay svg {
+        width: 28px;
+        height: 28px;
+    }
+
+    .dashboard-header-bar {
+        flex-direction: row;
+        align-items: flex-end;
+        gap: 24px;
+        margin-bottom: 38px;
+    }
+
+    .search-box {
+        width: auto;
+        min-width: 280px;
+    }
+
+    .video-info-header {
+        flex-direction: row;
+        gap: 24px;
+    }
+
+    .video-action-buttons {
+        width: auto;
+    }
+
+    .video-action-buttons .btn {
+        padding: 10px 18px;
+        font-size: 0.88rem;
+    }
+
+    .video-title {
+        font-size: 1.8rem;
+    }
+
+    .vp-volume-slider-wrap {
+        display: block;
+    }
+
+    .vp-cinema {
+        border-radius: var(--radius-xl);
+        margin-bottom: 24px;
+    }
+
+    .watch-page {
+        max-width: 960px;
+    }
+
+    .btn-comment {
+        width: auto;
+    }
+
+    .theme-modal-backdrop {
+        align-items: center;
+        padding: 24px;
+    }
+
+    .theme-modal {
+        max-width: 440px;
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        transform: none;
+    }
+
+    .title-edit-btn {
+        opacity: 0;
+    }
+
+    .video-title-wrap:hover .title-edit-btn {
+        opacity: 1;
+    }
+
+    .title-edit-input {
+        font-size: 1.4rem;
     }
 }
 
