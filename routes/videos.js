@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const { spawn } = require('child_process');
 const { isAuthenticated, isMuaj } = require('../middleware/auth');
 const { requireCsrf } = require('../utils/security');
 const db = require('../database');
@@ -360,7 +361,7 @@ router.post('/thumbnail/:id', isMuaj, (req, res) => {
     });
 });
 
-// POST /thumbnail/:id/regenerate - Rebuild thumbnail from the video file (Admin / Muaj only)
+// POST /thumbnail/:id/regenerate - Rebuild thumbnail from source URL or video file (Admin / Muaj only)
 router.post('/thumbnail/:id/regenerate', isMuaj, async (req, res) => {
     let csrfOk = false;
     requireCsrf(req, res, () => {
@@ -368,7 +369,7 @@ router.post('/thumbnail/:id/regenerate', isMuaj, async (req, res) => {
     });
     if (!csrfOk) return;
 
-    const video = db.prepare('SELECT id, filename, thumbnail FROM videos WHERE id = ?').get(req.params.id);
+    const video = db.prepare('SELECT id, filename, thumbnail, source_url FROM videos WHERE id = ?').get(req.params.id);
     const watchUrl = `/watch/${encodeURIComponent(req.params.id)}`;
 
     if (!video) {
@@ -379,7 +380,61 @@ router.post('/thumbnail/:id/regenerate', isMuaj, async (req, res) => {
     }
 
     try {
-        const thumbFilename = await generateVideoThumbnail(video.filename, video.id);
+        let thumbFilename = null;
+
+        // 1. If video has a source URL, try to fetch official source thumbnail first
+        if (video.source_url) {
+            thumbFilename = await new Promise((resolve) => {
+                const tempId = `refetch-${video.id}-${Date.now()}`;
+                const outputPath = path.join(uploadsDir, `${tempId}.mp4`);
+                const proc = spawn('python3', [
+                    '-m', 'yt_dlp',
+                    '--no-check-certificates',
+                    '--no-playlist',
+                    '--skip-download',
+                    '--write-thumbnail',
+                    '-o', outputPath,
+                    video.source_url
+                ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+
+                let settled = false;
+                const timer = setTimeout(() => {
+                    if (!settled) {
+                        settled = true;
+                        proc.kill();
+                        resolve(null);
+                    }
+                }, 20000);
+
+                proc.on('close', async () => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    try {
+                        const files = await fs.promises.readdir(uploadsDir);
+                        const thumbCandidate = files.find(f => 
+                            f.startsWith(tempId) && 
+                            ['.jpg', '.jpeg', '.webp', '.png'].includes(path.extname(f).toLowerCase())
+                        );
+                        if (thumbCandidate) {
+                            const ext = path.extname(thumbCandidate).toLowerCase();
+                            const targetFilename = `${video.id}${ext}`;
+                            const targetPath = path.join(thumbnailsDir, targetFilename);
+                            const srcPath = path.join(uploadsDir, thumbCandidate);
+                            await fs.promises.rename(srcPath, targetPath);
+                            return resolve(targetFilename);
+                        }
+                    } catch {}
+                    resolve(null);
+                });
+            });
+        }
+
+        // 2. If no source thumbnail was retrieved, fallback to FFmpeg extraction
+        if (!thumbFilename) {
+            thumbFilename = await generateVideoThumbnail(video.filename, video.id);
+        }
+
         if (!thumbFilename) {
             return res.redirect(`${watchUrl}?thumbnail=${encodeURIComponent('Could not generate thumbnail.')}`);
         }
