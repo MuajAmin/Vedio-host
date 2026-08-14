@@ -337,6 +337,7 @@ const commentsHtml = comments.length === 0
             </div>
         </div>
 
+        ${isAdmin ? `
         <section class="thumbnail-manager">
             <div class="thumbnail-preview-box">
                 ${video.thumbnail ? `<img src="/thumbnails/${h(video.thumbnail)}" alt="${h(video.title)} thumbnail" class="thumb-img" loading="lazy">` : '<div class="thumb-placeholder"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40"><rect x="6" y="10" width="36" height="28" rx="4"/><polygon points="20,18 32,24 20,30" fill="currentColor"/></svg></div>'}
@@ -356,7 +357,7 @@ const commentsHtml = comments.length === 0
                     <button type="submit" class="btn btn-ghost btn-sm">Regenerate</button>
                 </form>
             </div>
-        </section>
+        </section>` : ''}
 
         <!-- Download Confirmation Modal -->
         <div class="theme-modal-backdrop" id="downloadModal">

@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const { isAuthenticated } = require('../middleware/auth');
+const { isAuthenticated, isMuaj } = require('../middleware/auth');
 const { requireCsrf } = require('../utils/security');
 const db = require('../database');
 
@@ -312,8 +312,8 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
     res.json({ success: true });
 });
 
-// POST /thumbnail/:id - Upload a custom thumbnail for a video
-router.post('/thumbnail/:id', isAuthenticated, (req, res) => {
+// POST /thumbnail/:id - Upload a custom thumbnail for a video (Admin / Muaj only)
+router.post('/thumbnail/:id', isMuaj, (req, res) => {
     thumbnailUpload.single('thumbnail')(req, res, (err) => {
         const video = db.prepare('SELECT id, thumbnail FROM videos WHERE id = ?').get(req.params.id);
         const watchUrl = `/watch/${encodeURIComponent(req.params.id)}`;
@@ -360,8 +360,8 @@ router.post('/thumbnail/:id', isAuthenticated, (req, res) => {
     });
 });
 
-// POST /thumbnail/:id/regenerate - Rebuild thumbnail from the video file
-router.post('/thumbnail/:id/regenerate', isAuthenticated, async (req, res) => {
+// POST /thumbnail/:id/regenerate - Rebuild thumbnail from the video file (Admin / Muaj only)
+router.post('/thumbnail/:id/regenerate', isMuaj, async (req, res) => {
     let csrfOk = false;
     requireCsrf(req, res, () => {
         csrfOk = true;
