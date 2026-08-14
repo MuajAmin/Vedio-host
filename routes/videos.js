@@ -502,9 +502,9 @@ function streamFile(req, res, filePath, filename, stat) {
             return res.status(416).end();
         }
 
-        // Cap chunk size to 5MB — streamed via pipe so only highWaterMark bytes
-        // stay in memory; safe for 1-core / 1GB VPS while cutting round-trips
-        const MAX_CHUNK = 5 * 1024 * 1024;
+        // Cap chunk size to 10MB — only 2 viewers so memory is fine;
+        // highWaterMark (256KB) controls actual RAM usage, not chunk size
+        const MAX_CHUNK = 10 * 1024 * 1024;
         const requestedEnd = parsed.end;
         const cappedEnd = Math.min(parsed.start + MAX_CHUNK - 1, requestedEnd);
         const chunkSize = cappedEnd - parsed.start + 1;
