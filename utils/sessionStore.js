@@ -24,8 +24,11 @@ class SQLiteSessionStore extends session.Store {
 
         this.cleanupTimer = setInterval(() => {
             this.pruneExpired();
-        }, 60 * 60 * 1000);
+        }, 15 * 60 * 1000); // Check every 15 mins
         this.cleanupTimer.unref();
+
+        // Prune immediately on startup
+        setTimeout(() => this.pruneExpired(), 1000).unref();
     }
 
     get(sid, callback) {
@@ -72,10 +75,20 @@ class SQLiteSessionStore extends session.Store {
     }
 
     pruneExpired() {
-        this.statements.prune.run(Date.now());
+        try {
+            this.statements.prune.run(Date.now());
+            // Also clean up any unauthenticated sessions older than 1 hour
+            db.prepare("DELETE FROM sessions WHERE sess NOT LIKE '%\"user\":%' AND expires_at <= ?").run(Date.now() + 30 * 60 * 1000);
+        } catch (err) {
+            console.error('[sessionStore] Prune error:', err.message);
+        }
     }
 
     getExpiresAt(sess) {
+        // Unauthenticated / bot sessions only get 30 minutes TTL
+        if (!sess || !sess.user) {
+            return Date.now() + (30 * 60 * 1000);
+        }
         const expires = sess && sess.cookie && sess.cookie.expires;
         const expiresAt = expires ? new Date(expires).getTime() : Date.now() + this.ttlMs;
         return Number.isFinite(expiresAt) ? expiresAt : Date.now() + this.ttlMs;
