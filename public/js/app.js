@@ -1198,7 +1198,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function scheduleHide() {
             clearTimeout(hideTimer);
             if (!vid.paused && !isDragging && !controlsLocked) {
-                hideTimer = setTimeout(hideControls, 2000);
+                hideTimer = setTimeout(hideControls, 1400);
             }
         }
 

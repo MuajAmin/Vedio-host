@@ -2072,39 +2072,6 @@ input, textarea {
     z-index: 1;
 }
 
-.vp-audio-chip {
-    position: absolute;
-    top: 14px;
-    left: 14px;
-    z-index: 12;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    color: #08080c;
-    background: linear-gradient(135deg, var(--accent-gold-bright), var(--accent-warm));
-    border: 1px solid rgba(255, 255, 255, 0.24);
-    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.5), 0 0 24px var(--accent-gold-glow);
-    opacity: 0;
-    transform: translateY(-8px);
-    pointer-events: none;
-    transition: opacity 0.22s ease, transform 0.22s ease;
-}
-
-.vp-muted .vp-audio-chip {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-/* Hide audio chip when controls are hidden */
-.vp-cinema:not(.vp-controls-visible) .vp-audio-chip {
-    opacity: 0 !important;
-    transform: translateY(-8px);
-    transition-delay: 0.1s;
-}
-
 .vp-status-badge {
     display: none;
 }
@@ -4496,14 +4463,6 @@ h3,
         max-width: calc(100% - 20px);
         padding: 7px 10px;
         font-size: 0.72rem;
-    }
-
-    .vp-audio-chip {
-        top: 10px;
-        left: 10px;
-        width: 34px;
-        height: 34px;
-        border-radius: 9px;
     }
 
     .vp-loading-panel {
