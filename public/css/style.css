@@ -2458,7 +2458,7 @@ input, textarea {
 }
 
 /* ========================================
-   ULTRA-MODERN FLOATING CONTROLS BAR
+   YOUTUBE-STYLE FLAT CONTROLS
    ======================================== */
 .vp-controls {
     position: absolute;
@@ -2466,10 +2466,10 @@ input, textarea {
     left: 0;
     right: 0;
     z-index: 10;
-    padding: 0 10px 8px;
+    padding: 0;
     opacity: 0;
-    transform: translateY(6px);
-    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform: translateY(4px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
     pointer-events: none;
 }
 
@@ -2479,16 +2479,14 @@ input, textarea {
     pointer-events: auto;
 }
 
-/* ---- Seamless Scrubber / Progress Bar ---- */
+/* ---- Progress / Scrubber Bar ---- */
 .vp-progress-wrap {
     position: relative;
     width: 100%;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 999px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.25);
     cursor: pointer;
-    margin-bottom: 6px;
-    transition: height 0.15s ease, background 0.15s ease;
+    transition: height 0.12s ease;
     touch-action: none;
     display: flex;
     align-items: center;
@@ -2496,8 +2494,7 @@ input, textarea {
 
 .vp-progress-wrap:hover,
 .vp-progress-wrap.vp-dragging {
-    height: 7px;
-    background: rgba(255, 255, 255, 0.25);
+    height: 5px;
 }
 
 .vp-progress-buffer {
@@ -2505,8 +2502,7 @@ input, textarea {
     top: 0;
     left: 0;
     height: 100%;
-    background: rgba(255, 255, 255, 0.35);
-    border-radius: inherit;
+    background: rgba(255, 255, 255, 0.4);
     pointer-events: none;
     transition: width 0.15s ease;
 }
@@ -2516,25 +2512,22 @@ input, textarea {
     top: 0;
     left: 0;
     height: 100%;
-    background: linear-gradient(90deg, #f59e0b, #fbbf24);
-    border-radius: inherit;
+    background: #e11d48;
     pointer-events: none;
-    box-shadow: 0 0 10px rgba(245, 158, 11, 0.7);
     transition: width 0.04s linear;
 }
 
 .vp-progress-thumb {
     position: absolute;
-    right: -7px;
+    right: -6px;
     top: 50%;
     transform: translateY(-50%) scale(0);
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     border-radius: 50%;
-    background: #ffffff;
-    border: 2px solid #f59e0b;
-    box-shadow: 0 0 10px rgba(245, 158, 11, 0.9), 0 2px 5px rgba(0, 0, 0, 0.6);
-    transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+    background: #e11d48;
+    box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.3);
+    transition: transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .vp-progress-wrap:hover .vp-progress-thumb,
@@ -2544,144 +2537,116 @@ input, textarea {
 
 .vp-progress-hover-time {
     position: absolute;
-    top: -28px;
+    top: -32px;
     left: 0;
-    background: rgba(10, 10, 18, 0.94);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #ffffff;
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 5px;
+    background: rgba(15, 15, 15, 0.92);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.12s ease;
+    transition: opacity 0.1s ease;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .vp-progress-wrap:hover .vp-progress-hover-time {
     opacity: 1;
 }
 
-/* ---- Action Bar Dock ---- */
+/* ---- Button Row ---- */
 .vp-controls-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 4px;
-    min-height: 42px;
-    padding: 2px 6px;
-    border-radius: 12px;
-    background: rgba(12, 12, 20, 0.78);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(20px) saturate(160%);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    height: 40px;
+    padding: 0 8px;
+    background: rgba(0, 0, 0, 0.7);
 }
 
 .vp-controls-left,
 .vp-controls-right {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
 }
 
-/* ---- Standard Control Buttons ---- */
+/* ---- Buttons ---- */
 .vp-btn {
-    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    background: transparent;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.88);
+    color: #fff;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: opacity 0.12s ease;
     flex-shrink: 0;
     padding: 0;
+    opacity: 0.9;
+    position: relative;
 }
 
 .vp-btn:hover {
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
+    opacity: 1;
 }
 
 .vp-btn:active {
-    transform: scale(0.9);
-    background: rgba(255, 255, 255, 0.18);
+    opacity: 0.7;
 }
 
-/* Primary Play/Pause Button */
+/* Play/Pause — same style, no special background */
 .vp-btn-play {
-    background: rgba(245, 158, 11, 0.18);
-    border: 1px solid rgba(245, 158, 11, 0.4);
-    color: #fbbf24;
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
+    width: 44px;
+    height: 44px;
 }
 
-.vp-btn-play:hover {
-    background: rgba(245, 158, 11, 0.32);
-    border-color: rgba(245, 158, 11, 0.65);
-    color: #fff;
-    box-shadow: 0 0 14px rgba(245, 158, 11, 0.5);
-}
-
-/* Rewind / Fast Forward 10s */
+/* Seek buttons */
 .vp-btn-seek {
-    color: rgba(255, 255, 255, 0.85);
+    opacity: 0.85;
 }
 
 .vp-btn-seek:hover {
-    color: #fbbf24;
+    opacity: 1;
 }
 
-/* Volume Control Pill */
+/* Volume */
 .vp-volume-group {
     display: flex;
     align-items: center;
     gap: 0;
-    height: 36px;
-    border-radius: 8px;
-    transition: background 0.15s ease;
-}
-
-.vp-volume-group:hover,
-.vp-volume-group:focus-within {
-    background: rgba(255, 255, 255, 0.08);
 }
 
 .vp-volume-group .vp-btn-vol {
-    background: transparent;
+    background: none;
     border: none;
 }
 
 .vp-volume-slider-wrap {
     width: 0;
     overflow: hidden;
-    transition: width 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease;
+    transition: width 0.18s ease, opacity 0.12s ease;
     opacity: 0;
 }
 
 .vp-volume-group:hover .vp-volume-slider-wrap,
 .vp-volume-group:focus-within .vp-volume-slider-wrap,
 .vp-volume-slider-wrap.vp-vol-open {
-    width: 68px;
+    width: 60px;
     opacity: 1;
 }
 
 .vp-volume-slider {
     -webkit-appearance: none;
     appearance: none;
-    width: 60px;
-    height: 3.5px;
+    width: 52px;
+    height: 3px;
     border-radius: 2px;
     background: rgba(255, 255, 255, 0.3);
     outline: none;
@@ -2695,8 +2660,7 @@ input, textarea {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: #f59e0b;
-    box-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
+    background: #fff;
     cursor: pointer;
 }
 
@@ -2704,124 +2668,123 @@ input, textarea {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: #f59e0b;
+    background: #fff;
     border: none;
-    box-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
     cursor: pointer;
 }
 
 .vp-btn-muted {
-    color: #f59e0b;
+    color: #fff;
 }
 
-/* Time Display Badge */
+/* Time Display */
 .vp-time {
     display: flex;
     align-items: center;
-    gap: 3px;
-    font-size: 0.76rem;
-    font-weight: 700;
-    color: #ffffff;
+    gap: 2px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
     font-variant-numeric: tabular-nums;
-    margin-left: 2px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-left: 4px;
     white-space: nowrap;
-    min-width: fit-content;
+    letter-spacing: 0.02em;
 }
 
 .vp-time-sep {
-    opacity: 0.35;
-    margin: 0 1px;
+    opacity: 0.5;
+    margin: 0 2px;
 }
 
 .vp-time-dur {
-    color: rgba(255, 255, 255, 0.58);
-    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
 }
 
-/* Playback Speed Pill */
+/* Speed Button */
 .vp-speed-group {
     position: relative;
 }
 
 .vp-speed-btn {
-    font-size: 0.74rem;
-    font-weight: 800;
-    padding: 0 8px;
-    min-width: 34px;
-    height: 30px;
-    border-radius: 7px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #fbbf24;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0 6px;
+    min-width: 36px;
+    height: 28px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #fff;
+    letter-spacing: 0.02em;
 }
 
 .vp-speed-btn:hover {
-    background: rgba(245, 158, 11, 0.18);
-    border-color: rgba(245, 158, 11, 0.4);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.2);
 }
 
+/* Speed Menu */
 .vp-speed-menu {
     position: absolute;
-    bottom: 38px;
-    right: 0;
-    background: rgba(10, 10, 18, 0.96);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    bottom: 44px;
+    right: -8px;
+    background: rgba(18, 18, 18, 0.97);
     border-radius: 12px;
-    padding: 5px;
-    backdrop-filter: blur(24px);
-    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.8);
-    min-width: 115px;
+    padding: 8px 0;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.7);
+    min-width: 130px;
     display: none;
     z-index: 50;
 }
 
 .vp-speed-menu.vp-menu-open {
     display: block;
-    animation: vp-menu-enter 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+    animation: vp-menu-enter 0.15s ease;
 }
 
 .vp-speed-option {
     display: block;
     width: 100%;
-    padding: 7px 12px;
+    padding: 10px 20px;
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.75);
-    font-size: 0.82rem;
-    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.85rem;
+    font-weight: 500;
     text-align: left;
-    border-radius: 7px;
     cursor: pointer;
-    transition: all 0.12s ease;
+    transition: background 0.1s ease;
 }
 
 .vp-speed-option:hover {
     background: rgba(255, 255, 255, 0.1);
-    color: #fff;
 }
 
 .vp-speed-option.active {
-    color: #f59e0b;
-    background: rgba(245, 158, 11, 0.18);
+    color: #fff;
     font-weight: 700;
+    position: relative;
+    padding-left: 32px;
 }
 
-/* Fullscreen Button */
+.vp-speed-option.active::before {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #e11d48;
+}
+
+/* Fullscreen */
 .vp-btn-fullscreen {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    opacity: 0.85;
 }
 
 .vp-btn-fullscreen:hover {
-    background: rgba(245, 158, 11, 0.18);
-    border-color: rgba(245, 158, 11, 0.35);
-    color: #fbbf24;
-    box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+    opacity: 1;
 }
 
 /* Action Buttons & Video Meta */
