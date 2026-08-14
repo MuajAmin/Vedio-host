@@ -718,17 +718,23 @@ document.addEventListener('DOMContentLoaded', () => {
         vid.addEventListener('durationchange', () => {
             if (durationEl) durationEl.textContent = fmtTime(vid.duration);
         });
+        vid.addEventListener('loadstart', () => {
+            if (container) container.classList.add('vp-buffering');
+        });
         vid.addEventListener('loadeddata', () => {
             clearSlowStartTimer();
             updateBuffer();
+            if (container && (vid.readyState >= 3 || !vid.paused)) container.classList.remove('vp-buffering');
         });
         vid.addEventListener('canplay', () => {
+            if (container) container.classList.remove('vp-buffering');
             clearRecoveryTimer();
             clearSlowStartTimer();
             updateBuffer();
             clearPlayerStatus();
         });
         vid.addEventListener('playing', () => {
+            if (container) container.classList.remove('vp-buffering');
             retryCount = 0;
             clearRecoveryTimer();
             clearSlowStartTimer();
@@ -736,25 +742,27 @@ document.addEventListener('DOMContentLoaded', () => {
             clearPlayerStatus();
         });
         vid.addEventListener('canplaythrough', () => {
+            if (container) container.classList.remove('vp-buffering');
             clearRecoveryTimer();
             clearSlowStartTimer();
             clearPlayerStatus();
         });
         vid.addEventListener('waiting', () => {
             if (vid.ended) return;
-            // No overlay for buffering — just silently wait
+            if (container) container.classList.add('vp-buffering');
             queueRecovery();
         });
         vid.addEventListener('stalled', () => {
-            // No overlay for stalled — just queue recovery
+            if (container && !vid.paused) container.classList.add('vp-buffering');
             queueRecovery();
         });
         vid.addEventListener('seeking', () => {
-            // No overlay for seeking
+            if (container) container.classList.add('vp-buffering');
         });
         vid.addEventListener('seeked', () => {
             updateBuffer();
-            if (vid.readyState >= 3) {
+            if (container && vid.readyState >= 3) {
+                container.classList.remove('vp-buffering');
                 clearPlayerStatus();
             }
         });

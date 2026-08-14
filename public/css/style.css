@@ -2143,6 +2143,52 @@ input, textarea {
     50% { transform: scale(1.45); opacity: 1; }
 }
 
+/* ========================================
+   CIRCULAR BUFFERING SPINNER (YOUTUBE STYLE)
+   ======================================== */
+.vp-buffering-spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 15;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.vp-cinema.vp-buffering .vp-buffering-spinner {
+    opacity: 1;
+    visibility: visible;
+}
+
+.vp-cinema.vp-buffering .vp-center-overlay {
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.vp-spinner-ring {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: 3.5px solid rgba(255, 255, 255, 0.18);
+    border-top-color: #ffffff;
+    border-right-color: var(--accent-gold, #f59e0b);
+    animation: vp-circle-spin 0.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+}
+
+@keyframes vp-circle-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 .vp-loading-overlay {
     position: absolute;
     inset: 0;
