@@ -85,7 +85,7 @@ const thumbnailUpload = multer({
         }
     }
 });
-const STREAM_HIGH_WATER_MARK = 64 * 1024;
+const STREAM_HIGH_WATER_MARK = 256 * 1024;
 
 const { generateVideoThumbnail, getVideoDuration } = require('../utils/thumbnail');
 
@@ -481,8 +481,9 @@ function streamFile(req, res, filePath, filename, stat) {
             return res.status(416).end();
         }
 
-        // Cap chunk size to 2MB to prevent memory spikes on large seeks
-        const MAX_CHUNK = 2 * 1024 * 1024;
+        // Cap chunk size to 5MB — streamed via pipe so only highWaterMark bytes
+        // stay in memory; safe for 1-core / 1GB VPS while cutting round-trips
+        const MAX_CHUNK = 5 * 1024 * 1024;
         const requestedEnd = parsed.end;
         const cappedEnd = Math.min(parsed.start + MAX_CHUNK - 1, requestedEnd);
         const chunkSize = cappedEnd - parsed.start + 1;
