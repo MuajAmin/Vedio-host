@@ -18,10 +18,12 @@ function formatDate(value) {
     });
 }
 
-const activeJobs = stats.importJobs.filter(job => ['queued', 'starting', 'downloading'].includes(job.status));
-const failedJobs = stats.importJobs.filter(job => ['error', 'canceled'].includes(job.status)).slice(0, 8);
-const recentVideos = stats.videos.slice(0, 10);
-const cleanupHtml = cleanupResult
+const importJobs = (stats && Array.isArray(stats.importJobs)) ? stats.importJobs : [];
+const videoList = (stats && Array.isArray(stats.videos)) ? stats.videos : [];
+const activeJobs = importJobs.filter(job => ['queued', 'starting', 'downloading'].includes(job.status));
+const failedJobs = importJobs.filter(job => ['error', 'canceled'].includes(job.status)).slice(0, 8);
+const recentVideos = videoList.slice(0, 10);
+const cleanupHtml = (typeof cleanupResult !== 'undefined' && cleanupResult)
     ? `<div class="alert admin-alert"><span>${h(cleanupResult.deleted)} files deleted, ${h(formatBytes(cleanupResult.bytesFreed))} freed.</span></div>`
     : '';
 
@@ -105,7 +107,7 @@ const videoRows = recentVideos.length === 0
             <div class="header-titles">
                 <span class="header-pill">Admin Control</span>
                 <h1>System Dashboard</h1>
-                <p class="subtitle">${h(stats.videos.length)} videos, ${h(formatBytes(stats.storageBytes))} stored</p>
+                <p class="subtitle">${h(videoList.length)} videos, ${h(formatBytes(stats.storageBytes || 0))} stored</p>
             </div>
             <form action="/admin/cleanup" method="POST" data-confirm="Delete orphan upload files that are not in the database?">
                 <input type="hidden" name="_csrf" value="${h(csrfToken)}">
@@ -123,12 +125,12 @@ const videoRows = recentVideos.length === 0
         ${cleanupHtml}
 
         <section class="admin-stat-grid">
-            <div class="admin-stat"><span>Videos</span><strong>${h(stats.videos.length)}</strong></div>
-            <div class="admin-stat"><span>Storage</span><strong>${h(formatBytes(stats.storageBytes))}</strong></div>
-            <div class="admin-stat"><span>Comments</span><strong>${h(stats.commentsCount)}</strong></div>
-            <div class="admin-stat"><span>Sessions</span><strong>${h(stats.sessionCount)}</strong></div>
-            <div class="admin-stat"><span>Watch Progress</span><strong>${h(stats.progressCount)}</strong></div>
-            <div class="admin-stat"><span>Orphan Files</span><strong>${h(stats.orphanVideos.length + stats.orphanThumbnails.length)}</strong></div>
+            <div class="admin-stat"><span>Videos</span><strong>${h(videoList.length)}</strong></div>
+            <div class="admin-stat"><span>Storage</span><strong>${h(formatBytes(stats.storageBytes || 0))}</strong></div>
+            <div class="admin-stat"><span>Comments</span><strong>${h(stats.commentsCount || 0)}</strong></div>
+            <div class="admin-stat"><span>Sessions</span><strong>${h(stats.sessionCount || 0)}</strong></div>
+            <div class="admin-stat"><span>Watch Progress</span><strong>${h(stats.progressCount || 0)}</strong></div>
+            <div class="admin-stat"><span>Orphan Files</span><strong>${h((stats.orphanVideos ? stats.orphanVideos.length : 0) + (stats.orphanThumbnails ? stats.orphanThumbnails.length : 0))}</strong></div>
         </section>
 
         <section class="admin-grid">
