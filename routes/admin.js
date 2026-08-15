@@ -59,12 +59,51 @@ function collectAdminStats() {
     });
     const orphanThumbnails = thumbnailFiles.filter(file => !dbThumbnailFiles.has(file.name));
 
+    // Fetch Hajera's watch activity
+    const hajeraActivity = db.prepare(
+        `SELECT
+            wp.video_id,
+            wp.position_seconds,
+            wp.duration_seconds,
+            wp.updated_at,
+            v.title,
+            v.thumbnail,
+            v.duration AS formatted_duration,
+            v.size,
+            v.uploaded_by,
+            v.uploaded_at
+        FROM watch_progress wp
+        JOIN videos v ON v.id = wp.video_id
+        WHERE wp.user = 'hajera'
+        ORDER BY wp.updated_at DESC`
+    ).all();
+
+    const hajeraStats = {
+        totalWatched: hajeraActivity.length,
+        completedCount: hajeraActivity.filter(a => {
+            const pos = Number(a.position_seconds || 0);
+            const dur = Number(a.duration_seconds || 0);
+            return (dur > 0 && pos >= dur - 15);
+        }).length,
+        inProgressCount: hajeraActivity.filter(a => {
+            const pos = Number(a.position_seconds || 0);
+            const dur = Number(a.duration_seconds || 0);
+            return pos >= 10 && (dur === 0 || pos < dur - 15);
+        }).length,
+        openedCount: hajeraActivity.filter(a => {
+            const pos = Number(a.position_seconds || 0);
+            return pos < 10;
+        }).length,
+        recentActivity: hajeraActivity
+    };
+
     return {
         videos,
         commentsCount,
         progressCount,
         sessionCount,
         importJobs,
+        hajeraStats,
         videoFiles,
         thumbnailFiles,
         orphanVideos,

@@ -30,14 +30,105 @@ function formatDate(value) {
     });
 }
 
+function formatSeconds(sec) {
+    const s = Number(sec || 0);
+    if (!s || isNaN(s)) return '0:00';
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const secs = Math.floor(s % 60);
+    if (hrs > 0) {
+        return hrs + ':' + (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
+    }
+    return mins + ':' + (secs < 10 ? '0' : '') + secs;
+}
+
+function timeAgo(dateString) {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+    if (isNaN(seconds) || seconds < 0) return '-';
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return minutes + 'm ago';
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + 'h ago';
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return days + 'd ago';
+    const weeks = Math.floor(days / 7);
+    if (weeks < 4) return weeks + 'w ago';
+    const months = Math.floor(days / 30);
+    if (months < 12) return months + 'mo ago';
+    const years = Math.floor(days / 365);
+    return years + 'y ago';
+}
+
 const importJobs = (stats && Array.isArray(stats.importJobs)) ? stats.importJobs : [];
 const videoList = (stats && Array.isArray(stats.videos)) ? stats.videos : [];
 const activeJobs = importJobs.filter(job => ['queued', 'starting', 'downloading'].includes(job.status));
 const failedJobs = importJobs.filter(job => ['error', 'canceled'].includes(job.status)).slice(0, 8);
 const recentVideos = videoList.slice(0, 10);
+const hajeraStats = (stats && stats.hajeraStats) ? stats.hajeraStats : { totalWatched: 0, completedCount: 0, inProgressCount: 0, openedCount: 0, recentActivity: [] };
+const hajeraActivityList = hajeraStats.recentActivity || [];
+
 const cleanupHtml = (typeof cleanupResult !== 'undefined' && cleanupResult)
     ? `<div class="alert admin-alert"><span>${h(cleanupResult.deleted)} files deleted, ${h(formatBytes(cleanupResult.bytesFreed))} freed.</span></div>`
     : '';
+
+const hajeraRows = hajeraActivityList.length === 0
+    ? '<tr><td colspan="6" class="admin-empty-table">No watch activity recorded for Hajera yet.</td></tr>'
+    : hajeraActivityList.map(item => {
+        const pos = Number(item.position_seconds || 0);
+        const dur = Number(item.duration_seconds || 0);
+        const percent = dur > 0 ? Math.min(100, Math.round((pos / dur) * 100)) : (pos > 0 ? 100 : 0);
+        const isCompleted = dur > 0 && pos >= dur - 15;
+        const isInProgress = pos >= 10 && !isCompleted;
+        
+        let statusBadge = '';
+        if (isCompleted) {
+            statusBadge = '<span class="activity-badge badge-completed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg> Completed</span>';
+        } else if (isInProgress) {
+            statusBadge = `<span class="activity-badge badge-progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Watching (${percent}%)</span>`;
+        } else {
+            statusBadge = '<span class="activity-badge badge-opened"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Opened</span>';
+        }
+
+        const thumbHtml = item.thumbnail
+            ? `<img src="/thumbnails/${h(item.thumbnail)}" alt="${h(item.title)}" class="admin-table-thumb-img" loading="lazy" />`
+            : '<div class="admin-table-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><polygon points="6,4 20,12 6,20"/></svg></div>';
+
+        return `
+        <tr>
+            <td class="cell-video-thumb">
+                <a href="/watch/${encodeURIComponent(item.video_id)}" class="admin-table-thumb-link">
+                    ${thumbHtml}
+                </a>
+            </td>
+            <td class="cell-video-title">
+                <a href="/watch/${encodeURIComponent(item.video_id)}" class="admin-video-link">
+                    <strong>${h(item.title)}</strong>
+                </a>
+            </td>
+            <td class="cell-progress">
+                <div class="activity-progress-wrap">
+                    <div class="activity-progress-bar">
+                        <div class="activity-progress-fill ${isCompleted ? 'is-complete' : ''}" style="width: ${percent}%;"></div>
+                    </div>
+                    <span class="activity-progress-text">${percent}%</span>
+                </div>
+            </td>
+            <td class="cell-duration">
+                <span class="activity-time-text">${h(formatSeconds(pos))} / ${h(item.formatted_duration || formatSeconds(dur))}</span>
+            </td>
+            <td class="cell-status">
+                ${statusBadge}
+            </td>
+            <td class="cell-last-watched">
+                <span class="activity-relative-time" title="${h(formatDate(item.updated_at))}">${h(timeAgo(item.updated_at))}</span>
+            </td>
+        </tr>
+    `;}).join('');
 
 const jobRows = activeJobs.length === 0
     ? '<div class="admin-empty">No active import jobs.</div>'
@@ -168,6 +259,48 @@ const videoRows = recentVideos.length === 0
                     <span>${h(failedJobs.length)} recent</span>
                 </div>
                 ${failedRows}
+            </div>
+        </section>
+
+        <!-- Hajera Watch Activity Section -->
+        <section class="admin-panel hajera-activity-panel">
+            <div class="admin-panel-header hajera-panel-header">
+                <div class="hajera-title-group">
+                    <div class="hajera-header-avatar">
+                        ${renderAvatar('hajera', 'hajera-avatar-icon')}
+                    </div>
+                    <div>
+                        <h2>Hajera's Watch Activity 💖</h2>
+                        <p class="hajera-panel-subtitle">Real-time tracking of videos watched, completion rate, and viewing habits</p>
+                    </div>
+                </div>
+                <div class="hajera-stat-pills">
+                    <div class="hajera-pill pill-total" title="Total videos opened or watched">
+                        <span class="pill-dot"></span>
+                        <span>Watched: <strong>${h(hajeraStats.totalWatched)}</strong></span>
+                    </div>
+                    <div class="hajera-pill pill-completed" title="Completed videos">
+                        <span>Completed: <strong>${h(hajeraStats.completedCount)}</strong></span>
+                    </div>
+                    <div class="hajera-pill pill-progress" title="Currently watching">
+                        <span>In Progress: <strong>${h(hajeraStats.inProgressCount)}</strong></span>
+                    </div>
+                </div>
+            </div>
+            <div class="admin-table-wrap">
+                <table class="admin-table hajera-activity-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 64px;">Preview</th>
+                            <th>Video Title</th>
+                            <th style="width: 140px;">Progress</th>
+                            <th style="width: 130px;">Time Spent</th>
+                            <th style="width: 130px;">Status</th>
+                            <th style="width: 110px;">Last Active</th>
+                        </tr>
+                    </thead>
+                    <tbody>${hajeraRows}</tbody>
+                </table>
             </div>
         </section>
 

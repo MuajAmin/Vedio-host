@@ -4417,6 +4417,269 @@ kbd {
 }
 
 /* ========================================
+   HAJERA'S WATCH ACTIVITY PANEL
+   ======================================== */
+.hajera-activity-panel {
+    margin-bottom: 24px;
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    background: linear-gradient(180deg, rgba(244, 63, 94, 0.04) 0%, rgba(14, 15, 23, 0.95) 100%);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 0 20px rgba(244, 63, 94, 0.08);
+    position: relative;
+    overflow: hidden;
+}
+
+.hajera-activity-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #f43f5e, #fda4af, #f43f5e, transparent);
+}
+
+.hajera-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.hajera-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.hajera-header-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 2px solid #f43f5e;
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.4);
+}
+
+.hajera-header-avatar .avatar-img,
+.hajera-header-avatar .avatar-letter {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hajera-panel-subtitle {
+    margin: 2px 0 0 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.hajera-stat-pills {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.hajera-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid var(--border-subtle);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+}
+
+.hajera-pill strong {
+    color: var(--text-primary);
+    font-weight: 800;
+}
+
+.hajera-pill.pill-total {
+    border-color: rgba(244, 63, 94, 0.35);
+    background: rgba(244, 63, 94, 0.1);
+    color: #fecdd3;
+}
+
+.hajera-pill.pill-total strong {
+    color: #fff;
+}
+
+.hajera-pill.pill-completed {
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.08);
+    color: #a7f3d0;
+}
+
+.hajera-pill.pill-progress {
+    border-color: rgba(245, 158, 11, 0.3);
+    background: rgba(245, 158, 11, 0.08);
+    color: #fde68a;
+}
+
+.pill-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #f43f5e;
+    box-shadow: 0 0 6px #f43f5e;
+}
+
+/* Activity Table Specifics */
+.hajera-activity-table {
+    min-width: 640px;
+}
+
+.cell-video-thumb {
+    width: 64px;
+    padding: 8px 6px !important;
+}
+
+.admin-table-thumb-link {
+    display: block;
+    width: 56px;
+    aspect-ratio: 16 / 9;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #141520;
+    border: 1px solid var(--border-subtle);
+    position: relative;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-table-thumb-link:hover {
+    transform: scale(1.08);
+    border-color: var(--accent-gold);
+}
+
+.admin-table-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.admin-table-thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+.admin-video-link {
+    color: var(--text-primary) !important;
+    text-decoration: none;
+    transition: color 0.2s ease;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.88rem;
+    line-height: 1.35;
+}
+
+.admin-video-link:hover {
+    color: var(--accent-gold-bright) !important;
+}
+
+/* Progress bar inside table */
+.activity-progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.activity-progress-bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+    min-width: 60px;
+}
+
+.activity-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.activity-progress-fill.is-complete {
+    background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.activity-progress-text {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    min-width: 32px;
+}
+
+.activity-time-text {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: monospace, monospace;
+}
+
+/* Activity Badges */
+.activity-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.activity-badge.badge-completed {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.activity-badge.badge-progress {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.activity-badge.badge-opened {
+    background: rgba(148, 163, 184, 0.12);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.activity-relative-time {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.admin-empty-table {
+    text-align: center;
+    padding: 24px !important;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* ========================================
    ERROR / FORBIDDEN PAGES
    ======================================== */
 .error-container {
