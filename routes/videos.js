@@ -230,11 +230,32 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
         'SELECT id FROM videos WHERE uploaded_at < ? ORDER BY uploaded_at DESC LIMIT 1'
     ).get(video.uploaded_at);
 
+    // Suggested videos (all other videos ordered by newest, with watch progress)
+    const suggestedVideos = db.prepare(
+        `SELECT
+            v.id,
+            v.title,
+            v.size,
+            v.duration,
+            v.thumbnail,
+            v.uploaded_by,
+            v.uploaded_at,
+            wp.position_seconds,
+            wp.duration_seconds
+        FROM videos v
+        LEFT JOIN watch_progress wp
+            ON wp.video_id = v.id AND wp.user = ?
+        WHERE v.id != ?
+        ORDER BY v.uploaded_at DESC
+        LIMIT 30`
+    ).all(req.session.user, req.params.id);
+
     res.render('watch', {
         user: req.session.user,
         video,
         comments,
         progress,
+        suggestedVideos,
         thumbnail: String(req.query.thumbnail || '').slice(0, 120),
         prevVideoId: prevVideo ? prevVideo.id : null,
         nextVideoId: nextVideo ? nextVideo.id : null

@@ -1551,23 +1551,252 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ---- AJAX Comment Submit ----
-    const commentForm = document.querySelector('.comment-form');
-    if (commentForm) {
+    // ---- Autoplay Next Video Logic (YouTube Style) ----
+    const autoplayToggle = document.getElementById('autoplayToggle');
+    const autoplayToast = document.getElementById('autoplayToast');
+    const autoplayProgressCircle = document.getElementById('autoplayProgressCircle');
+    const autoplayCountdownNum = document.getElementById('autoplayCountdownNum');
+    const autoplaySecondsText = document.getElementById('autoplaySecondsText');
+    const autoplayNextTitle = document.getElementById('autoplayNextTitle');
+    const autoplayCancelBtn = document.getElementById('autoplayCancelBtn');
+    const autoplayPlayNowBtn = document.getElementById('autoplayPlayNowBtn');
+
+    if (autoplayToggle) {
+        const savedAutoplay = storage.getItem('videohost_autoplay');
+        if (savedAutoplay !== null) {
+            autoplayToggle.checked = savedAutoplay === 'true';
+        }
+        autoplayToggle.addEventListener('change', () => {
+            storage.setItem('videohost_autoplay', autoplayToggle.checked ? 'true' : 'false');
+        });
+    }
+
+    let autoplayTimer = null;
+    let autoplayInterval = null;
+
+    function getNextVideoCard() {
+        const visibleSuggestions = Array.from(document.querySelectorAll('.suggestion-card'))
+            .filter(card => !card.classList.contains('is-hidden') && card.style.display !== 'none');
+        return visibleSuggestions.length > 0 ? visibleSuggestions[0] : null;
+    }
+
+    function cancelAutoplay() {
+        if (autoplayTimer) {
+            clearTimeout(autoplayTimer);
+            autoplayTimer = null;
+        }
+        if (autoplayInterval) {
+            clearInterval(autoplayInterval);
+            autoplayInterval = null;
+        }
+        if (autoplayToast) {
+            autoplayToast.style.display = 'none';
+        }
+    }
+
+    function triggerAutoplayCountdown(nextCard) {
+        if (!nextCard || !autoplayToast) return;
+        cancelAutoplay();
+
+        const targetUrl = nextCard.getAttribute('href');
+        const cardTitle = nextCard.querySelector('.suggestion-title')?.textContent || 'Next Video';
+
+        if (autoplayNextTitle) autoplayNextTitle.textContent = cardTitle;
+        autoplayToast.style.display = 'block';
+
+        let remainingSeconds = 5;
+        const totalSeconds = 5;
+
+        function updateCountdownDisplay() {
+            if (autoplayCountdownNum) autoplayCountdownNum.textContent = remainingSeconds;
+            if (autoplaySecondsText) autoplaySecondsText.textContent = remainingSeconds + 's';
+            if (autoplayProgressCircle) {
+                const percent = (remainingSeconds / totalSeconds) * 100;
+                autoplayProgressCircle.setAttribute('stroke-dasharray', `${percent}, 100`);
+            }
+        }
+
+        updateCountdownDisplay();
+
+        autoplayInterval = setInterval(() => {
+            remainingSeconds -= 1;
+            updateCountdownDisplay();
+            if (remainingSeconds <= 0) {
+                clearInterval(autoplayInterval);
+                autoplayInterval = null;
+            }
+        }, 1000);
+
+        autoplayTimer = setTimeout(() => {
+            cancelAutoplay();
+            if (targetUrl) window.location.href = targetUrl;
+        }, 5000);
+
+        if (autoplayPlayNowBtn) {
+            autoplayPlayNowBtn.onclick = () => {
+                cancelAutoplay();
+                if (targetUrl) window.location.href = targetUrl;
+            };
+        }
+
+        if (autoplayCancelBtn) {
+            autoplayCancelBtn.onclick = () => {
+                cancelAutoplay();
+            };
+        }
+    }
+
+    // Attach to video ended event
+    if (vid) {
+        vid.addEventListener('ended', () => {
+            if (autoplayToggle && autoplayToggle.checked) {
+                const nextCard = getNextVideoCard();
+                if (nextCard) {
+                    triggerAutoplayCountdown(nextCard);
+                }
+            }
+        });
+    }
+
+    // ---- Suggestions Filter Chips ----
+    const suggestionChips = document.getElementById('suggestionChips');
+    if (suggestionChips) {
+        const chipButtons = suggestionChips.querySelectorAll('.chip-btn');
+        const cards = document.querySelectorAll('.suggestion-card');
+
+        chipButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                chipButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                const filter = btn.getAttribute('data-filter');
+                cards.forEach(card => {
+                    const uploader = card.getAttribute('data-uploader');
+                    const isUnwatched = card.getAttribute('data-unwatched') === 'true';
+
+                    let match = true;
+                    if (filter === 'muaj') match = uploader === 'muaj';
+                    else if (filter === 'hajera') match = uploader === 'hajera';
+                    else if (filter === 'unwatched') match = isUnwatched;
+
+                    if (match) {
+                        card.classList.remove('is-hidden');
+                        card.style.display = '';
+                    } else {
+                        card.classList.add('is-hidden');
+                        card.style.display = 'none';
+                    }
+                });
+            });
+        });
+    }
+
+    // ---- Modern Comments Interactivity ----
+    const commentForm = document.getElementById('commentForm') || document.querySelector('.comment-form');
+    const commentTextarea = document.getElementById('commentTextarea') || commentForm?.querySelector('textarea[name="text"]');
+    const commentCancelBtn = document.getElementById('commentCancelBtn');
+    const emojiChips = document.querySelectorAll('.emoji-chip');
+
+    // Emoji Insert
+    emojiChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            const emoji = chip.getAttribute('data-emoji') || chip.textContent.trim();
+            if (commentTextarea) {
+                const start = commentTextarea.selectionStart || commentTextarea.value.length;
+                const end = commentTextarea.selectionEnd || commentTextarea.value.length;
+                const val = commentTextarea.value;
+                commentTextarea.value = val.substring(0, start) + emoji + val.substring(end);
+                commentTextarea.selectionStart = commentTextarea.selectionEnd = start + emoji.length;
+                commentTextarea.focus();
+                commentTextarea.dispatchEvent(new Event('input'));
+            }
+        });
+    });
+
+    // Cancel Button
+    if (commentCancelBtn && commentTextarea) {
+        commentCancelBtn.addEventListener('click', () => {
+            commentTextarea.value = '';
+            commentTextarea.style.height = 'auto';
+            commentTextarea.blur();
+        });
+    }
+
+    // Liked Comments in LocalStorage
+    const likedCommentsKey = 'videohost_liked_comments';
+    function getLikedComments() {
+        try {
+            return JSON.parse(storage.getItem(likedCommentsKey) || '{}');
+        } catch (e) {
+            return {};
+        }
+    }
+    function saveLikedComments(map) {
+        try {
+            storage.setItem(likedCommentsKey, JSON.stringify(map));
+        } catch (e) {}
+    }
+
+    function initCommentActions(container = document) {
+        const likedMap = getLikedComments();
+
+        // Init like buttons
+        container.querySelectorAll('.comment-like-btn').forEach(btn => {
+            const commentId = btn.getAttribute('data-comment-id');
+            if (commentId && likedMap[commentId]) {
+                btn.classList.add('liked');
+                const counter = btn.querySelector('.like-counter');
+                if (counter) counter.textContent = '1';
+            }
+
+            btn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const isLiked = btn.classList.toggle('liked');
+                const counter = btn.querySelector('.like-counter');
+                if (isLiked) {
+                    likedMap[commentId] = 1;
+                    if (counter) counter.textContent = '1';
+                } else {
+                    delete likedMap[commentId];
+                    if (counter) counter.textContent = '';
+                }
+                saveLikedComments(likedMap);
+            };
+        });
+
+        // Init reply buttons
+        container.querySelectorAll('.comment-reply-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                const author = btn.getAttribute('data-author') || '';
+                if (commentTextarea) {
+                    commentTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    commentTextarea.value = `@${author} ` + commentTextarea.value.replace(new RegExp(`^@${author}\\s*`), '');
+                    commentTextarea.focus();
+                    commentTextarea.setSelectionRange(commentTextarea.value.length, commentTextarea.value.length);
+                    commentTextarea.dispatchEvent(new Event('input'));
+                }
+            };
+        });
+    }
+
+    initCommentActions();
+
+    // AJAX Comment Submit
+    if (commentForm && commentTextarea) {
         commentForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const textarea = commentForm.querySelector('textarea[name="text"]');
-            const submitBtn = commentForm.querySelector('button[type="submit"]');
-            const text = (textarea?.value || '').trim();
-            if (!text || !textarea) return;
+            const submitBtn = document.getElementById('commentSubmitBtn') || commentForm.querySelector('button[type="submit"]');
+            const text = (commentTextarea.value || '').trim();
+            if (!text) return;
 
             const csrfInput = commentForm.querySelector('input[name="_csrf"]');
             const csrf = csrfInput ? csrfInput.value : '';
             const action = commentForm.getAttribute('action');
 
-            // Disable while submitting
             submitBtn.disabled = true;
-            textarea.disabled = true;
+            commentTextarea.disabled = true;
 
             try {
                 const res = await fetch(action, {
@@ -1583,64 +1812,64 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await res.json();
 
                 if (res.ok && data.success) {
-                    // Build new comment HTML and prepend
-                    const commentsList = document.querySelector('.comments-list');
-                    const noComments = commentsList?.querySelector('.no-comments');
+                    const commentsList = document.getElementById('commentsList') || document.querySelector('.comments-list');
+                    const noComments = commentsList?.querySelector('.no-comments-box') || commentsList?.querySelector('.no-comments');
                     if (noComments) noComments.remove();
 
                     const isAdmin = data.comment.user === 'muaj';
                     const displayName = isAdmin ? 'Muaj' : 'Hajera';
                     const avatarClass = isAdmin ? 'avatar-admin' : 'avatar-viewer';
                     const initial = isAdmin ? 'M' : 'H';
-                    const now = new Date();
-                    const timeStr = now.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' })
-                        + ' ' + now.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+                    const timeStr = 'Just now';
 
-                    // Escape text for safe insertion
                     const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
                     const avatarHtml = data.comment && data.comment.avatar
                         ? `<img src="/avatars/${encodeURIComponent(data.comment.avatar)}" alt="${displayName}" class="avatar-img comment-avatar-img" loading="lazy" />`
                         : `<div class="avatar-letter ${avatarClass}">${initial}</div>`;
 
-                    const commentHtml = `<div class="comment-item" style="opacity:0;transform:translateY(-8px);transition:all 0.3s ease"><div class="comment-avatar">${avatarHtml}</div><div class="comment-body"><div class="comment-header"><span class="comment-author">${displayName}</span><span class="comment-time">${timeStr}</span></div><p class="comment-text">${escaped}</p></div></div>`;
+                    const authorBadgeHtml = isAdmin
+                        ? `<span class="comment-author-badge badge-admin"><svg viewBox="0 0 24 24" fill="currentColor" width="11" height="11"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/></svg>Admin</span>`
+                        : `<span class="comment-author-badge badge-viewer">💖 Hajera</span>`;
+
+                    const tempCommentId = 'new_' + Date.now();
+
+                    const commentHtml = `<div class="comment-item" id="comment-${tempCommentId}" style="opacity:0;transform:translateY(-8px);transition:all 0.3s ease"><div class="comment-avatar">${avatarHtml}</div><div class="comment-body"><div class="comment-header"><span class="comment-author">${displayName}</span>${authorBadgeHtml}<span class="comment-time">${timeStr}</span></div><div class="comment-text-box"><p class="comment-text">${escaped}</p></div><div class="comment-actions-bar"><button type="button" class="comment-action-btn comment-like-btn" data-comment-id="${tempCommentId}" title="Like"><svg class="icon-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span class="like-counter"></span></button><button type="button" class="comment-action-btn comment-reply-btn" data-author="${displayName}" title="Reply to ${displayName}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span>Reply</span></button></div></div></div>`;
 
                     if (commentsList) {
                         commentsList.insertAdjacentHTML('afterbegin', commentHtml);
-                        // Animate in
-                        requestAnimationFrame(() => {
-                            const newComment = commentsList.firstElementChild;
-                            if (newComment) {
+                        const newComment = commentsList.firstElementChild;
+                        if (newComment) {
+                            requestAnimationFrame(() => {
                                 newComment.style.opacity = '1';
                                 newComment.style.transform = 'translateY(0)';
-                            }
-                        });
-                    }
-
-                    // Update comment count
-                    const countTitle = document.querySelector('.comments-title');
-                    if (countTitle) {
-                        const match = countTitle.textContent.match(/\((\d+)\)/);
-                        if (match) {
-                            const newCount = parseInt(match[1]) + 1;
-                            countTitle.innerHTML = countTitle.innerHTML.replace(/\(\d+\)/, `(${newCount})`);
+                            });
+                            initCommentActions(newComment);
                         }
                     }
 
-                    // Clear textarea
-                    textarea.value = '';
-                    textarea.style.height = 'auto';
+                    // Update comment counts in all badges
+                    const countPill = document.getElementById('commentsCountPill');
+                    if (countPill) {
+                        const current = parseInt(countPill.textContent) || 0;
+                        countPill.textContent = current + 1;
+                    }
+                    const countBadge = document.getElementById('commentsCountBadge');
+                    if (countBadge) {
+                        const current = parseInt(countBadge.textContent) || 0;
+                        countBadge.textContent = current + 1;
+                    }
+
+                    commentTextarea.value = '';
+                    commentTextarea.style.height = 'auto';
                 } else {
-                    // Fallback: reload
                     commentForm.submit();
                 }
             } catch (err) {
-                // Network error — fallback to normal submit
                 commentForm.submit();
             } finally {
                 submitBtn.disabled = false;
-                textarea.disabled = false;
-                textarea.focus();
+                commentTextarea.disabled = false;
             }
         });
     }
@@ -1650,7 +1879,7 @@ document.addEventListener('DOMContentLoaded', () => {
     commentInputs.forEach(textarea => {
         textarea.addEventListener('input', function() {
             this.style.height = 'auto';
-            this.style.height = this.scrollHeight + 'px';
+            this.style.height = Math.max(42, this.scrollHeight) + 'px';
         });
     });
 

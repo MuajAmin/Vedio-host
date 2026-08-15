@@ -47,11 +47,15 @@ function formatWatchPosition(video) {
     return mins + ':' + (secs < 10 ? '0' : '') + secs;
 }
 
-const lastVisitDate = typeof lastVisit !== 'undefined' && lastVisit ? new Date(lastVisit) : null;
-
 function isNewVideo(v) {
-    if (!lastVisitDate || !v.uploaded_at) return false;
-    return new Date(v.uploaded_at) > lastVisitDate;
+    if (!v || !v.uploaded_at) return false;
+    const uploadTime = new Date(v.uploaded_at).getTime();
+    if (isNaN(uploadTime)) return false;
+    const now = Date.now();
+    // Video is NEW if uploaded within the last 48 hours OR if unwatched & uploaded in last 7 days
+    const isWithin48h = (now - uploadTime) < (48 * 60 * 60 * 1000);
+    const isUnwatchedRecent = !v.position_seconds && (now - uploadTime) < (7 * 24 * 60 * 60 * 1000);
+    return isWithin48h || isUnwatchedRecent;
 }
 
 function renderVideoCard(v, extraClass) {
@@ -64,9 +68,12 @@ function renderVideoCard(v, extraClass) {
         ? `<div class="card-watch-progress" title="Continue from ${h(formatWatchPosition(v))}"><span style="width:${h(progress)}%"></span></div>`
         : '';
     const isNew = isNewVideo(v);
-    const badgeText = isNew ? 'NEW' : (progress ? 'RESUME' : '');
     const uploader = v.uploaded_by || 'muaj';
     const uploaderName = uploader === 'hajera' ? 'Hajera' : (uploader === 'muaj' ? 'Muaj' : uploader);
+
+    const badgeMarkup = isNew
+        ? `<div class="card-badge badge-new"><span class="badge-pulse-dot"></span><span>NEW</span></div>`
+        : (progress ? `<div class="card-badge badge-resume"><span>RESUME</span></div>` : '');
 
     return `<a href="${watchUrl}" class="video-card ${extraClass || ''}" data-title="${h(String(v.title || '').toLowerCase())}">
         <div class="card-thumbnail">
@@ -77,7 +84,7 @@ function renderVideoCard(v, extraClass) {
                     <polygon points="20,18 32,24 20,30" fill="currentColor"/>
                 </svg>
             </div>
-            ${badgeText ? `<div class="card-badge ${isNew ? 'badge-new' : 'badge-resume'}">${badgeText}</div>` : ''}
+            ${badgeMarkup}
             <div class="play-overlay">
                 <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
                     <polygon points="6,4 20,12 6,20"/>
@@ -85,7 +92,7 @@ function renderVideoCard(v, extraClass) {
             </div>
             <div class="card-duration">${v.duration ? h(v.duration) : h(formatSize(v.size))}</div>
             ${progressHtml}
-        </div>
+        </div>`
         <div class="card-info">
             <div class="card-avatar" title="Uploaded by ${h(uploaderName)}">
                 ${renderAvatar(uploader, 'card-avatar-img')}

@@ -8,6 +8,7 @@ const uploaderName = uploader === 'hajera' ? 'Hajera' : (uploader === 'muaj' ? '
 const uploaderIsAdmin = uploader === 'muaj';
 const uploaderRole = uploaderIsAdmin ? 'Admin' : 'Viewer';
 const avatars = (typeof userAvatars !== 'undefined' && userAvatars) ? userAvatars : ((typeof locals !== 'undefined' && locals.userAvatars) ? locals.userAvatars : {});
+
 function renderAvatar(uname, extraCls = '') {
     const avatar = avatars[uname];
     const cleanCls = h(extraCls || '');
@@ -37,6 +38,28 @@ function formatDate(value, withTime) {
     });
 }
 
+function timeAgo(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+    if (isNaN(seconds) || seconds < 0) return '';
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return minutes + 'm ago';
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + 'h ago';
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return days + 'd ago';
+    const weeks = Math.floor(days / 7);
+    if (weeks < 4) return weeks + 'w ago';
+    const months = Math.floor(days / 30);
+    if (months < 12) return months + 'mo ago';
+    const years = Math.floor(days / 365);
+    return years + 'y ago';
+}
+
 function mimeTypeFor(filename) {
     const ext = String(filename || '').toLowerCase().split('.').pop();
     const mimeMap = {
@@ -52,6 +75,22 @@ function mimeTypeFor(filename) {
     return mimeMap[ext] || 'video/mp4';
 }
 
+function isNewVideo(v) {
+    if (!v || !v.uploaded_at) return false;
+    const uploadTime = new Date(v.uploaded_at).getTime();
+    if (isNaN(uploadTime)) return false;
+    const now = Date.now();
+    const isWithin48h = (now - uploadTime) < (48 * 60 * 60 * 1000);
+    const isUnwatchedRecent = !v.position_seconds && (now - uploadTime) < (7 * 24 * 60 * 60 * 1000);
+    return isWithin48h || isUnwatchedRecent;
+}
+
+function formatDurationOrSize(v) {
+    if (v.duration) return v.duration;
+    if (v.size) return (v.size / (1024 * 1024)).toFixed(1) + ' MB';
+    return '';
+}
+
 const videoId = encodeURIComponent(video.id);
 const streamUrl = '/stream/' + videoId;
 const sourceType = mimeTypeFor(video.filename || video.original_name);
@@ -61,15 +100,105 @@ const savedPosition = Number(savedProgress.position_seconds || 0);
 const thumbMessage = typeof thumbnail !== 'undefined' ? thumbnail : '';
 const deleteForm = `<form action="/delete/${videoId}" method="POST" data-confirm="Delete this video? This cannot be undone."><input type="hidden" name="_csrf" value="${h(csrfToken)}"><button type="submit" class="btn btn-danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Delete</span></button></form>`;
 
+const suggestions = Array.isArray(suggestedVideos) ? suggestedVideos : [];
+
+function renderSuggestionCard(v) {
+    const watchUrl = '/watch/' + encodeURIComponent(v.id);
+    const thumbImg = v.thumbnail
+        ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="suggestion-thumb-img" loading="lazy" />`
+        : '';
+    const isNew = isNewVideo(v);
+    const vUploader = v.uploaded_by || 'muaj';
+    const vUploaderName = vUploader === 'hajera' ? 'Hajera' : (vUploader === 'muaj' ? 'Muaj' : vUploader);
+    const isUnwatched = !v.position_seconds || v.position_seconds < 10;
+    const filterClasses = `filter-item filter-${h(vUploader)} ${isUnwatched ? 'filter-unwatched' : 'filter-watched'}`;
+
+    return `<a href="${watchUrl}" class="suggestion-card ${filterClasses}" data-id="${h(v.id)}" data-uploader="${h(vUploader)}" data-unwatched="${isUnwatched}" data-title="${h(String(v.title || '').toLowerCase())}">
+        <div class="suggestion-thumb-wrap">
+            ${thumbImg}
+            <div class="suggestion-thumb-placeholder ${v.thumbnail ? 'has-thumb' : ''}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24">
+                    <rect x="3" y="5" width="18" height="14" rx="3"/>
+                    <polygon points="10 8 16 12 10 16" fill="currentColor"/>
+                </svg>
+            </div>
+            ${isNew ? `<div class="card-badge badge-new badge-sm"><span class="badge-pulse-dot"></span><span>NEW</span></div>` : ''}
+            <div class="suggestion-duration">${h(formatDurationOrSize(v))}</div>
+            <div class="suggestion-play-hover">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                    <polygon points="6,4 20,12 6,20"/>
+                </svg>
+            </div>
+        </div>
+        <div class="suggestion-details">
+            <h4 class="suggestion-title" title="${h(v.title)}">${h(v.title)}</h4>
+            <div class="suggestion-uploader-row">
+                <div class="suggestion-avatar-box">
+                    ${renderAvatar(vUploader, 'suggestion-avatar-img')}
+                </div>
+                <span class="suggestion-author">${h(vUploaderName)}</span>
+            </div>
+            <div class="suggestion-meta">
+                <span>${h(timeAgo(v.uploaded_at) || formatDate(v.uploaded_at, false))}</span>
+                <span class="meta-dot">•</span>
+                <span>${v.duration ? h(v.duration) : h(formatDurationOrSize(v))}</span>
+            </div>
+        </div>
+    </a>`;
+}
+
 const commentsHtml = comments.length === 0
-    ? '<div class="no-comments"><p>No comments yet.</p></div>'
+    ? `<div class="no-comments-box">
+        <div class="no-comments-icon">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" width="48" height="48">
+                <path d="M40 8H8a4 4 0 0 0-4 4v20a4 4 0 0 0 4 4h8l8 8 8-8h8a4 4 0 0 0 4-4V12a4 4 0 0 0-4-4z"/>
+                <path d="M16 20h16M16 26h10" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <h3 class="no-comments-title">No comments yet</h3>
+        <p class="no-comments-subtitle">Be the first to share what you think about this video! ✨</p>
+       </div>`
     : comments.map((c) => {
         const canDelete = isAdmin || user === c.user;
+        const commentAuthorIsAdmin = c.user === 'muaj';
+        const commentAuthorName = commentAuthorIsAdmin ? 'Muaj' : 'Hajera';
+        const authorRoleBadge = commentAuthorIsAdmin
+            ? `<span class="comment-author-badge badge-admin"><svg viewBox="0 0 24 24" fill="currentColor" width="11" height="11"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/></svg>Admin</span>`
+            : `<span class="comment-author-badge badge-viewer">💖 Hajera</span>`;
+
         const commentDeleteForm = canDelete
-            ? `<form action="/comment/delete/${encodeURIComponent(c.id)}" method="POST" class="comment-delete-form"><input type="hidden" name="_csrf" value="${h(csrfToken)}"><button type="submit" class="btn-icon" title="Delete comment"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></form>`
+            ? `<form action="/comment/delete/${encodeURIComponent(c.id)}" method="POST" class="comment-delete-form" data-confirm="Delete this comment?"><input type="hidden" name="_csrf" value="${h(csrfToken)}"><button type="submit" class="comment-action-btn comment-delete-btn" title="Delete comment"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></form>`
             : '';
 
-        return `<div class="comment-item"><div class="comment-avatar">${renderAvatar(c.user, 'comment-avatar-img')}</div><div class="comment-body"><div class="comment-header"><span class="comment-author">${c.user === 'muaj' ? 'Muaj' : 'Hajera'}</span><span class="comment-time">${h(formatDate(c.created_at, true))}</span>${commentDeleteForm}</div><p class="comment-text">${h(c.text)}</p></div></div>`;
+        return `<div class="comment-item" id="comment-${encodeURIComponent(c.id)}" data-comment-id="${h(c.id)}">
+            <div class="comment-avatar">${renderAvatar(c.user, 'comment-avatar-img')}</div>
+            <div class="comment-body">
+                <div class="comment-header">
+                    <span class="comment-author">${commentAuthorName}</span>
+                    ${authorRoleBadge}
+                    <span class="comment-time" title="${h(formatDate(c.created_at, true))}">${h(timeAgo(c.created_at) || formatDate(c.created_at, false))}</span>
+                    <div class="comment-header-actions">${commentDeleteForm}</div>
+                </div>
+                <div class="comment-text-box">
+                    <p class="comment-text">${h(c.text)}</p>
+                </div>
+                <div class="comment-actions-bar">
+                    <button type="button" class="comment-action-btn comment-like-btn" data-comment-id="${h(c.id)}" title="Like this comment">
+                        <svg class="icon-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                        </svg>
+                        <span class="like-counter"></span>
+                    </button>
+                    <button type="button" class="comment-action-btn comment-reply-btn" data-author="${h(commentAuthorName)}" title="Reply to ${h(commentAuthorName)}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                            <polyline points="9 17 4 12 9 7"/>
+                            <path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+                        </svg>
+                        <span>Reply</span>
+                    </button>
+                </div>
+            </div>
+        </div>`;
     }).join('');
 %>
 <%- include('layout', { pageTitle: video.title, body: `
@@ -116,268 +245,388 @@ const commentsHtml = comments.length === 0
     </nav>
 
     <main class="main-content watch-page">
-        <div class="vp-cinema vp-muted" id="playerContainer">
+        <div class="watch-layout-grid">
+            <!-- Left / Main Column: Player, Video Info, Admin Panel, Comments -->
+            <div class="watch-main-col">
+                <div class="vp-cinema vp-muted" id="playerContainer">
 
-            <!-- Center Play/Pause & Video Navigation Overlay (YouTube Mobile Style) -->
-            <div class="vp-center-overlay" id="vpCenterOverlay">
-                <!-- Previous Video on Screen -->
-                ${prevVideoId ? `
-                <a href="/watch/${encodeURIComponent(prevVideoId)}" class="vp-center-nav-btn vp-center-prev" title="Previous Video" aria-label="Previous video">
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
-                        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
-                    </svg>
-                </a>` : `
-                <div class="vp-center-nav-btn vp-center-prev is-disabled" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
-                        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
-                    </svg>
-                </div>`}
-
-                <!-- Center Play/Pause Button -->
-                <div class="vp-center-btn" id="vpCenterPlayBtn">
-                    <svg class="vp-play-icon" viewBox="0 0 24 24" fill="currentColor" width="44" height="44">
-                        <polygon points="6,3 20,12 6,21"/>
-                    </svg>
-                    <svg class="vp-pause-icon" viewBox="0 0 24 24" fill="currentColor" width="44" height="44" style="display:none">
-                        <rect x="6" y="4" width="4" height="16" rx="1"/>
-                        <rect x="14" y="4" width="4" height="16" rx="1"/>
-                    </svg>
-                </div>
-
-                <!-- Next Video on Screen -->
-                ${nextVideoId ? `
-                <a href="/watch/${encodeURIComponent(nextVideoId)}" class="vp-center-nav-btn vp-center-next" title="Next Video" aria-label="Next video">
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
-                        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
-                    </svg>
-                </a>` : `
-                <div class="vp-center-nav-btn vp-center-next is-disabled" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
-                        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
-                    </svg>
-                </div>`}
-            </div>
-
-            <!-- Circular Loading / Buffering Spinner -->
-            <div class="vp-buffering-spinner" id="vpBufferingSpinner" aria-hidden="true">
-                <div class="vp-spinner-ring"></div>
-            </div>
-
-            <!-- Seek Gesture Ripples -->
-            <div class="vp-seek-ripple vp-seek-left" id="seekRippleLeft">
-                <div class="vp-ripple-content">
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26"><polygon points="11,19 2,12 11,5"/><polygon points="22,19 13,12 22,5"/></svg>
-                    <span>10s</span>
-                </div>
-            </div>
-            <div class="vp-seek-ripple vp-seek-right" id="seekRippleRight">
-                <div class="vp-ripple-content">
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26"><polygon points="13,5 22,12 13,19"/><polygon points="2,5 11,12 2,19"/></svg>
-                    <span>10s</span>
-                </div>
-            </div>
-
-            <!-- The Video Element -->
-            <video id="vpVideo" ${posterAttr} preload="metadata" playsinline muted data-video-id="${h(video.id)}" data-stream-url="${h(streamUrl)}" data-source-type="${h(sourceType)}" data-saved-position="${h(savedPosition)}" data-progress-url="/watch-progress/${videoId}" data-csrf-token="${h(csrfToken)}">
-                <source src="${h(streamUrl)}" type="${h(sourceType)}">
-            </video>
-
-            <!-- Playback Status / Slow Network UI -->
-            <div class="vp-loading-overlay" id="vpLoadingOverlay" aria-live="polite" aria-hidden="true">
-                <div class="vp-loading-panel">
-                    <div class="vp-spinner" aria-hidden="true"></div>
-                    <div class="vp-loading-copy">
-                        <p class="vp-loading-title" id="vpLoadingTitle"></p>
-                        <p class="vp-loading-detail" id="vpLoadingDetail"></p>
-                    </div>
-                    <button type="button" class="vp-retry-btn" id="vpRetryBtn">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                            <path d="M21 12a9 9 0 1 1-3-6.7"/>
-                            <path d="M21 3v6h-6"/>
-                        </svg>
-                        <span>Retry stream</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Bottom Gradient Fade -->
-            <div class="vp-bottom-gradient"></div>
-
-            <!-- Custom Controls Bar -->
-            <div class="vp-controls" id="vpControls">
-                <!-- Progress Bar -->
-                <div class="vp-progress-wrap" id="vpProgressWrap">
-                    <div class="vp-progress-buffer" id="vpProgressBuffer"></div>
-                    <div class="vp-progress-played" id="vpProgressPlayed">
-                        <div class="vp-progress-thumb" id="vpProgressThumb"></div>
-                    </div>
-                    <div class="vp-progress-hover-time" id="vpHoverTime">0:00</div>
-                </div>
-
-                <!-- Controls Row -->
-                <div class="vp-controls-row">
-                    <!-- Left Controls -->
-                    <div class="vp-controls-left">
-                        <button type="button" class="vp-btn vp-btn-play" id="vpPlayBtn" title="Play/Pause" aria-label="Play or pause">
-                            <svg class="vp-icon-play" viewBox="0 0 24 24" fill="currentColor" width="26" height="26">
-                                <path d="M8 5v14l11-7z"/>
+                    <!-- Center Play/Pause & Video Navigation Overlay (YouTube Mobile Style) -->
+                    <div class="vp-center-overlay" id="vpCenterOverlay">
+                        <!-- Previous Video on Screen -->
+                        ${prevVideoId ? `
+                        <a href="/watch/${encodeURIComponent(prevVideoId)}" class="vp-center-nav-btn vp-center-prev" title="Previous Video" aria-label="Previous video">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
                             </svg>
-                            <svg class="vp-icon-pause" viewBox="0 0 24 24" fill="currentColor" width="26" height="26" style="display:none">
+                        </a>` : `
+                        <div class="vp-center-nav-btn vp-center-prev is-disabled" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                            </svg>
+                        </div>`}
+
+                        <!-- Center Play/Pause Button -->
+                        <div class="vp-center-btn" id="vpCenterPlayBtn">
+                            <svg class="vp-play-icon" viewBox="0 0 24 24" fill="currentColor" width="44" height="44">
+                                <polygon points="6,3 20,12 6,21"/>
+                            </svg>
+                            <svg class="vp-pause-icon" viewBox="0 0 24 24" fill="currentColor" width="44" height="44" style="display:none">
                                 <rect x="6" y="4" width="4" height="16" rx="1"/>
                                 <rect x="14" y="4" width="4" height="16" rx="1"/>
                             </svg>
-                        </button>
-
-                        <button type="button" class="vp-btn vp-btn-seek" id="vpRewindBtn" title="Rewind 10s" aria-label="Rewind 10 seconds">
-                            <svg viewBox="0 0 24 24" width="22" height="22">
-                                <path d="M12 5V2L7 6l5 4V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" fill="currentColor"/>
-                                <text x="12" y="14.5" font-size="7" font-weight="800" font-family="system-ui, sans-serif" text-anchor="middle" fill="currentColor">10</text>
-                            </svg>
-                        </button>
-
-                        <button type="button" class="vp-btn vp-btn-seek" id="vpForwardBtn" title="Forward 10s" aria-label="Forward 10 seconds">
-                            <svg viewBox="0 0 24 24" width="22" height="22">
-                                <path d="M12 5V2l5 4-5 4V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" fill="currentColor"/>
-                                <text x="12" y="14.5" font-size="7" font-weight="800" font-family="system-ui, sans-serif" text-anchor="middle" fill="currentColor">10</text>
-                            </svg>
-                        </button>
-
-                        <!-- Volume -->
-                        <div class="vp-volume-group">
-                            <button type="button" class="vp-btn vp-btn-vol vp-btn-muted" id="vpMuteBtn" title="Unmute" aria-label="Unmute" aria-pressed="true">
-                                <svg class="vp-icon-vol-on" viewBox="0 0 24 24" fill="currentColor" width="22" height="22" style="display:none">
-                                    <path d="M3 9v6h4l5 5V4L7 9H3z"/>
-                                    <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" opacity="0.7"/>
-                                </svg>
-                                <svg class="vp-icon-vol-off" viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
-                                    <path d="M3 9v6h4l5 5V4L7 9H3z"/>
-                                    <line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"/>
-                                    <line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"/>
-                                </svg>
-                            </button>
-                            <div class="vp-volume-slider-wrap">
-                                <input type="range" min="0" max="100" value="0" class="vp-volume-slider" id="vpVolumeSlider" aria-label="Volume">
-                            </div>
                         </div>
 
-                        <div class="vp-time" id="vpTimeDisplay">
-                            <span class="vp-time-curr" id="vpCurrentTime">0:00</span>
-                            <span class="vp-time-sep">/</span>
-                            <span class="vp-time-dur" id="vpDuration">0:00</span>
+                        <!-- Next Video on Screen -->
+                        ${nextVideoId ? `
+                        <a href="/watch/${encodeURIComponent(nextVideoId)}" class="vp-center-nav-btn vp-center-next" title="Next Video" aria-label="Next video">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                            </svg>
+                        </a>` : `
+                        <div class="vp-center-nav-btn vp-center-next is-disabled" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                            </svg>
+                        </div>`}
+                    </div>
+
+                    <!-- Circular Loading / Buffering Spinner -->
+                    <div class="vp-buffering-spinner" id="vpBufferingSpinner" aria-hidden="true">
+                        <div class="vp-spinner-ring"></div>
+                    </div>
+
+                    <!-- Seek Gesture Ripples -->
+                    <div class="vp-seek-ripple vp-seek-left" id="seekRippleLeft">
+                        <div class="vp-ripple-content">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26"><polygon points="11,19 2,12 11,5"/><polygon points="22,19 13,12 22,5"/></svg>
+                            <span>10s</span>
+                        </div>
+                    </div>
+                    <div class="vp-seek-ripple vp-seek-right" id="seekRippleRight">
+                        <div class="vp-ripple-content">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26"><polygon points="13,5 22,12 13,19"/><polygon points="2,5 11,12 2,19"/></svg>
+                            <span>10s</span>
                         </div>
                     </div>
 
-                    <!-- Right Controls -->
-                    <div class="vp-controls-right">
-                        <!-- Speed -->
-                        <div class="vp-speed-group" id="vpSpeedGroup">
-                            <button type="button" class="vp-btn vp-speed-btn" id="vpSpeedBtn" title="Playback Speed" aria-label="Playback speed">
-                                <span id="vpSpeedLabel">1x</span>
+                    <!-- The Video Element -->
+                    <video id="vpVideo" ${posterAttr} preload="metadata" playsinline muted data-video-id="${h(video.id)}" data-stream-url="${h(streamUrl)}" data-source-type="${h(sourceType)}" data-saved-position="${h(savedPosition)}" data-progress-url="/watch-progress/${videoId}" data-csrf-token="${h(csrfToken)}">
+                        <source src="${h(streamUrl)}" type="${h(sourceType)}">
+                    </video>
+
+                    <!-- Playback Status / Slow Network UI -->
+                    <div class="vp-loading-overlay" id="vpLoadingOverlay" aria-live="polite" aria-hidden="true">
+                        <div class="vp-loading-panel">
+                            <div class="vp-spinner" aria-hidden="true"></div>
+                            <div class="vp-loading-copy">
+                                <p class="vp-loading-title" id="vpLoadingTitle"></p>
+                                <p class="vp-loading-detail" id="vpLoadingDetail"></p>
+                            </div>
+                            <button type="button" class="vp-retry-btn" id="vpRetryBtn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                    <path d="M21 12a9 9 0 1 1-3-6.7"/>
+                                    <path d="M21 3v6h-6"/>
+                                </svg>
+                                <span>Retry stream</span>
                             </button>
-                            <div class="vp-speed-menu" id="vpSpeedMenu">
-                                <button class="vp-speed-option" data-speed="0.5">0.5x</button>
-                                <button class="vp-speed-option" data-speed="0.75">0.75x</button>
-                                <button class="vp-speed-option active" data-speed="1">Normal</button>
-                                <button class="vp-speed-option" data-speed="1.25">1.25x</button>
-                                <button class="vp-speed-option" data-speed="1.5">1.5x</button>
-                                <button class="vp-speed-option" data-speed="2">2x</button>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Gradient Fade -->
+                    <div class="vp-bottom-gradient"></div>
+
+                    <!-- Custom Controls Bar -->
+                    <div class="vp-controls" id="vpControls">
+                        <!-- Progress Bar -->
+                        <div class="vp-progress-wrap" id="vpProgressWrap">
+                            <div class="vp-progress-buffer" id="vpProgressBuffer"></div>
+                            <div class="vp-progress-played" id="vpProgressPlayed">
+                                <div class="vp-progress-thumb" id="vpProgressThumb"></div>
+                            </div>
+                            <div class="vp-progress-hover-time" id="vpHoverTime">0:00</div>
+                        </div>
+
+                        <!-- Controls Row -->
+                        <div class="vp-controls-row">
+                            <!-- Left Controls -->
+                            <div class="vp-controls-left">
+                                <button type="button" class="vp-btn vp-btn-play" id="vpPlayBtn" title="Play/Pause" aria-label="Play or pause">
+                                    <svg class="vp-icon-play" viewBox="0 0 24 24" fill="currentColor" width="26" height="26">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                    <svg class="vp-icon-pause" viewBox="0 0 24 24" fill="currentColor" width="26" height="26" style="display:none">
+                                        <rect x="6" y="4" width="4" height="16" rx="1"/>
+                                        <rect x="14" y="4" width="4" height="16" rx="1"/>
+                                    </svg>
+                                </button>
+
+                                <button type="button" class="vp-btn vp-btn-seek" id="vpRewindBtn" title="Rewind 10s" aria-label="Rewind 10 seconds">
+                                    <svg viewBox="0 0 24 24" width="22" height="22">
+                                        <path d="M12 5V2L7 6l5 4V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" fill="currentColor"/>
+                                        <text x="12" y="14.5" font-size="7" font-weight="800" font-family="system-ui, sans-serif" text-anchor="middle" fill="currentColor">10</text>
+                                    </svg>
+                                </button>
+
+                                <button type="button" class="vp-btn vp-btn-seek" id="vpForwardBtn" title="Forward 10s" aria-label="Forward 10 seconds">
+                                    <svg viewBox="0 0 24 24" width="22" height="22">
+                                        <path d="M12 5V2l5 4-5 4V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" fill="currentColor"/>
+                                        <text x="12" y="14.5" font-size="7" font-weight="800" font-family="system-ui, sans-serif" text-anchor="middle" fill="currentColor">10</text>
+                                    </svg>
+                                </button>
+
+                                <!-- Volume -->
+                                <div class="vp-volume-group">
+                                    <button type="button" class="vp-btn vp-btn-vol vp-btn-muted" id="vpMuteBtn" title="Unmute" aria-label="Unmute" aria-pressed="true">
+                                        <svg class="vp-icon-vol-on" viewBox="0 0 24 24" fill="currentColor" width="22" height="22" style="display:none">
+                                            <path d="M3 9v6h4l5 5V4L7 9H3z"/>
+                                            <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" opacity="0.7"/>
+                                        </svg>
+                                        <svg class="vp-icon-vol-off" viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
+                                            <path d="M3 9v6h4l5 5V4L7 9H3z"/>
+                                            <line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"/>
+                                            <line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"/>
+                                        </svg>
+                                    </button>
+                                    <div class="vp-volume-slider-wrap">
+                                        <input type="range" min="0" max="100" value="0" class="vp-volume-slider" id="vpVolumeSlider" aria-label="Volume">
+                                    </div>
+                                </div>
+
+                                <div class="vp-time" id="vpTimeDisplay">
+                                    <span class="vp-time-curr" id="vpCurrentTime">0:00</span>
+                                    <span class="vp-time-sep">/</span>
+                                    <span class="vp-time-dur" id="vpDuration">0:00</span>
+                                </div>
+                            </div>
+
+                            <!-- Right Controls -->
+                            <div class="vp-controls-right">
+                                <!-- Speed -->
+                                <div class="vp-speed-group" id="vpSpeedGroup">
+                                    <button type="button" class="vp-btn vp-speed-btn" id="vpSpeedBtn" title="Playback Speed" aria-label="Playback speed">
+                                        <span id="vpSpeedLabel">1x</span>
+                                    </button>
+                                    <div class="vp-speed-menu" id="vpSpeedMenu">
+                                        <button class="vp-speed-option" data-speed="0.5">0.5x</button>
+                                        <button class="vp-speed-option" data-speed="0.75">0.75x</button>
+                                        <button class="vp-speed-option active" data-speed="1">Normal</button>
+                                        <button class="vp-speed-option" data-speed="1.25">1.25x</button>
+                                        <button class="vp-speed-option" data-speed="1.5">1.5x</button>
+                                        <button class="vp-speed-option" data-speed="2">2x</button>
+                                    </div>
+                                </div>
+
+                                <!-- Fullscreen -->
+                                <button type="button" class="vp-btn vp-btn-fullscreen" id="vpFullscreenBtn" title="Fullscreen" aria-label="Fullscreen">
+                                    <svg class="vp-icon-fs-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="22" height="22">
+                                        <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
+                                        <path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
+                                        <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+                                        <path d="M3 16v3a2 2 0 0 0 2 2h3"/>
+                                    </svg>
+                                    <svg class="vp-icon-fs-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="22" height="22" style="display:none">
+                                        <path d="M4 14h3a2 2 0 0 1 2 2v3"/>
+                                        <path d="M20 10h-3a2 2 0 0 1-2-2V5"/>
+                                        <path d="M14 20v-3a2 2 0 0 1 2-2h3"/>
+                                        <path d="M10 4v3a2 2 0 0 1-2 2H5"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="video-info-section">
+                    <div class="video-title-wrap" id="videoTitleWrap" data-rename-url="/rename/${videoId}" data-csrf="${h(csrfToken)}">
+                        <h1 class="video-title" id="videoTitleText">${h(video.title)}</h1>
+                        <button type="button" class="title-edit-btn" id="titleEditBtn" title="Rename video">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        <div class="title-edit-form" id="titleEditForm" style="display:none">
+                            <input type="text" class="title-edit-input" id="titleEditInput" maxlength="180" value="${h(video.title)}">
+                            <button type="button" class="title-save-btn" id="titleSaveBtn" title="Save">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>
+                            </button>
+                            <button type="button" class="title-cancel-btn" id="titleCancelBtn" title="Cancel">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="video-uploader-bar">
+                        <div class="video-uploader-profile">
+                            <div class="video-uploader-avatar-box">
+                                ${renderAvatar(uploader, 'watch-uploader-avatar')}
+                            </div>
+                            <div class="video-uploader-details">
+                                <div class="video-uploader-name-row">
+                                    <span class="video-uploader-name">${h(uploaderName)}</span>
+                                    <span class="video-uploader-badge ${uploaderIsAdmin ? 'badge-admin' : 'badge-viewer'}">${uploaderRole}</span>
+                                </div>
+                                <div class="video-uploader-meta-line">
+                                    <span class="uploader-by-tag">Uploaded by <strong>${h(uploaderName)}</strong></span>
+                                    <span class="meta-dot">•</span>
+                                    <span class="uploader-date-tag">${h(formatDate(video.uploaded_at, false))}</span>
+                                    ${video.size ? `<span class="meta-dot">•</span><span class="uploader-size-tag">${h((video.size / (1024 * 1024)).toFixed(1))} MB</span>` : ''}
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Fullscreen -->
-                        <button type="button" class="vp-btn vp-btn-fullscreen" id="vpFullscreenBtn" title="Fullscreen" aria-label="Fullscreen">
-                            <svg class="vp-icon-fs-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="22" height="22">
-                                <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
-                                <path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
-                                <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
-                                <path d="M3 16v3a2 2 0 0 0 2 2h3"/>
+                        <div class="video-action-buttons">
+                            <button type="button" class="btn btn-ghost btn-sm" id="btnDownload" title="Download Video">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                <span class="btn-text">Download</span>
+                            </button>
+                            ${deleteForm}
+                        </div>
+                    </div>
+                </div>
+
+                ${isAdmin ? `
+                <section class="thumbnail-manager">
+                    <div class="thumbnail-preview-box">
+                        ${video.thumbnail ? `<img src="/thumbnails/${h(video.thumbnail)}" alt="${h(video.title)} thumbnail" class="thumb-img" loading="lazy">` : '<div class="thumb-placeholder"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40"><rect x="6" y="10" width="36" height="28" rx="4"/><polygon points="20,18 32,24 20,30" fill="currentColor"/></svg></div>'}
+                    </div>
+                    <div class="thumbnail-manager-body">
+                        <div>
+                            <h2>Thumbnail</h2>
+                            <p>${thumbMessage === 'updated' ? 'Thumbnail updated.' : 'Upload a custom JPG, PNG, or WebP image.'}</p>
+                        </div>
+                        <form action="/thumbnail/${videoId}" method="POST" enctype="multipart/form-data" class="thumbnail-form">
+                            <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                            <input type="file" name="thumbnail" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="form-input thumbnail-input" required>
+                            <button type="submit" class="btn btn-primary btn-sm">Upload Thumbnail</button>
+                        </form>
+                        <form action="/thumbnail/${videoId}/regenerate" method="POST" class="thumbnail-form-inline">
+                            <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                            <button type="submit" class="btn btn-ghost btn-sm">Regenerate</button>
+                        </form>
+                    </div>
+                </section>` : ''}
+
+                <!-- Redesigned Modern Comments Section (YouTube Style) -->
+                <div class="comments-section" id="commentsSection">
+                    <div class="comments-header-row">
+                        <h2 class="comments-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                             </svg>
-                            <svg class="vp-icon-fs-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="22" height="22" style="display:none">
-                                <path d="M4 14h3a2 2 0 0 1 2 2v3"/>
-                                <path d="M20 10h-3a2 2 0 0 1-2-2V5"/>
-                                <path d="M14 20v-3a2 2 0 0 1 2-2h3"/>
-                                <path d="M10 4v3a2 2 0 0 1-2 2H5"/>
-                            </svg>
-                        </button>
+                            <span>Comments</span>
+                            <span class="comments-count-pill" id="commentsCountPill">${comments.length}</span>
+                        </h2>
+                    </div>
+
+                    <form action="/comment/${videoId}" method="POST" class="comment-form" id="commentForm">
+                        <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                        <div class="comment-input-wrapper">
+                            <div class="comment-avatar">${renderAvatar(user, 'comment-avatar-img')}</div>
+                            <div class="comment-input-group">
+                                <textarea name="text" placeholder="Add a comment... (একটি সুন্দর মন্তব্য লিখুন...)" rows="1" required maxlength="2000" class="comment-input" id="commentTextarea"></textarea>
+                                
+                                <div class="comment-form-actions" id="commentFormActions">
+                                    <div class="comment-emoji-bar">
+                                        <button type="button" class="emoji-chip" data-emoji="❤️" title="Love">❤️</button>
+                                        <button type="button" class="emoji-chip" data-emoji="🔥" title="Fire">🔥</button>
+                                        <button type="button" class="emoji-chip" data-emoji="😂" title="Laugh">😂</button>
+                                        <button type="button" class="emoji-chip" data-emoji="👏" title="Clap">👏</button>
+                                        <button type="button" class="emoji-chip" data-emoji="💖" title="Sparkle Heart">💖</button>
+                                        <button type="button" class="emoji-chip" data-emoji="✨" title="Sparkles">✨</button>
+                                        <button type="button" class="emoji-chip" data-emoji="👍" title="Thumbs Up">👍</button>
+                                        <button type="button" class="emoji-chip" data-emoji="😍" title="Heart Eyes">😍</button>
+                                    </div>
+                                    <div class="comment-btn-group">
+                                        <button type="button" class="btn btn-ghost btn-sm comment-cancel-btn" id="commentCancelBtn">Cancel</button>
+                                        <button type="submit" class="btn btn-primary btn-sm btn-comment" id="commentSubmitBtn">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                                                <line x1="22" y1="2" x2="11" y2="13"/>
+                                                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                                            </svg>
+                                            <span>Comment</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="comments-list" id="commentsList">
+                        ${commentsHtml}
                     </div>
                 </div>
             </div>
+
+            <!-- Right / Side Column: Suggested Videos (YouTube Style) -->
+            <aside class="watch-side-col" id="watchSideCol">
+                <div class="suggestions-panel">
+                    <div class="suggestions-header">
+                        <div class="suggestions-title-row">
+                            <h3 class="suggestions-heading">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                                    <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/>
+                                </svg>
+                                <span>Suggested Videos</span>
+                            </h3>
+                            <div class="autoplay-toggle-wrapper" title="Autoplay next video when playback ends">
+                                <span class="autoplay-label">Autoplay</span>
+                                <label class="switch-toggle" for="autoplayToggle">
+                                    <input type="checkbox" id="autoplayToggle" checked>
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="suggestion-chips-container">
+                            <div class="suggestion-chips" id="suggestionChips">
+                                <button type="button" class="chip-btn active" data-filter="all">All</button>
+                                <button type="button" class="chip-btn" data-filter="unwatched">Unwatched</button>
+                                <button type="button" class="chip-btn" data-filter="muaj">Muaj</button>
+                                <button type="button" class="chip-btn" data-filter="hajera">Hajera</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="suggestions-list" id="suggestionsList">
+                        ${suggestions.length === 0
+                            ? `<div class="no-suggestions-card">
+                                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" width="40" height="40">
+                                    <rect x="4" y="8" width="40" height="32" rx="6"/>
+                                    <polygon points="20,16 34,24 20,32"/>
+                                </svg>
+                                <p>No other videos in library yet.</p>
+                               </div>`
+                            : suggestions.map(renderSuggestionCard).join('')}
+                    </div>
+                </div>
+            </aside>
         </div>
 
-        <div class="video-info-section">
-            <div class="video-title-wrap" id="videoTitleWrap" data-rename-url="/rename/${videoId}" data-csrf="${h(csrfToken)}">
-                <h1 class="video-title" id="videoTitleText">${h(video.title)}</h1>
-                <button type="button" class="title-edit-btn" id="titleEditBtn" title="Rename video">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        <!-- Autoplay Next Video Toast Notification -->
+        <div class="autoplay-toast" id="autoplayToast" style="display: none;">
+            <div class="autoplay-toast-content">
+                <div class="autoplay-toast-spinner">
+                    <svg viewBox="0 0 36 36" class="circular-chart">
+                        <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        <path class="circle" id="autoplayProgressCircle" stroke-dasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
                     </svg>
-                </button>
-                <div class="title-edit-form" id="titleEditForm" style="display:none">
-                    <input type="text" class="title-edit-input" id="titleEditInput" maxlength="180" value="${h(video.title)}">
-                    <button type="button" class="title-save-btn" id="titleSaveBtn" title="Save">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>
-                    </button>
-                    <button type="button" class="title-cancel-btn" id="titleCancelBtn" title="Cancel">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
+                    <span class="autoplay-countdown-number" id="autoplayCountdownNum">5</span>
                 </div>
-            </div>
-
-            <div class="video-uploader-bar">
-                <div class="video-uploader-profile">
-                    <div class="video-uploader-avatar-box">
-                        ${renderAvatar(uploader, 'watch-uploader-avatar')}
-                    </div>
-                    <div class="video-uploader-details">
-                        <div class="video-uploader-name-row">
-                            <span class="video-uploader-name">${h(uploaderName)}</span>
-                            <span class="video-uploader-badge ${uploaderIsAdmin ? 'badge-admin' : 'badge-viewer'}">${uploaderRole}</span>
-                        </div>
-                        <div class="video-uploader-meta-line">
-                            <span class="uploader-by-tag">Uploaded by <strong>${h(uploaderName)}</strong></span>
-                            <span class="meta-dot">•</span>
-                            <span class="uploader-date-tag">${h(formatDate(video.uploaded_at, false))}</span>
-                            ${video.size ? `<span class="meta-dot">•</span><span class="uploader-size-tag">${h((video.size / (1024 * 1024)).toFixed(1))} MB</span>` : ''}
-                        </div>
-                    </div>
+                <div class="autoplay-toast-info">
+                    <span class="autoplay-toast-subtitle">Up Next in <span id="autoplaySecondsText">5s</span></span>
+                    <span class="autoplay-toast-title" id="autoplayNextTitle">Next Video</span>
                 </div>
-
-                <div class="video-action-buttons">
-                    <button type="button" class="btn btn-ghost btn-sm" id="btnDownload" title="Download Video">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        <span class="btn-text">Download</span>
-                    </button>
-                    ${deleteForm}
+                <div class="autoplay-toast-actions">
+                    <button type="button" class="btn btn-ghost btn-sm" id="autoplayCancelBtn">Cancel</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="autoplayPlayNowBtn">Play Now</button>
                 </div>
             </div>
         </div>
-
-        ${isAdmin ? `
-        <section class="thumbnail-manager">
-            <div class="thumbnail-preview-box">
-                ${video.thumbnail ? `<img src="/thumbnails/${h(video.thumbnail)}" alt="${h(video.title)} thumbnail" class="thumb-img" loading="lazy">` : '<div class="thumb-placeholder"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40"><rect x="6" y="10" width="36" height="28" rx="4"/><polygon points="20,18 32,24 20,30" fill="currentColor"/></svg></div>'}
-            </div>
-            <div class="thumbnail-manager-body">
-                <div>
-                    <h2>Thumbnail</h2>
-                    <p>${thumbMessage === 'updated' ? 'Thumbnail updated.' : 'Upload a custom JPG, PNG, or WebP image.'}</p>
-                </div>
-                <form action="/thumbnail/${videoId}" method="POST" enctype="multipart/form-data" class="thumbnail-form">
-                    <input type="hidden" name="_csrf" value="${h(csrfToken)}">
-                    <input type="file" name="thumbnail" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="form-input thumbnail-input" required>
-                    <button type="submit" class="btn btn-primary btn-sm">Upload Thumbnail</button>
-                </form>
-                <form action="/thumbnail/${videoId}/regenerate" method="POST" class="thumbnail-form-inline">
-                    <input type="hidden" name="_csrf" value="${h(csrfToken)}">
-                    <button type="submit" class="btn btn-ghost btn-sm">Regenerate</button>
-                </form>
-            </div>
-        </section>` : ''}
 
         <!-- Download Confirmation Modal -->
         <div class="theme-modal-backdrop" id="downloadModal">
@@ -403,36 +652,6 @@ const commentsHtml = comments.length === 0
                         <span>Download Now</span>
                     </a>
                 </div>
-            </div>
-        </div>
-
-        <div class="comments-section">
-            <h2 class="comments-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-                Comments (${comments.length})
-            </h2>
-
-            <form action="/comment/${videoId}" method="POST" class="comment-form">
-                <input type="hidden" name="_csrf" value="${h(csrfToken)}">
-                <div class="comment-input-wrapper">
-                    <div class="comment-avatar">${renderAvatar(user, 'comment-avatar-img')}</div>
-                    <div class="comment-input-group">
-                        <textarea name="text" placeholder="Write a comment..." rows="2" required maxlength="2000" class="comment-input"></textarea>
-                        <button type="submit" class="btn btn-primary btn-comment">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                                <line x1="22" y1="2" x2="11" y2="13"/>
-                                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                            </svg>
-                            <span>Send</span>
-                        </button>
-                    </div>
-                </div>
-            </form>
-
-            <div class="comments-list">
-                ${commentsHtml}
             </div>
         </div>
     </main>
