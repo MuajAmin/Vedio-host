@@ -569,16 +569,13 @@ function streamFile(req, res, filePath, filename, stat) {
             return res.status(416).end();
         }
 
-        // Cap chunk size to 10MB — only 2 viewers so memory is fine;
-        // highWaterMark (256KB) controls actual RAM usage, not chunk size
-        const MAX_CHUNK = 10 * 1024 * 1024;
-        const requestedEnd = parsed.end;
-        const cappedEnd = Math.min(parsed.start + MAX_CHUNK - 1, requestedEnd);
-        const chunkSize = cappedEnd - parsed.start + 1;
+        // Let the browser decide chunk size via its Range header —
+        // highWaterMark (256KB) controls actual memory usage per read
+        const chunkSize = parsed.end - parsed.start + 1;
 
         res.writeHead(206, {
             ...baseHeaders,
-            'Content-Range': `bytes ${parsed.start}-${cappedEnd}/${fileSize}`,
+            'Content-Range': `bytes ${parsed.start}-${parsed.end}/${fileSize}`,
             'Content-Length': chunkSize
         });
 
@@ -588,7 +585,7 @@ function streamFile(req, res, filePath, filename, stat) {
 
         return pipeFile(res, filePath, {
             start: parsed.start,
-            end: cappedEnd,
+            end: parsed.end,
             highWaterMark: STREAM_HIGH_WATER_MARK
         });
     }
