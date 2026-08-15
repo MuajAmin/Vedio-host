@@ -76,13 +76,9 @@ function mimeTypeFor(filename) {
 }
 
 function isNewVideo(v) {
-    if (!v || !v.uploaded_at) return false;
-    const uploadTime = new Date(v.uploaded_at).getTime();
-    if (isNaN(uploadTime)) return false;
-    const now = Date.now();
-    const isWithin48h = (now - uploadTime) < (48 * 60 * 60 * 1000);
-    const isUnwatchedRecent = !v.position_seconds && (now - uploadTime) < (7 * 24 * 60 * 60 * 1000);
-    return isWithin48h || isUnwatchedRecent;
+    if (!v) return false;
+    // Video is NEW only if the user has never clicked/opened it (no progress record exists)
+    return !v.progress_updated_at && (v.position_seconds === null || v.position_seconds === undefined);
 }
 
 function formatDurationOrSize(v) {

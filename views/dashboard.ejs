@@ -48,14 +48,9 @@ function formatWatchPosition(video) {
 }
 
 function isNewVideo(v) {
-    if (!v || !v.uploaded_at) return false;
-    const uploadTime = new Date(v.uploaded_at).getTime();
-    if (isNaN(uploadTime)) return false;
-    const now = Date.now();
-    // Video is NEW if uploaded within the last 48 hours OR if unwatched & uploaded in last 7 days
-    const isWithin48h = (now - uploadTime) < (48 * 60 * 60 * 1000);
-    const isUnwatchedRecent = !v.position_seconds && (now - uploadTime) < (7 * 24 * 60 * 60 * 1000);
-    return isWithin48h || isUnwatchedRecent;
+    if (!v) return false;
+    // Video is NEW only if the user has never clicked/opened it (no progress record exists)
+    return !v.progress_updated_at && (v.position_seconds === null || v.position_seconds === undefined);
 }
 
 function renderVideoCard(v, extraClass) {

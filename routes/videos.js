@@ -222,6 +222,16 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
         'SELECT position_seconds, duration_seconds, updated_at FROM watch_progress WHERE video_id = ? AND user = ?'
     ).get(req.params.id, req.session.user) || null;
 
+    try {
+        db.prepare(
+            `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
+             VALUES (?, ?, 1, 0, CURRENT_TIMESTAMP)
+             ON CONFLICT(video_id, user) DO NOTHING`
+        ).run(req.params.id, req.session.user);
+    } catch (e) {
+        // ignore
+    }
+
     // Next/Previous video navigation (ordered by uploaded_at DESC)
     const prevVideo = db.prepare(
         'SELECT id FROM videos WHERE uploaded_at > ? ORDER BY uploaded_at ASC LIMIT 1'
@@ -264,17 +274,14 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
 
 // POST /rename/:id — Rename video title (any authenticated user)
 router.post('/rename/:id', isAuthenticated, (req, res) => {
-    const video = db.prepare('SELECT id FROM videos WHERE id = ?').get(req.params.id);
-    if (!video) {
-        return res.status(404).json({ error: 'Video not found.' });
-    }
-
-    const newTitle = String(req.body.title || '').trim().slice(0, MAX_TITLE_LENGTH);
+    const newTitle = String(req.body.title || '').trim().slice(0, 180);
     if (!newTitle) {
         return res.status(400).json({ error: 'Title cannot be empty.' });
     }
-
-    db.prepare('UPDATE videos SET title = ? WHERE id = ?').run(newTitle, req.params.id);
+    const result = db.prepare('UPDATE videos SET title = ? WHERE id = ?').run(newTitle, req.params.id);
+    if (result.changes === 0) {
+        return res.status(404).json({ error: 'Video not found.' });
+    }
     res.json({ success: true, title: newTitle });
 });
 
@@ -301,13 +308,8 @@ router.post('/delete/:id', isAuthenticated, (req, res) => {
 res.redirect('/dashboard');
 });
 
-// POST /watch-progress/:id - Save per-user playback position
+// POST /watch-progress/:id - Save or update playback position for current user
 router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
-    const video = db.prepare('SELECT id FROM videos WHERE id = ?').get(req.params.id);
-    if (!video) {
-        return res.status(404).json({ error: 'Video not found.' });
-    }
-
     const position = Number(req.body.position);
     const duration = Number(req.body.duration);
     const ended = req.body.ended === true || req.body.ended === 'true';
@@ -319,10 +321,21 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
     const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
     const nearEnd = safeDuration > 0 && position >= safeDuration - 10;
 
-    if (ended || position < 5 || nearEnd) {
-        db.prepare('DELETE FROM watch_progress WHERE video_id = ? AND user = ?').run(req.params.id, req.session.user);
-        return res.json({ success: true, cleared: true });
+    if (ended || nearEnd) {
+        // Video finished — keep progress record with safeDuration so it does NOT appear in "Continue Watching" but also never reverts to "NEW"
+        db.prepare(
+            `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
+             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(video_id, user) DO UPDATE SET
+                position_seconds = excluded.position_seconds,
+                duration_seconds = excluded.duration_seconds,
+                updated_at = CURRENT_TIMESTAMP`
+        ).run(req.params.id, req.session.user, Math.floor(safeDuration || position), Math.floor(safeDuration));
+        return res.json({ success: true, completed: true });
     }
+
+    // For very short watches (< 5s), save position as 1 so the video is marked "seen"
+    const savePosition = position < 5 ? 1 : Math.floor(position);
 
     db.prepare(
         `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
@@ -331,7 +344,7 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
             position_seconds = excluded.position_seconds,
             duration_seconds = excluded.duration_seconds,
             updated_at = CURRENT_TIMESTAMP`
-    ).run(req.params.id, req.session.user, Math.floor(position), Math.floor(safeDuration));
+    ).run(req.params.id, req.session.user, savePosition, Math.floor(safeDuration));
 
     res.json({ success: true });
 });
