@@ -5939,10 +5939,90 @@ h3,
         gap: 12px;
     }
 
+    /* ========================================
+       ANDROID / MOBILE ADMIN PAGE OVERHAUL
+       ======================================== */
+    .admin-page {
+        padding: 16px 12px calc(90px + env(safe-area-inset-bottom)) !important;
+        width: 100%;
+        max-width: 100% !important;
+        overflow-x: hidden;
+    }
+
+    .admin-page .dashboard-header-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 14px;
+        margin-bottom: 20px;
+    }
+
+    .admin-page .dashboard-header-bar form {
+        width: 100%;
+    }
+
+    .admin-page .dashboard-header-bar form .btn {
+        width: 100%;
+        justify-content: center;
+        padding: 12px 16px;
+        font-size: 0.88rem;
+        border-radius: 12px;
+    }
+
+    /* 2-Column Touch Grid for Admin Stat Cards */
+    .admin-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .admin-stat {
+        min-height: 78px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .admin-stat span {
+        font-size: 0.68rem;
+        letter-spacing: 0.04em;
+    }
+
+    .admin-stat strong {
+        font-size: 1.25rem;
+    }
+
+    .admin-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+
+    .admin-panel {
+        padding: 16px 12px;
+        border-radius: 16px;
+        margin-bottom: 16px;
+    }
+
+    .admin-panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        margin-bottom: 14px;
+    }
+
+    .admin-panel-header h2 {
+        font-size: 1.1rem;
+    }
+
     .import-queue-item,
     .admin-job-row {
         grid-template-columns: 1fr;
         align-items: stretch;
+        padding: 12px 10px;
+        border-radius: 10px;
+        gap: 8px;
     }
 
     .import-queue-actions {
@@ -5950,12 +6030,114 @@ h3,
         flex-wrap: wrap;
     }
 
-    .admin-stat-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Hajera Activity Panel on Android */
+    .hajera-activity-panel {
+        border-radius: 18px;
+        padding: 16px 12px;
+        margin-bottom: 20px;
     }
 
-    .admin-grid {
-        grid-template-columns: 1fr;
+    .hajera-panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding-bottom: 12px;
+    }
+
+    .hajera-title-group {
+        width: 100%;
+        gap: 10px;
+    }
+
+    .hajera-header-avatar {
+        width: 36px;
+        height: 36px;
+    }
+
+    .hajera-title-group h2 {
+        font-size: 1.05rem;
+    }
+
+    .hajera-panel-subtitle {
+        font-size: 0.74rem;
+    }
+
+    .hajera-stat-pills {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        flex-wrap: nowrap;
+    }
+
+    .hajera-stat-pills::-webkit-scrollbar {
+        display: none;
+    }
+
+    .hajera-pill {
+        flex-shrink: 0;
+        padding: 4px 10px;
+        font-size: 0.72rem;
+    }
+
+    /* Table Wrappers on Android */
+    .admin-table-wrap {
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        background: rgba(0, 0, 0, 0.2);
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        margin: 0 -2px;
+        padding: 0 2px;
+    }
+
+    .admin-table {
+        min-width: 560px;
+    }
+
+    .admin-table th,
+    .admin-table td {
+        padding: 10px 8px;
+        font-size: 0.8rem;
+    }
+
+    .admin-table th {
+        font-size: 0.68rem;
+    }
+
+    .admin-video-link {
+        font-size: 0.82rem;
+    }
+
+    .cell-video-thumb {
+        width: 52px;
+    }
+
+    .admin-table-thumb-link {
+        width: 46px;
+    }
+
+    .activity-progress-bar {
+        min-width: 45px;
+        height: 5px;
+    }
+
+    .activity-progress-text {
+        font-size: 0.7rem;
+    }
+
+    .activity-time-text {
+        font-size: 0.72rem;
+    }
+
+    .activity-badge {
+        font-size: 0.66rem;
+        padding: 2px 6px;
+    }
+
+    .activity-relative-time {
+        font-size: 0.72rem;
     }
 
     .thumbnail-manager {
