@@ -5759,6 +5759,232 @@ h3,
     max-width: 100%;
 }
 
+/* Mobile-first: Force single-column stacked layout */
+.watch-layout-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+}
+
+.watch-side-col {
+    position: static;
+}
+
+.suggestions-list {
+    max-height: none;
+}
+
+/* Mobile suggestions panel compact */
+.suggestions-panel {
+    padding: 16px 12px;
+    border-radius: var(--radius-lg);
+}
+
+.suggestions-heading {
+    font-size: 1rem;
+}
+
+.suggestion-card {
+    padding: 6px;
+    gap: 10px;
+    border-radius: 10px;
+}
+
+.suggestion-thumb-wrap {
+    width: 120px;
+    min-width: 120px;
+    border-radius: 8px;
+}
+
+.suggestion-title {
+    font-size: 0.84rem;
+    -webkit-line-clamp: 2;
+}
+
+.suggestion-author {
+    font-size: 0.72rem;
+}
+
+.suggestion-meta {
+    font-size: 0.68rem;
+}
+
+.suggestion-duration {
+    font-size: 0.62rem;
+    padding: 1px 4px;
+}
+
+/* Mobile autoplay toggle */
+.autoplay-toggle-wrapper {
+    padding: 3px 8px;
+    border-radius: 14px;
+}
+
+.autoplay-label {
+    font-size: 0.68rem;
+}
+
+/* Mobile comment section */
+.comments-section {
+    padding: 16px 12px;
+    border-radius: var(--radius-lg);
+    margin-top: 16px;
+}
+
+.comments-title {
+    font-size: 1.05rem;
+    gap: 8px;
+}
+
+.comments-title svg {
+    width: 18px;
+    height: 18px;
+}
+
+.comment-form {
+    margin-bottom: 20px;
+}
+
+.comment-input-wrapper {
+    gap: 10px;
+}
+
+.comment-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 0.78rem;
+}
+
+.comment-input-group {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+}
+
+.comment-input {
+    min-height: 36px;
+    font-size: 0.92rem;
+}
+
+.comment-form-actions {
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 8px;
+}
+
+.comment-emoji-bar {
+    gap: 2px;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.emoji-chip {
+    padding: 4px 5px;
+    font-size: 0.92rem;
+    border-radius: 6px;
+}
+
+.comment-btn-group {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+}
+
+.comment-item {
+    padding: 12px 10px;
+    gap: 10px;
+    border-radius: var(--radius-md);
+}
+
+.comment-header {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+}
+
+.comment-author {
+    font-size: 0.85rem;
+}
+
+.comment-author-badge {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+}
+
+.comment-text {
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.comment-actions-bar {
+    gap: 8px;
+}
+
+.comment-action-btn {
+    font-size: 0.75rem;
+    padding: 3px 6px;
+}
+
+.no-comments-box {
+    padding: 30px 16px;
+}
+
+.no-comments-title {
+    font-size: 1rem;
+}
+
+.no-comments-subtitle {
+    font-size: 0.82rem;
+}
+
+/* Mobile chip filters */
+.chip-btn {
+    padding: 4px 10px;
+    font-size: 0.72rem;
+    border-radius: 10px;
+}
+
+/* Mobile autoplay toast at bottom */
+.autoplay-toast {
+    left: 12px;
+    right: 12px;
+    bottom: 70px;
+}
+
+.autoplay-toast-content {
+    max-width: none;
+    padding: 10px 12px;
+    gap: 10px;
+    border-radius: 12px;
+}
+
+.autoplay-toast-spinner {
+    width: 32px;
+    height: 32px;
+}
+
+.autoplay-toast-subtitle {
+    font-size: 0.68rem;
+}
+
+.autoplay-toast-title {
+    font-size: 0.82rem;
+}
+
+.autoplay-toast-actions .btn {
+    padding: 5px 10px;
+    font-size: 0.78rem;
+}
+
+/* Video uploader bar stacked on mobile */
+.video-uploader-bar {
+    flex-direction: column;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.video-uploader-meta-line {
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
 .btn-comment {
     width: 100%;
     justify-content: center;
@@ -5783,270 +6009,7 @@ h3,
     font-size: 1.1rem;
 }
 
-/* ========================================
-   DESKTOP RESTORE (min-width: 769px)
-   ======================================== */
-@media (min-width: 769px) {
-    .navbar {
-        padding: 16px 36px;
-        background: rgba(10, 10, 16, 0.75);
-        backdrop-filter: blur(32px) saturate(1.6);
-        -webkit-backdrop-filter: blur(32px) saturate(1.6);
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), inset 0 -1px 0 var(--accent-gold-glow);
-    }
-
-    .desktop-only-logout {
-        display: flex !important;
-    }
-
-    .btn-upload {
-        display: inline-flex;
-    }
-
-    .btn-text {
-        display: inline;
-    }
-
-    #btnTheaterMode {
-        display: inline-flex;
-    }
-
-    .badge-role {
-        display: inline;
-    }
-
-    .ambient-background {
-        display: block;
-    }
-
-    .mobile-bottom-bar {
-        display: none;
-    }
-
-    .main-content {
-        padding: 36px 36px 80px;
-    }
-
-    .video-grid {
-        grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-        gap: 24px;
-    }
-
-    .video-card {
-        flex-direction: column;
-        min-height: auto;
-        border-radius: var(--radius-lg);
-        backdrop-filter: blur(16px);
-        animation: card-stagger-in 0.6s var(--ease-out) both;
-    }
-
-    .video-card::before,
-    .video-card::after {
-        display: block;
-    }
-
-    .video-card:hover {
-        transform: translateY(-8px) scale(1.02);
-        border-color: var(--border-accent);
-        box-shadow: var(--shadow-md), var(--shadow-glow), 0 0 60px var(--accent-gold-glow);
-        background: var(--bg-card-hover);
-    }
-
-    .video-card:hover .card-title {
-        color: var(--accent-gold-bright);
-    }
-
-    .video-card:hover .thumb-img {
-        transform: scale(1.06);
-    }
-
-    .video-card:active {
-        transform: scale(0.97);
-        opacity: 1;
-    }
-
-    .card-thumbnail {
-        flex: none;
-        width: 100%;
-        min-height: auto;
-        aspect-ratio: 16 / 9;
-    }
-
-    .card-info {
-        padding: 18px 20px;
-        justify-content: space-between;
-    }
-
-    .card-title {
-        font-size: 1.05rem;
-        margin-bottom: 12px;
-        -webkit-line-clamp: 2;
-    }
-
-    .card-duration {
-        right: 12px;
-        bottom: 12px;
-        padding: 4px 8px;
-        font-size: 0.72rem;
-    }
-
-    .card-badge {
-        top: 12px;
-        left: 12px;
-    }
-
-    .play-overlay {
-        width: 58px;
-        height: 58px;
-    }
-
-    .play-overlay svg {
-        width: 28px;
-        height: 28px;
-    }
-
-    .dashboard-header-bar {
-        flex-direction: row;
-        align-items: flex-end;
-        gap: 24px;
-        margin-bottom: 38px;
-    }
-
-    .search-box {
-        width: auto;
-        min-width: 280px;
-    }
-
-    .video-info-header {
-        flex-direction: row;
-        gap: 24px;
-    }
-
-    .video-uploader-bar {
-        flex-direction: row;
-        align-items: center;
-        gap: 24px;
-    }
-
-    .video-action-buttons {
-        width: auto;
-    }
-
-    .video-action-buttons .btn {
-        padding: 10px 18px;
-        font-size: 0.88rem;
-    }
-
-    .video-title {
-        font-size: 1.8rem;
-    }
-
-    .vp-volume-slider-wrap {
-        display: block;
-    }
-
-    .vp-cinema {
-        border-radius: var(--radius-xl);
-        margin-bottom: 24px;
-    }
-
-    .watch-page {
-        max-width: 1460px;
-    }
-
-    .btn-comment {
-        width: auto;
-    }
-
-    .theme-modal-backdrop {
-        align-items: center;
-        padding: 24px;
-    }
-
-    .theme-modal {
-        max-width: 440px;
-        border-radius: var(--radius-lg);
-        padding: 24px;
-        transform: none;
-    }
-
-    .title-edit-btn {
-        opacity: 0;
-    }
-
-    .video-title-wrap:hover .title-edit-btn {
-        opacity: 1;
-    }
-
-    .title-edit-input {
-        font-size: 1.4rem;
-    }
-}
-
-@media (max-width: 1080px) {
-    .watch-layout-grid {
-        grid-template-columns: 1fr;
-        gap: 24px;
-    }
-
-    .watch-side-col {
-        position: static;
-    }
-
-    .suggestions-list {
-        max-height: none;
-    }
-}
-
-@media (max-width: 600px) {
-    .suggestions-panel {
-        padding: 16px 12px;
-    }
-
-    .suggestion-thumb-wrap {
-        width: 115px;
-        min-width: 115px;
-    }
-
-    .suggestion-title {
-        font-size: 0.82rem;
-    }
-
-    .comments-section {
-        padding: 18px 14px;
-    }
-
-    .comment-item {
-        padding: 12px 10px;
-        gap: 10px;
-    }
-
-    .comment-avatar {
-        width: 36px;
-        height: 36px;
-        font-size: 0.8rem;
-    }
-
-    .comment-emoji-bar {
-        gap: 2px;
-    }
-
-    .emoji-chip {
-        padding: 3px 4px;
-        font-size: 0.9rem;
-    }
-
-    .autoplay-toast {
-        left: 16px;
-        right: 16px;
-        bottom: 74px;
-    }
-
-    .autoplay-toast-content {
-        max-width: none;
-        padding: 10px 14px;
-    }
-}
+/* (Legacy DESKTOP RESTORE block removed — handled above in consolidated min-width:769px) */
 
 @media (prefers-reduced-motion: reduce) {
     html {
