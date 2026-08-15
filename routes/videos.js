@@ -623,6 +623,8 @@ function pipeFile(res, filePath, options) {
     return stream.pipe(res);
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 async function handleStream(req, res) {
     const video = db.prepare('SELECT filename FROM videos WHERE id = ? OR filename = ?').get(req.params.videoKey, req.params.videoKey);
 
@@ -642,6 +644,17 @@ async function handleStream(req, res) {
         return res.status(404).send('File not found');
     }
 
+    // Production: Nginx serves video directly via X-Accel-Redirect (zero Node.js overhead)
+    if (isProduction) {
+        res.setHeader('X-Accel-Redirect', `/internal-videos/${video.filename}`);
+        res.setHeader('Content-Type', getMimeType(video.filename));
+        res.setHeader('Content-Disposition', formatContentDisposition(video.filename, 'inline'));
+        res.setHeader('Cache-Control', 'private, max-age=86400, no-transform');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        return res.end();
+    }
+
+    // Dev: Node.js streams the file directly
     return streamFile(req, res, filePath, video.filename, stat);
 }
 
@@ -675,6 +688,17 @@ router.get('/download/:id', isAuthenticated, async (req, res) => {
         rawName += ext;
     }
 
+    // Production: Nginx serves file directly via X-Accel-Redirect
+    if (isProduction) {
+        res.setHeader('X-Accel-Redirect', `/internal-videos/${video.filename}`);
+        res.setHeader('Content-Type', getMimeType(video.filename));
+        res.setHeader('Content-Disposition', formatContentDisposition(rawName, 'attachment'));
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        return res.end();
+    }
+
+    // Dev: Node.js streams the file
     res.writeHead(200, {
         'Content-Type': getMimeType(video.filename),
         'Content-Disposition': formatContentDisposition(rawName, 'attachment'),
