@@ -68,16 +68,28 @@ const importJobs = (stats && Array.isArray(stats.importJobs)) ? stats.importJobs
 const videoList = (stats && Array.isArray(stats.videos)) ? stats.videos : [];
 const activeJobs = importJobs.filter(job => ['queued', 'starting', 'downloading'].includes(job.status));
 const failedJobs = importJobs.filter(job => ['error', 'canceled'].includes(job.status)).slice(0, 8);
-const recentVideos = videoList.slice(0, 10);
+const recentVideos = videoList.slice(0, 12);
 const hajeraStats = (stats && stats.hajeraStats) ? stats.hajeraStats : { totalWatched: 0, completedCount: 0, inProgressCount: 0, openedCount: 0, recentActivity: [] };
 const hajeraActivityList = hajeraStats.recentActivity || [];
 
+const totalVideos = hajeraStats.totalLibrary || videoList.length || 0;
+const watchedCount = hajeraStats.totalWatched || 0;
+const completedCount = hajeraStats.completedCount || 0;
+const inProgressCount = hajeraStats.inProgressCount || 0;
+const unwatchedCount = hajeraStats.unwatchedCount || 0;
+const openedCount = hajeraStats.openedCount || 0;
+const overallPercent = totalVideos > 0 ? Math.round((watchedCount / totalVideos) * 100) : 0;
+
+const lastActiveItem = hajeraActivityList.find(item => item.hajera_watched_at || item.updated_at);
+const lastActiveTime = lastActiveItem ? (lastActiveItem.hajera_watched_at || lastActiveItem.updated_at) : null;
+const lastActiveText = lastActiveTime ? timeAgo(lastActiveTime) : 'No activity yet';
+
 const cleanupHtml = (typeof cleanupResult !== 'undefined' && cleanupResult)
-    ? `<div class="alert admin-alert"><span>${h(cleanupResult.deleted)} files deleted, ${h(formatBytes(cleanupResult.bytesFreed))} freed.</span></div>`
+    ? `<div class="alert admin-alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg><span>${h(cleanupResult.deleted)} files cleaned up, ${h(formatBytes(cleanupResult.bytesFreed))} space freed.</span></div>`
     : '';
 
 const hajeraCardsHtml = hajeraActivityList.length === 0
-    ? `<div class="hajera-empty-card">
+    ? `<div class="hajera-empty-card" id="hajeraEmptyState">
         <div class="hajera-empty-icon-wrap">
             <div class="hajera-empty-icon">💖</div>
         </div>
@@ -92,38 +104,58 @@ const hajeraCardsHtml = hajeraActivityList.length === 0
         const percent = (isWatched && dur > 0) ? Math.min(100, Math.round((pos / dur) * 100)) : (isWatched && pos > 0 ? 100 : 0);
         const isCompleted = isWatched && dur > 0 && pos >= dur - 15;
         const isInProgress = isWatched && pos >= 10 && !isCompleted;
+        const isOpened = isWatched && pos < 10 && !isCompleted;
         
+        let statusKey = 'unwatched';
         let statusBadge = '';
+        let statusIconCorner = '';
+        
         if (!isWatched) {
+            statusKey = 'unwatched';
             statusBadge = '<span class="activity-badge badge-unwatched"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Unwatched</span>';
+            statusIconCorner = '<span class="card-thumb-status-dot dot-unwatched" title="Not seen yet"></span>';
         } else if (isCompleted) {
+            statusKey = 'completed';
             statusBadge = '<span class="activity-badge badge-completed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11"><polyline points="20 6 9 17 4 12"/></svg> Completed</span>';
+            statusIconCorner = '<span class="card-thumb-status-dot dot-completed" title="Completed"></span>';
         } else if (isInProgress) {
+            statusKey = 'watching';
             statusBadge = `<span class="activity-badge badge-progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Watching (${percent}%)</span>`;
+            statusIconCorner = '<span class="card-thumb-status-dot dot-watching" title="Currently watching"></span>';
         } else {
+            statusKey = 'opened';
             statusBadge = '<span class="activity-badge badge-opened"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Opened</span>';
+            statusIconCorner = '<span class="card-thumb-status-dot dot-opened" title="Opened"></span>';
         }
 
         const thumbImg = item.thumbnail
             ? `<img src="/thumbnails/${h(item.thumbnail)}" alt="${h(item.title)}" class="hajera-card-thumb-img" loading="lazy" />`
             : '<div class="hajera-card-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><polygon points="6,4 20,12 6,20"/></svg></div>';
 
-        return `<a href="/watch/${encodeURIComponent(item.video_id)}" class="hajera-mobile-card ${isWatched ? 'is-watched-card' : 'is-unwatched-card'}">
-            <div class="hajera-mobile-card-thumb">
+        const safeTitle = String(item.title || '');
+        const durationText = item.formatted_duration || formatSeconds(dur);
+        const timeSpentText = isWatched ? `${formatSeconds(pos)} / ${durationText}` : durationText;
+
+        return `<a href="/watch/${encodeURIComponent(item.video_id)}" 
+            class="hajera-android-card status-${statusKey} ${isWatched ? 'is-watched' : 'is-unwatched'}" 
+            data-status="${statusKey}" 
+            data-title="${h(safeTitle.toLowerCase())}">
+            <div class="hajera-card-thumb-box">
                 ${thumbImg}
-                <span class="hajera-thumb-duration">${h(item.formatted_duration || formatSeconds(dur))}</span>
+                ${statusIconCorner}
+                <span class="hajera-thumb-duration">${h(durationText)}</span>
             </div>
-            <div class="hajera-mobile-card-details">
-                <h4 class="hajera-mobile-card-title">${h(item.title)}</h4>
-                <div class="hajera-mobile-card-meta">
-                    ${statusBadge}
-                    <span class="hajera-mobile-card-time">${isWatched ? h(timeAgo(watchedTime)) : 'Not seen yet'}</span>
+            <div class="hajera-card-content">
+                <div class="hajera-card-top-row">
+                    <h4 class="hajera-card-title">${h(safeTitle)}</h4>
+                    <span class="hajera-card-rel-time">${isWatched ? h(timeAgo(watchedTime)) : 'Not seen'}</span>
                 </div>
-                <div class="hajera-mobile-progress-wrap">
-                    <div class="activity-progress-bar">
-                        <div class="activity-progress-fill ${isCompleted ? 'is-complete' : ''} ${!isWatched ? 'is-unwatched-fill' : ''}" style="width: ${percent}%;"></div>
-                    </div>
-                    <span class="hajera-mobile-time-spent">${isWatched ? `${h(formatSeconds(pos))} / ${h(item.formatted_duration || formatSeconds(dur))}` : (item.formatted_duration || '-')}</span>
+                <div class="hajera-card-meta-row">
+                    ${statusBadge}
+                    <span class="hajera-card-time-info">${h(timeSpentText)}</span>
+                </div>
+                <div class="hajera-card-progress-track">
+                    <div class="hajera-card-progress-fill ${isCompleted ? 'fill-completed' : (isInProgress ? 'fill-watching' : '')}" style="width: ${percent}%;"></div>
                 </div>
             </div>
         </a>`;
@@ -139,15 +171,21 @@ const hajeraRows = hajeraActivityList.length === 0
         const percent = (isWatched && dur > 0) ? Math.min(100, Math.round((pos / dur) * 100)) : (isWatched && pos > 0 ? 100 : 0);
         const isCompleted = isWatched && dur > 0 && pos >= dur - 15;
         const isInProgress = isWatched && pos >= 10 && !isCompleted;
+        const isOpened = isWatched && pos < 10 && !isCompleted;
         
+        let statusKey = 'unwatched';
         let statusBadge = '';
         if (!isWatched) {
+            statusKey = 'unwatched';
             statusBadge = '<span class="activity-badge badge-unwatched"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Unwatched</span>';
         } else if (isCompleted) {
+            statusKey = 'completed';
             statusBadge = '<span class="activity-badge badge-completed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg> Completed</span>';
         } else if (isInProgress) {
+            statusKey = 'watching';
             statusBadge = `<span class="activity-badge badge-progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Watching (${percent}%)</span>`;
         } else {
+            statusKey = 'opened';
             statusBadge = '<span class="activity-badge badge-opened"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Opened</span>';
         }
 
@@ -156,7 +194,7 @@ const hajeraRows = hajeraActivityList.length === 0
             : '<div class="admin-table-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><polygon points="6,4 20,12 6,20"/></svg></div>';
 
         return `
-        <tr class="${isWatched ? 'row-watched' : 'row-unwatched'}">
+        <tr class="${isWatched ? 'row-watched' : 'row-unwatched'}" data-status="${statusKey}" data-title="${h(String(item.title || '').toLowerCase())}">
             <td class="cell-video-thumb">
                 <a href="/watch/${encodeURIComponent(item.video_id)}" class="admin-table-thumb-link">
                     ${thumbHtml}
@@ -188,12 +226,15 @@ const hajeraRows = hajeraActivityList.length === 0
     `;}).join('');
 
 const jobRows = activeJobs.length === 0
-    ? '<div class="admin-empty">No active import jobs.</div>'
+    ? '<div class="admin-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="20 6 9 17 4 12"/></svg><span>No active import jobs running.</span></div>'
     : activeJobs.map(job => `
         <div class="admin-job-row">
-            <div>
-                <strong>${h(job.title || 'Import job')}</strong>
-                <span>${h(job.status)}${job.queuePosition ? ' - queue #' + h(job.queuePosition) : ''}</span>
+            <div class="admin-job-top">
+                <div class="admin-job-title-box">
+                    <span class="job-status-pill status-${h(job.status)}">${h(job.status)}</span>
+                    <strong>${h(job.title || 'Import job')}</strong>
+                </div>
+                ${job.queuePosition ? `<span class="job-queue-tag">#${h(job.queuePosition)} in queue</span>` : ''}
             </div>
             <div class="admin-job-progress">
                 <div class="admin-mini-bar"><span style="width:${h(job.progress || 0)}%"></span></div>
@@ -203,19 +244,20 @@ const jobRows = activeJobs.length === 0
     `).join('');
 
 const failedRows = failedJobs.length === 0
-    ? '<div class="admin-empty">No failed imports in memory.</div>'
+    ? '<div class="admin-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span>No failed imports in record.</span></div>'
     : failedJobs.map(job => `
         <div class="admin-job-row failed">
-            <div>
+            <div class="admin-job-top">
                 <strong>${h(job.title || job.url || 'Import job')}</strong>
-                <span>${h(job.error || job.status)}</span>
+                <span class="job-status-pill status-error">Failed</span>
             </div>
-            <em>${h(formatDate(job.finishedAt || job.createdAt))}</em>
+            <div class="admin-job-err-msg">${h(job.error || job.status)}</div>
+            <em class="admin-job-timestamp">${h(formatDate(job.finishedAt || job.createdAt))}</em>
         </div>
     `).join('');
 
 const videoCardsHtml = recentVideos.length === 0
-    ? '<div class="admin-empty">No videos uploaded yet.</div>'
+    ? '<div class="admin-empty"><span>No videos uploaded yet.</span></div>'
     : recentVideos.map(video => {
         const uploader = video.uploaded_by || 'muaj';
         const uploaderName = uploader === 'hajera' ? 'Hajera' : (uploader === 'muaj' ? 'Muaj' : uploader);
@@ -223,140 +265,152 @@ const videoCardsHtml = recentVideos.length === 0
             ? `<img src="/thumbnails/${h(video.thumbnail)}" alt="${h(video.title)}" class="admin-video-card-thumb-img" loading="lazy" />`
             : '<div class="admin-video-card-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><polygon points="6,4 20,12 6,20"/></svg></div>';
         return `
-        <a href="/watch/${encodeURIComponent(video.id)}" class="admin-video-mobile-card">
-            <div class="admin-video-card-thumb">
+        <a href="/watch/${encodeURIComponent(video.id)}" class="admin-video-android-card">
+            <div class="admin-video-thumb-wrap">
                 ${thumbHtml}
-                <span class="admin-video-card-dur">${h(video.duration || '-')}</span>
+                <span class="admin-video-dur-pill">${h(video.duration || '-')}</span>
             </div>
-            <div class="admin-video-card-info">
-                <h4 class="admin-video-card-title">${h(video.title)}</h4>
-                <div class="admin-video-card-meta">
-                    <div class="admin-user-cell"><div class="badge-avatar">${renderAvatar(uploader, 'admin-row-avatar')}</div><span>${h(uploaderName)}</span></div>
-                    <span class="admin-video-pill">${h(formatBytes(video.size))}</span>
-                    <span class="admin-video-pill quality-pill">${h(video.import_quality || 'HD')}</span>
-                    <span class="admin-video-time">${h(timeAgo(video.uploaded_at))}</span>
+            <div class="admin-video-body">
+                <h4 class="admin-video-title">${h(video.title)}</h4>
+                <div class="admin-video-meta-tags">
+                    <div class="admin-user-cell">
+                        <div class="badge-avatar">${renderAvatar(uploader, 'admin-row-avatar')}</div>
+                        <span>${h(uploaderName)}</span>
+                    </div>
+                    <span class="admin-video-tag">${h(formatBytes(video.size))}</span>
+                    <span class="admin-video-tag quality-tag">${h(video.import_quality || 'HD')}</span>
+                    <span class="admin-video-time-tag">${h(timeAgo(video.uploaded_at))}</span>
                 </div>
             </div>
         </a>
     `;}).join('');
 
 const videoRows = recentVideos.length === 0
-    ? '<tr><td colspan="6">No videos yet.</td></tr>'
+    ? '<tr><td colspan="6" class="admin-empty-table">No videos in library yet.</td></tr>'
     : recentVideos.map(video => {
         const uploader = video.uploaded_by || 'muaj';
         const uploaderName = uploader === 'hajera' ? 'Hajera' : (uploader === 'muaj' ? 'Muaj' : uploader);
         return `
         <tr>
-            <td><a href="/watch/${encodeURIComponent(video.id)}">${h(video.title)}</a></td>
+            <td><a href="/watch/${encodeURIComponent(video.id)}" class="admin-table-video-title"><strong>${h(video.title)}</strong></a></td>
             <td><div class="admin-user-cell"><div class="badge-avatar">${renderAvatar(uploader, 'admin-row-avatar')}</div><span>${h(uploaderName)}</span></div></td>
-            <td>${h(formatBytes(video.size))}</td>
-            <td>${h(video.duration || '-')}</td>
-            <td>${h(video.import_quality || 'Upload')}</td>
-            <td>${h(formatDate(video.uploaded_at))}</td>
+            <td><span class="admin-table-pill">${h(formatBytes(video.size))}</span></td>
+            <td><span class="admin-table-dur">${h(video.duration || '-')}</span></td>
+            <td><span class="admin-table-quality">${h(video.import_quality || 'Upload')}</span></td>
+            <td><span class="activity-relative-time" title="${h(formatDate(video.uploaded_at))}">${h(timeAgo(video.uploaded_at))}</span></td>
         </tr>
     `;}).join('');
 %>
-<%- include('layout', { pageTitle: 'Admin', body: `
-<div class="app-container">
+<%- include('layout', { pageTitle: 'Admin Control Center', body: `
+<div class="app-container admin-app-container">
     <div class="ambient-background">
         <div class="ambient-orb orb-1"></div>
         <div class="ambient-orb orb-2"></div>
     </div>
 
-    <nav class="navbar">
-        <div class="nav-left">
-            <a href="/dashboard" class="nav-logo">
-                <div class="logo-icon-wrapper">
-                    <svg viewBox="0 0 48 48" fill="none" width="24" height="24">
-                        <rect x="4" y="8" width="40" height="32" rx="6" stroke="currentColor" stroke-width="2.5"/>
-                        <polygon points="20,16 34,24 20,32" fill="currentColor"/>
-                    </svg>
-                </div>
-                <span>Video<em>Host</em></span>
-            </a>
-        </div>
-        <div class="nav-right">
-            <a href="/dashboard" class="btn btn-ghost">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+    <!-- Android Native App Bar -->
+    <header class="android-app-bar">
+        <div class="app-bar-left">
+            <a href="/dashboard" class="app-bar-back-btn" title="Back to Library">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
                     <line x1="19" y1="12" x2="5" y2="12"/>
                     <polyline points="12 19 5 12 12 5"/>
                 </svg>
-                <span>Library</span>
             </a>
-            <div class="user-badge badge-admin user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture">
+            <div class="app-bar-title-wrap">
+                <span class="app-bar-badge">Admin Panel</span>
+                <h1 class="app-bar-title">Control Center</h1>
+            </div>
+        </div>
+        <div class="app-bar-actions">
+            <button type="button" class="btn-app-bar-action" id="themeSwitcherNavBtn" title="Palette Themes">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
+                </svg>
+            </button>
+            <div class="user-badge badge-admin user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Change Avatar">
                 <div class="badge-avatar">${renderAvatar(user, 'nav-avatar')}</div>
                 <span class="user-name">Muaj</span>
             </div>
             <form action="/logout" method="POST" class="nav-form desktop-only-logout">
                 <input type="hidden" name="_csrf" value="${h(csrfToken)}">
-                <button type="submit" class="btn btn-ghost">
-                    <span>Logout</span>
+                <button type="submit" class="btn btn-ghost" title="Logout">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
                 </button>
             </form>
         </div>
-    </nav>
+    </header>
 
-    <main class="main-content admin-page">
-        <div class="dashboard-header-bar admin-header-bar">
-            <div class="header-titles">
-                <span class="header-pill">Admin Control</span>
-                <h1>System Dashboard</h1>
-                <p class="subtitle">${h(videoList.length)} videos, ${h(formatBytes(stats.storageBytes || 0))} stored</p>
+    <main class="main-content admin-main-content">
+        <!-- Status & Cleanup Toolbar Banner -->
+        <div class="admin-quick-toolbar">
+            <div class="quick-toolbar-info">
+                <span class="live-dot-indicator"></span>
+                <span><strong>${h(videoList.length)}</strong> Videos stored • <strong>${h(formatBytes(stats.storageBytes || 0))}</strong> Total</span>
             </div>
-            <form action="/admin/cleanup" method="POST" data-confirm="Delete orphan upload files that are not in the database?">
+            <form action="/admin/cleanup" method="POST" data-confirm="Clean up orphan upload files that are not referenced in the database?">
                 <input type="hidden" name="_csrf" value="${h(csrfToken)}">
-                <button type="submit" class="btn btn-danger btn-cleanup-action">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <button type="submit" class="btn-cleanup-compact" title="Remove unreferenced files">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                         <path d="M3 6h18"/>
                         <path d="M8 6V4h8v2"/>
                         <path d="M19 6l-1 14H6L5 6"/>
                     </svg>
-                    <span>Cleanup Orphans</span>
+                    <span>Cleanup</span>
                 </button>
             </form>
         </div>
 
         ${cleanupHtml}
 
-        <section class="admin-stat-grid">
-            <div class="admin-stat stat-videos">
-                <div class="stat-icon-wrap icon-videos">
+        <!-- 6-Tile Android Stat Grid -->
+        <section class="admin-stat-tiles-grid">
+            <div class="stat-tile tile-videos">
+                <div class="stat-tile-icon icon-cyan">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                         <polygon points="23 7 16 12 23 17 23 7"/>
                         <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                     </svg>
                 </div>
-                <div class="stat-text-group">
-                    <span>Videos</span>
-                    <strong>${h(videoList.length)}</strong>
+                <div class="stat-tile-info">
+                    <span class="stat-tile-label">Videos</span>
+                    <strong class="stat-tile-val">${h(videoList.length)}</strong>
                 </div>
             </div>
-            <div class="admin-stat stat-storage">
-                <div class="stat-icon-wrap icon-storage">
+
+            <div class="stat-tile tile-storage">
+                <div class="stat-tile-icon icon-amber">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                         <ellipse cx="12" cy="5" rx="9" ry="3"/>
                         <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
                         <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
                     </svg>
                 </div>
-                <div class="stat-text-group">
-                    <span>Storage</span>
-                    <strong>${h(formatBytes(stats.storageBytes || 0))}</strong>
+                <div class="stat-tile-info">
+                    <span class="stat-tile-label">Storage</span>
+                    <strong class="stat-tile-val">${h(formatBytes(stats.storageBytes || 0))}</strong>
                 </div>
             </div>
-            <div class="admin-stat stat-comments">
-                <div class="stat-icon-wrap icon-comments">
+
+            <div class="stat-tile tile-comments">
+                <div class="stat-tile-icon icon-emerald">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                     </svg>
                 </div>
-                <div class="stat-text-group">
-                    <span>Comments</span>
-                    <strong>${h(stats.commentsCount || 0)}</strong>
+                <div class="stat-tile-info">
+                    <span class="stat-tile-label">Comments</span>
+                    <strong class="stat-tile-val">${h(stats.commentsCount || 0)}</strong>
                 </div>
             </div>
-            <div class="admin-stat stat-sessions">
-                <div class="stat-icon-wrap icon-sessions">
+
+            <div class="stat-tile tile-sessions">
+                <div class="stat-tile-icon icon-violet">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                         <circle cx="9" cy="7" r="4"/>
@@ -364,90 +418,156 @@ const videoRows = recentVideos.length === 0
                         <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                     </svg>
                 </div>
-                <div class="stat-text-group">
-                    <span>Sessions</span>
-                    <strong>${h(stats.sessionCount || 0)}</strong>
+                <div class="stat-tile-info">
+                    <span class="stat-tile-label">Sessions</span>
+                    <strong class="stat-tile-val">${h(stats.sessionCount || 0)}</strong>
                 </div>
             </div>
-            <div class="admin-stat stat-progress">
-                <div class="stat-icon-wrap icon-progress">
+
+            <div class="stat-tile tile-progress">
+                <div class="stat-tile-icon icon-rose">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                         <circle cx="12" cy="12" r="10"/>
                         <polyline points="12 6 12 12 16 14"/>
                     </svg>
                 </div>
-                <div class="stat-text-group">
-                    <span>Watch Activity</span>
-                    <strong>${h(stats.progressCount || 0)}</strong>
+                <div class="stat-tile-info">
+                    <span class="stat-tile-label">Watch Events</span>
+                    <strong class="stat-tile-val">${h(stats.progressCount || 0)}</strong>
                 </div>
             </div>
-            <div class="admin-stat stat-orphans">
-                <div class="stat-icon-wrap icon-orphans">
+
+            <div class="stat-tile tile-orphans">
+                <div class="stat-tile-icon icon-coral">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                         <path d="M3 6h18"/>
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                     </svg>
                 </div>
-                <div class="stat-text-group">
-                    <span>Orphan Files</span>
-                    <strong>${h((stats.orphanVideos ? stats.orphanVideos.length : 0) + (stats.orphanThumbnails ? stats.orphanThumbnails.length : 0))}</strong>
+                <div class="stat-tile-info">
+                    <span class="stat-tile-label">Orphan Files</span>
+                    <strong class="stat-tile-val">${h((stats.orphanVideos ? stats.orphanVideos.length : 0) + (stats.orphanThumbnails ? stats.orphanThumbnails.length : 0))}</strong>
                 </div>
             </div>
         </section>
 
-        <section class="admin-grid">
-            <div class="admin-panel">
-                <div class="admin-panel-header">
-                    <h2>Import Queue</h2>
-                    <span>${h(activeJobs.length)} active</span>
+        <!-- HAJERA'S WATCH ACTIVITY SHOWCASE SECTION -->
+        <section class="admin-section-card hajera-tracker-section">
+            <!-- Hajera Hero Engagement Banner -->
+            <div class="hajera-hero-widget">
+                <div class="hajera-hero-bg-glow"></div>
+                <div class="hajera-hero-main">
+                    <div class="hajera-hero-avatar-wrap">
+                        <div class="hajera-hero-avatar">
+                            ${renderAvatar('hajera', 'hajera-avatar-hero')}
+                        </div>
+                        <div class="hajera-hero-online-dot" title="Tracker Active"></div>
+                    </div>
+                    <div class="hajera-hero-info">
+                        <div class="hajera-hero-tag">
+                            <span class="heart-pulse">💖</span>
+                            <span class="tag-title">Hajera's Watch Tracker</span>
+                            <span class="hero-last-active" title="Last Watch Timestamp">⏱️ ${h(lastActiveText)}</span>
+                        </div>
+                        <h2 class="hajera-hero-title">Viewing Habits & Progress</h2>
+                        <p class="hajera-hero-desc">${h(watchedCount)} of ${h(totalVideos)} library videos explored (${h(overallPercent)}%)</p>
+                    </div>
                 </div>
-                ${jobRows}
+
+                <div class="hajera-hero-metrics">
+                    <div class="hero-progress-block">
+                        <div class="hero-progress-labels">
+                            <span>Total Engagement Rate</span>
+                            <strong>${h(overallPercent)}%</strong>
+                        </div>
+                        <div class="hero-progress-track">
+                            <div class="hero-progress-fill" style="width: ${h(overallPercent)}%;"></div>
+                        </div>
+                    </div>
+                    <div class="hero-mini-stats">
+                        <div class="hero-mini-stat stat-complete">
+                            <span class="mini-num">${h(completedCount)}</span>
+                            <span class="mini-label">Completed</span>
+                        </div>
+                        <div class="hero-mini-stat stat-watching">
+                            <span class="mini-num">${h(inProgressCount)}</span>
+                            <span class="mini-label">Watching</span>
+                        </div>
+                        <div class="hero-mini-stat stat-opened">
+                            <span class="mini-num">${h(openedCount)}</span>
+                            <span class="mini-label">Opened</span>
+                        </div>
+                        <div class="hero-mini-stat stat-unwatched">
+                            <span class="mini-num">${h(unwatchedCount)}</span>
+                            <span class="mini-label">Unwatched</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="admin-panel">
-                <div class="admin-panel-header">
-                    <h2>Failed Imports</h2>
-                    <span>${h(failedJobs.length)} recent</span>
-                </div>
-                ${failedRows}
-            </div>
-        </section>
-
-        <!-- Hajera Watch Activity Section -->
-        <section class="admin-panel hajera-activity-panel">
-            <div class="admin-panel-header hajera-panel-header">
-                <div class="hajera-title-group">
-                    <div class="hajera-header-avatar">
-                        ${renderAvatar('hajera', 'hajera-avatar-icon')}
-                    </div>
-                    <div>
-                        <h2>Hajera's Watch Activity 💖</h2>
-                        <p class="hajera-panel-subtitle">Real-time tracking of videos watched, completion rate, and viewing habits</p>
-                    </div>
-                </div>
-                <div class="hajera-stat-pills">
-                    <div class="hajera-pill pill-total" title="Total videos in library">
-                        <span class="pill-dot"></span>
-                        <span>Total: <strong>${h(hajeraStats.totalLibrary || videoList.length)}</strong></span>
-                    </div>
-                    <div class="hajera-pill pill-watched" title="Videos watched or opened by Hajera">
-                        <span>Watched: <strong>${h(hajeraStats.totalWatched)}</strong></span>
-                    </div>
-                    <div class="hajera-pill pill-unwatched" title="Videos not watched yet by Hajera">
-                        <span>Unwatched: <strong>${h(hajeraStats.unwatchedCount)}</strong></span>
-                    </div>
-                    <div class="hajera-pill pill-completed" title="Completed videos">
-                        <span>Completed: <strong>${h(hajeraStats.completedCount)}</strong></span>
-                    </div>
-                    <div class="hajera-pill pill-progress" title="Currently watching">
-                        <span>In Progress: <strong>${h(hajeraStats.inProgressCount)}</strong></span>
-                    </div>
+            <!-- Interactive Android Filter Chips Carousel -->
+            <div class="hajera-filter-carousel">
+                <div class="hajera-chips-track" id="hajeraFilterChips">
+                    <button type="button" class="hajera-chip active" data-filter="all">
+                        <span class="chip-label">All</span>
+                        <span class="chip-count">${h(totalVideos)}</span>
+                    </button>
+                    <button type="button" class="hajera-chip chip-watching" data-filter="watching">
+                        <span class="chip-dot dot-watching"></span>
+                        <span class="chip-label">Watching</span>
+                        <span class="chip-count">${h(inProgressCount)}</span>
+                    </button>
+                    <button type="button" class="hajera-chip chip-completed" data-filter="completed">
+                        <span class="chip-dot dot-completed"></span>
+                        <span class="chip-label">Completed</span>
+                        <span class="chip-count">${h(completedCount)}</span>
+                    </button>
+                    <button type="button" class="hajera-chip chip-opened" data-filter="opened">
+                        <span class="chip-dot dot-opened"></span>
+                        <span class="chip-label">Opened</span>
+                        <span class="chip-count">${h(openedCount)}</span>
+                    </button>
+                    <button type="button" class="hajera-chip chip-unwatched" data-filter="unwatched">
+                        <span class="chip-dot dot-unwatched"></span>
+                        <span class="chip-label">Unwatched</span>
+                        <span class="chip-count">${h(unwatchedCount)}</span>
+                    </button>
                 </div>
             </div>
 
-            <!-- Desktop View: Table -->
+            <!-- Live Search / Quick Filter Bar -->
+            <div class="hajera-search-bar">
+                <div class="hajera-search-input-wrap">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="text" id="hajeraSearchInput" class="hajera-search-input" placeholder="Search Hajera's video logs..." autocomplete="off" />
+                    <button type="button" class="search-clear-btn" id="hajeraSearchClear" style="display:none;" title="Clear search">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="hajera-search-status" id="hajeraFilterCount">Showing <strong>${h(hajeraActivityList.length)}</strong> of ${h(hajeraActivityList.length)}</div>
+            </div>
+
+            <!-- Mobile Android Touch Cards View -->
+            <div class="hajera-android-cards-list" id="hajeraCardsList">
+                ${hajeraCardsHtml}
+            </div>
+
+            <div class="hajera-filtered-empty" id="hajeraFilteredEmpty" style="display:none;">
+                <div class="filtered-empty-icon">🔍</div>
+                <h4>No matching videos found</h4>
+                <p>Try switching filters or changing your search terms.</p>
+                <button type="button" class="btn btn-ghost btn-sm" id="hajeraResetFilterBtn">Reset Filter</button>
+            </div>
+
+            <!-- Desktop View: High-density Table (>= 900px) -->
             <div class="admin-table-wrap hajera-desktop-table">
-                <table class="admin-table hajera-activity-table">
+                <table class="admin-table hajera-activity-table" id="hajeraDesktopTable">
                     <thead>
                         <tr>
                             <th style="width: 64px;">Preview</th>
@@ -461,18 +581,66 @@ const videoRows = recentVideos.length === 0
                     <tbody>${hajeraRows}</tbody>
                 </table>
             </div>
+        </section>
 
-            <!-- Mobile / Android View: Native Touch Cards & Rich Empty State -->
-            <div class="hajera-mobile-cards">
-                ${hajeraCardsHtml}
+        <!-- Import Queue & Failed Imports Grid -->
+        <section class="admin-jobs-grid">
+            <div class="admin-section-card">
+                <div class="section-card-header">
+                    <div class="card-title-group">
+                        <div class="icon-bubble icon-cyan">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                        </div>
+                        <h2>Import Queue</h2>
+                    </div>
+                    <span class="count-pill">${h(activeJobs.length)} active</span>
+                </div>
+                <div class="jobs-list">${jobRows}</div>
+            </div>
+
+            <div class="admin-section-card">
+                <div class="section-card-header">
+                    <div class="card-title-group">
+                        <div class="icon-bubble icon-coral">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="15" y1="9" x2="9" y2="15"/>
+                                <line x1="9" y1="9" x2="15" y2="15"/>
+                            </svg>
+                        </div>
+                        <h2>Failed Imports</h2>
+                    </div>
+                    <span class="count-pill error-pill">${h(failedJobs.length)} recent</span>
+                </div>
+                <div class="jobs-list">${failedRows}</div>
             </div>
         </section>
 
-        <section class="admin-panel">
-            <div class="admin-panel-header">
-                <h2>Recent Videos</h2>
-                <span>${h(formatBytes(stats.videoBytes))} stored</span>
+        <!-- Recent Uploaded Videos Section -->
+        <section class="admin-section-card">
+            <div class="section-card-header">
+                <div class="card-title-group">
+                    <div class="icon-bubble icon-amber">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                            <line x1="7" y1="2" x2="7" y2="22"/>
+                            <line x1="17" y1="2" x2="17" y2="22"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <line x1="2" y1="7" x2="7" y2="7"/>
+                            <line x1="2" y1="17" x2="7" y2="17"/>
+                            <line x1="17" y1="17" x2="22" y2="17"/>
+                            <line x1="17" y1="7" x2="22" y2="7"/>
+                        </svg>
+                    </div>
+                    <h2>Recent Videos</h2>
+                </div>
+                <span class="count-pill">${h(formatBytes(stats.videoBytes))} stored</span>
             </div>
+
             <!-- Desktop Table -->
             <div class="admin-table-wrap admin-desktop-videos-table">
                 <table class="admin-table">
@@ -489,13 +657,15 @@ const videoRows = recentVideos.length === 0
                     <tbody>${videoRows}</tbody>
                 </table>
             </div>
+
             <!-- Mobile Android Video Cards -->
-            <div class="admin-mobile-video-cards">
+            <div class="admin-android-videos-list">
                 ${videoCardsHtml}
             </div>
         </section>
     </main>
 
+    <!-- Mobile Bottom Navigation Bar -->
     <nav class="mobile-bottom-bar">
         <a href="/dashboard" class="bottom-nav-item">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
@@ -515,6 +685,13 @@ const videoRows = recentVideos.length === 0
             </div>
             <span>Upload</span>
         </a>
+        <a href="/admin" class="bottom-nav-item active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z"/>
+                <path d="M9 12l2 2 4-5"/>
+            </svg>
+            <span>Admin</span>
+        </a>
         <form action="/logout" method="POST" class="bottom-nav-form">
             <input type="hidden" name="_csrf" value="${h(csrfToken)}">
             <button type="submit" class="bottom-nav-item">
@@ -527,5 +704,45 @@ const videoRows = recentVideos.length === 0
             </button>
         </form>
     </nav>
+</div>
+
+<!-- Theme Selector Modal -->
+<div class="theme-modal-backdrop" id="themeModalBackdrop">
+    <div class="theme-modal">
+        <div class="theme-modal-header">
+            <h3>🎨 Choose Palette Theme</h3>
+            <button type="button" class="theme-close-btn" id="themeCloseBtn">&times;</button>
+        </div>
+        <div class="theme-options-grid">
+            <button type="button" class="theme-card-option" data-set-theme="cinematic">
+                <div class="theme-preview preview-cinematic">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>🎬 Obsidian Gold</span>
+            </button>
+            <button type="button" class="theme-card-option" data-set-theme="cyberpunk">
+                <div class="theme-preview preview-cyberpunk">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>⚡ Cyberpunk Neon</span>
+            </button>
+            <button type="button" class="theme-card-option" data-set-theme="emerald">
+                <div class="theme-preview preview-emerald">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>🌿 Emerald Luxury</span>
+            </button>
+            <button type="button" class="theme-card-option" data-set-theme="sunset">
+                <div class="theme-preview preview-sunset">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                </div>
+                <span>🌅 Sunset Velvet</span>
+            </button>
+        </div>
+    </div>
 </div>
 ` }) %>

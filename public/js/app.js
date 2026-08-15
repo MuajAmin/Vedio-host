@@ -2626,4 +2626,129 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ========================================
+    // Admin Control Center Interactivity
+    // ========================================
+    const hajeraFilterChips = document.getElementById('hajeraFilterChips');
+    const hajeraCardsList = document.getElementById('hajeraCardsList');
+    const hajeraDesktopTable = document.getElementById('hajeraDesktopTable');
+    const hajeraSearchInput = document.getElementById('hajeraSearchInput');
+    const hajeraSearchClear = document.getElementById('hajeraSearchClear');
+    const hajeraFilterCount = document.getElementById('hajeraFilterCount');
+    const hajeraFilteredEmpty = document.getElementById('hajeraFilteredEmpty');
+    const hajeraResetFilterBtn = document.getElementById('hajeraResetFilterBtn');
+
+    if (hajeraFilterChips || hajeraSearchInput) {
+        let activeStatusFilter = 'all';
+        let searchQuery = '';
+
+        function updateHajeraView() {
+            const cards = document.querySelectorAll('.hajera-android-card');
+            const rows = document.querySelectorAll('#hajeraDesktopTable tbody tr');
+            let visibleCount = 0;
+            const totalCount = cards.length || rows.length;
+
+            // Filter Mobile Cards
+            cards.forEach(card => {
+                const status = card.getAttribute('data-status') || '';
+                const title = (card.getAttribute('data-title') || '').toLowerCase();
+                const matchesStatus = (activeStatusFilter === 'all') || (status === activeStatusFilter);
+                const matchesSearch = !searchQuery || title.includes(searchQuery);
+
+                if (matchesStatus && matchesSearch) {
+                    card.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            // Filter Desktop Rows
+            rows.forEach(row => {
+                const status = row.getAttribute('data-status') || '';
+                const title = (row.getAttribute('data-title') || '').toLowerCase();
+                const matchesStatus = (activeStatusFilter === 'all') || (status === activeStatusFilter);
+                const matchesSearch = !searchQuery || title.includes(searchQuery);
+
+                if (matchesStatus && matchesSearch) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Update Counter
+            if (hajeraFilterCount) {
+                hajeraFilterCount.innerHTML = `Showing <strong>${visibleCount}</strong> of ${totalCount}`;
+            }
+
+            // Update Empty state
+            if (hajeraFilteredEmpty) {
+                if (visibleCount === 0 && totalCount > 0) {
+                    hajeraFilteredEmpty.style.display = 'flex';
+                    if (hajeraCardsList) hajeraCardsList.style.display = 'none';
+                    if (hajeraDesktopTable) hajeraDesktopTable.style.display = 'none';
+                } else {
+                    hajeraFilteredEmpty.style.display = 'none';
+                    if (hajeraCardsList) hajeraCardsList.style.display = '';
+                    if (hajeraDesktopTable) hajeraDesktopTable.style.display = '';
+                }
+            }
+        }
+
+        // Chip Clicks
+        if (hajeraFilterChips) {
+            hajeraFilterChips.addEventListener('click', (e) => {
+                const btn = e.target.closest('.hajera-chip');
+                if (!btn) return;
+
+                hajeraFilterChips.querySelectorAll('.hajera-chip').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+
+                activeStatusFilter = btn.getAttribute('data-filter') || 'all';
+                updateHajeraView();
+            });
+        }
+
+        // Search Input
+        if (hajeraSearchInput) {
+            hajeraSearchInput.addEventListener('input', (e) => {
+                searchQuery = e.target.value.trim().toLowerCase();
+                if (hajeraSearchClear) {
+                    hajeraSearchClear.style.display = searchQuery ? 'flex' : 'none';
+                }
+                updateHajeraView();
+            });
+        }
+
+        // Search Clear
+        if (hajeraSearchClear) {
+            hajeraSearchClear.addEventListener('click', () => {
+                if (hajeraSearchInput) {
+                    hajeraSearchInput.value = '';
+                    searchQuery = '';
+                    hajeraSearchClear.style.display = 'none';
+                    updateHajeraView();
+                    hajeraSearchInput.focus();
+                }
+            });
+        }
+
+        // Reset Filter Button
+        if (hajeraResetFilterBtn) {
+            hajeraResetFilterBtn.addEventListener('click', () => {
+                activeStatusFilter = 'all';
+                searchQuery = '';
+                if (hajeraSearchInput) hajeraSearchInput.value = '';
+                if (hajeraSearchClear) hajeraSearchClear.style.display = 'none';
+                if (hajeraFilterChips) {
+                    hajeraFilterChips.querySelectorAll('.hajera-chip').forEach(c => {
+                        c.classList.toggle('active', c.getAttribute('data-filter') === 'all');
+                    });
+                }
+                updateHajeraView();
+            });
+        }
+    }
+
 });
