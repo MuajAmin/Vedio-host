@@ -4883,6 +4883,50 @@ kbd {
     border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
+.activity-badge.badge-unwatched {
+    background: rgba(100, 116, 139, 0.14);
+    color: #94a3b8;
+    border: 1px solid rgba(100, 116, 139, 0.28);
+}
+
+.hajera-pill.pill-watched {
+    border-color: rgba(56, 189, 248, 0.3);
+    background: rgba(56, 189, 248, 0.08);
+    color: #bae6fd;
+}
+
+.hajera-pill.pill-unwatched {
+    border-color: rgba(148, 163, 184, 0.3);
+    background: rgba(148, 163, 184, 0.08);
+    color: #cbd5e1;
+}
+
+.is-unwatched-fill {
+    background: transparent !important;
+    width: 0% !important;
+}
+
+.row-unwatched {
+    opacity: 0.75;
+}
+
+.row-unwatched:hover {
+    opacity: 1;
+}
+
+.is-unwatched-card {
+    opacity: 0.8;
+}
+
+.is-unwatched-card:active {
+    opacity: 1;
+}
+
+.text-dim {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
 .activity-relative-time {
     font-size: 0.78rem;
     color: var(--text-muted);

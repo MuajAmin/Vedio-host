@@ -59,42 +59,51 @@ function collectAdminStats() {
     });
     const orphanThumbnails = thumbnailFiles.filter(file => !dbThumbnailFiles.has(file.name));
 
-    // Fetch Hajera's watch activity
-    const hajeraActivity = db.prepare(
+    // Fetch Hajera's watch status for all videos in the library
+    const hajeraVideos = db.prepare(
         `SELECT
-            wp.video_id,
-            wp.position_seconds,
-            wp.duration_seconds,
-            wp.updated_at,
+            v.id AS video_id,
             v.title,
             v.thumbnail,
             v.duration AS formatted_duration,
             v.size,
             v.uploaded_by,
-            v.uploaded_at
-        FROM watch_progress wp
-        JOIN videos v ON v.id = wp.video_id
-        WHERE wp.user = 'hajera'
-        ORDER BY wp.updated_at DESC`
+            v.uploaded_at,
+            wp.position_seconds,
+            wp.duration_seconds,
+            wp.updated_at AS hajera_watched_at
+        FROM videos v
+        LEFT JOIN watch_progress wp
+            ON wp.video_id = v.id AND wp.user = 'hajera'
+        ORDER BY
+            CASE WHEN wp.updated_at IS NOT NULL THEN 0 ELSE 1 END,
+            wp.updated_at DESC,
+            v.uploaded_at DESC`
     ).all();
 
+    const watchedVideos = hajeraVideos.filter(v => v.hajera_watched_at !== null);
+    const unwatchedVideos = hajeraVideos.filter(v => v.hajera_watched_at === null);
+
     const hajeraStats = {
-        totalWatched: hajeraActivity.length,
-        completedCount: hajeraActivity.filter(a => {
+        totalLibrary: hajeraVideos.length,
+        totalWatched: watchedVideos.length,
+        unwatchedCount: unwatchedVideos.length,
+        completedCount: watchedVideos.filter(a => {
             const pos = Number(a.position_seconds || 0);
             const dur = Number(a.duration_seconds || 0);
             return (dur > 0 && pos >= dur - 15);
         }).length,
-        inProgressCount: hajeraActivity.filter(a => {
+        inProgressCount: watchedVideos.filter(a => {
             const pos = Number(a.position_seconds || 0);
             const dur = Number(a.duration_seconds || 0);
             return pos >= 10 && (dur === 0 || pos < dur - 15);
         }).length,
-        openedCount: hajeraActivity.filter(a => {
+        openedCount: watchedVideos.filter(a => {
             const pos = Number(a.position_seconds || 0);
             return pos < 10;
         }).length,
-        recentActivity: hajeraActivity
+        allVideos: hajeraVideos,
+        recentActivity: hajeraVideos
     };
 
     return {
