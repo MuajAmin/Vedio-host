@@ -1387,38 +1387,114 @@ input, textarea {
 }
 
 .card-badge.badge-new {
-    background: linear-gradient(135deg, #ff0844 0%, #ff4e50 100%);
-    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: linear-gradient(135deg, #ff0844 0%, #ff6b6b 30%, #ff0844 60%, #e11d48 100%);
+    background-size: 200% 200%;
+    animation: badge-gradient-shift 2.5s ease-in-out infinite;
+    border: 1.5px solid rgba(255, 255, 255, 0.5);
     color: #ffffff;
-    box-shadow: 0 2px 10px rgba(255, 8, 68, 0.45);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow:
+        0 2px 12px rgba(255, 8, 68, 0.55),
+        0 0 20px rgba(255, 8, 68, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 900;
+    padding: 3px 10px 3px 7px;
+    border-radius: 8px;
+    position: absolute;
+    overflow: hidden;
+}
+
+/* Holographic shimmer sweep across badge */
+.card-badge.badge-new::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -100%;
+    width: 50%;
+    height: 200%;
+    background: linear-gradient(
+        100deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0) 35%,
+        rgba(255, 255, 255, 0.45) 50%,
+        rgba(255, 255, 255, 0) 65%,
+        transparent 100%
+    );
+    animation: badge-shimmer-sweep 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes badge-gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+@keyframes badge-shimmer-sweep {
+    0% { left: -100%; }
+    50%, 100% { left: 200%; }
 }
 
 .card-badge.badge-sm {
-    padding: 2px 6px;
-    font-size: 0.62rem;
-    border-radius: 4px;
+    padding: 2px 7px 2px 5px;
+    font-size: 0.6rem;
+    border-radius: 6px;
 }
 
+/* Pulsing live dot indicator */
 .badge-pulse-dot {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background-color: #ffffff;
-    box-shadow: 0 0 5px #ffffff;
-    animation: badge-pulse-anim 1.5s ease-in-out infinite;
+    box-shadow: 0 0 6px #ffffff, 0 0 12px rgba(255, 255, 255, 0.4);
+    animation: badge-dot-breathe 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    position: relative;
+    flex-shrink: 0;
 }
 
-@keyframes badge-pulse-anim {
+/* Expanding ring ripple around the dot */
+.badge-pulse-dot::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.7);
+    animation: badge-ring-pulse 1.8s cubic-bezier(0, 0.5, 0.5, 1) infinite;
+}
+
+@keyframes badge-dot-breathe {
     0%, 100% {
-        transform: scale(0.85);
-        opacity: 0.85;
+        transform: scale(0.8);
+        opacity: 0.75;
+        box-shadow: 0 0 4px #ffffff;
     }
     50% {
-        transform: scale(1.35);
+        transform: scale(1.2);
         opacity: 1;
-        box-shadow: 0 0 8px #ffffff;
+        box-shadow: 0 0 10px #ffffff, 0 0 18px rgba(255, 255, 255, 0.3);
     }
+}
+
+@keyframes badge-ring-pulse {
+    0% {
+        transform: scale(0.6);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(2.2);
+        opacity: 0;
+    }
+}
+
+/* Hover: amplify glow */
+.video-card:hover .card-badge.badge-new,
+.suggestion-card:hover .card-badge.badge-new {
+    box-shadow:
+        0 2px 16px rgba(255, 8, 68, 0.7),
+        0 0 30px rgba(255, 8, 68, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 .card-badge.badge-resume {
