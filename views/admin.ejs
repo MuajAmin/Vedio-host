@@ -210,6 +210,32 @@ const failedRows = failedJobs.length === 0
         </div>
     `).join('');
 
+const videoCardsHtml = recentVideos.length === 0
+    ? '<div class="admin-empty">No videos uploaded yet.</div>'
+    : recentVideos.map(video => {
+        const uploader = video.uploaded_by || 'muaj';
+        const uploaderName = uploader === 'hajera' ? 'Hajera' : (uploader === 'muaj' ? 'Muaj' : uploader);
+        const thumbHtml = video.thumbnail
+            ? `<img src="/thumbnails/${h(video.thumbnail)}" alt="${h(video.title)}" class="admin-video-card-thumb-img" loading="lazy" />`
+            : '<div class="admin-video-card-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><polygon points="6,4 20,12 6,20"/></svg></div>';
+        return `
+        <a href="/watch/${encodeURIComponent(video.id)}" class="admin-video-mobile-card">
+            <div class="admin-video-card-thumb">
+                ${thumbHtml}
+                <span class="admin-video-card-dur">${h(video.duration || '-')}</span>
+            </div>
+            <div class="admin-video-card-info">
+                <h4 class="admin-video-card-title">${h(video.title)}</h4>
+                <div class="admin-video-card-meta">
+                    <div class="admin-user-cell"><div class="badge-avatar">${renderAvatar(uploader, 'admin-row-avatar')}</div><span>${h(uploaderName)}</span></div>
+                    <span class="admin-video-pill">${h(formatBytes(video.size))}</span>
+                    <span class="admin-video-pill quality-pill">${h(video.import_quality || 'HD')}</span>
+                    <span class="admin-video-time">${h(timeAgo(video.uploaded_at))}</span>
+                </div>
+            </div>
+        </a>
+    `;}).join('');
+
 const videoRows = recentVideos.length === 0
     ? '<tr><td colspan="6">No videos yet.</td></tr>'
     : recentVideos.map(video => {
@@ -267,7 +293,7 @@ const videoRows = recentVideos.length === 0
     </nav>
 
     <main class="main-content admin-page">
-        <div class="dashboard-header-bar">
+        <div class="dashboard-header-bar admin-header-bar">
             <div class="header-titles">
                 <span class="header-pill">Admin Control</span>
                 <h1>System Dashboard</h1>
@@ -275,7 +301,7 @@ const videoRows = recentVideos.length === 0
             </div>
             <form action="/admin/cleanup" method="POST" data-confirm="Delete orphan upload files that are not in the database?">
                 <input type="hidden" name="_csrf" value="${h(csrfToken)}">
-                <button type="submit" class="btn btn-danger">
+                <button type="submit" class="btn btn-danger btn-cleanup-action">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                         <path d="M3 6h18"/>
                         <path d="M8 6V4h8v2"/>
@@ -289,12 +315,80 @@ const videoRows = recentVideos.length === 0
         ${cleanupHtml}
 
         <section class="admin-stat-grid">
-            <div class="admin-stat"><span>Videos</span><strong>${h(videoList.length)}</strong></div>
-            <div class="admin-stat"><span>Storage</span><strong>${h(formatBytes(stats.storageBytes || 0))}</strong></div>
-            <div class="admin-stat"><span>Comments</span><strong>${h(stats.commentsCount || 0)}</strong></div>
-            <div class="admin-stat"><span>Sessions</span><strong>${h(stats.sessionCount || 0)}</strong></div>
-            <div class="admin-stat"><span>Watch Progress</span><strong>${h(stats.progressCount || 0)}</strong></div>
-            <div class="admin-stat"><span>Orphan Files</span><strong>${h((stats.orphanVideos ? stats.orphanVideos.length : 0) + (stats.orphanThumbnails ? stats.orphanThumbnails.length : 0))}</strong></div>
+            <div class="admin-stat stat-videos">
+                <div class="stat-icon-wrap icon-videos">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                </div>
+                <div class="stat-text-group">
+                    <span>Videos</span>
+                    <strong>${h(videoList.length)}</strong>
+                </div>
+            </div>
+            <div class="admin-stat stat-storage">
+                <div class="stat-icon-wrap icon-storage">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                    </svg>
+                </div>
+                <div class="stat-text-group">
+                    <span>Storage</span>
+                    <strong>${h(formatBytes(stats.storageBytes || 0))}</strong>
+                </div>
+            </div>
+            <div class="admin-stat stat-comments">
+                <div class="stat-icon-wrap icon-comments">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                </div>
+                <div class="stat-text-group">
+                    <span>Comments</span>
+                    <strong>${h(stats.commentsCount || 0)}</strong>
+                </div>
+            </div>
+            <div class="admin-stat stat-sessions">
+                <div class="stat-icon-wrap icon-sessions">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                </div>
+                <div class="stat-text-group">
+                    <span>Sessions</span>
+                    <strong>${h(stats.sessionCount || 0)}</strong>
+                </div>
+            </div>
+            <div class="admin-stat stat-progress">
+                <div class="stat-icon-wrap icon-progress">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                </div>
+                <div class="stat-text-group">
+                    <span>Watch Activity</span>
+                    <strong>${h(stats.progressCount || 0)}</strong>
+                </div>
+            </div>
+            <div class="admin-stat stat-orphans">
+                <div class="stat-icon-wrap icon-orphans">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M3 6h18"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                </div>
+                <div class="stat-text-group">
+                    <span>Orphan Files</span>
+                    <strong>${h((stats.orphanVideos ? stats.orphanVideos.length : 0) + (stats.orphanThumbnails ? stats.orphanThumbnails.length : 0))}</strong>
+                </div>
+            </div>
         </section>
 
         <section class="admin-grid">
@@ -340,6 +434,7 @@ const videoRows = recentVideos.length === 0
                     </div>
                 </div>
             </div>
+
             <!-- Desktop View: Table -->
             <div class="admin-table-wrap hajera-desktop-table">
                 <table class="admin-table hajera-activity-table">
@@ -366,9 +461,10 @@ const videoRows = recentVideos.length === 0
         <section class="admin-panel">
             <div class="admin-panel-header">
                 <h2>Recent Videos</h2>
-                <span>${h(formatBytes(stats.videoBytes))} video files</span>
+                <span>${h(formatBytes(stats.videoBytes))} stored</span>
             </div>
-            <div class="admin-table-wrap">
+            <!-- Desktop Table -->
+            <div class="admin-table-wrap admin-desktop-videos-table">
                 <table class="admin-table">
                     <thead>
                         <tr>
@@ -382,6 +478,10 @@ const videoRows = recentVideos.length === 0
                     </thead>
                     <tbody>${videoRows}</tbody>
                 </table>
+            </div>
+            <!-- Mobile Android Video Cards -->
+            <div class="admin-mobile-video-cards">
+                ${videoCardsHtml}
             </div>
         </section>
     </main>

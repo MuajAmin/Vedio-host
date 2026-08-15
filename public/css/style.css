@@ -4299,64 +4299,148 @@ kbd {
 }
 
 /* ========================================
-   ADMIN PAGE
+   ADMIN PAGE (Android-First & Material App Design)
    ======================================== */
 .admin-page {
     max-width: 1180px;
+    margin: 0 auto;
 }
 
 .admin-alert {
     background: rgba(52, 211, 153, 0.12);
     border: 1px solid rgba(52, 211, 153, 0.26);
     color: #a7f3d0;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 18px;
 }
 
 .admin-stat-grid {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 14px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 22px;
 }
 
 .admin-stat {
-    min-height: 94px;
-    padding: 16px;
+    min-height: 84px;
+    padding: 14px;
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
     box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-stat:hover {
+    border-color: var(--border-accent);
+}
+
+.stat-icon-wrap {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.icon-videos {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.icon-storage {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.icon-comments {
+    background: rgba(52, 211, 153, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.icon-sessions {
+    background: rgba(167, 139, 250, 0.15);
+    color: #a78bfa;
+    border: 1px solid rgba(167, 139, 250, 0.3);
+}
+
+.icon-progress {
+    background: rgba(251, 113, 133, 0.15);
+    color: #fb7185;
+    border: 1px solid rgba(251, 113, 133, 0.3);
+}
+
+.icon-orphans {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.stat-text-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
 
 .admin-stat span {
     color: var(--text-secondary);
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .admin-stat strong {
     font-family: var(--font-display);
-    font-size: 1.45rem;
-    line-height: 1;
-    color: var(--accent-gold-bright);
+    font-size: 1.35rem;
+    line-height: 1.1;
+    color: var(--text-primary);
 }
 
 .admin-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-    margin-bottom: 18px;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
 }
 
 .admin-panel {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
     padding: 18px;
     box-shadow: var(--shadow-sm);
+    margin-bottom: 20px;
+}
+
+.admin-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-panel-header h2 {
+    font-family: var(--font-display);
+    font-size: 1.18rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
 }
 
 .admin-panel-header span {
@@ -4365,30 +4449,163 @@ kbd {
 }
 
 .admin-empty {
-    padding: 16px;
+    padding: 20px 16px;
     border: 1px dashed var(--border-subtle);
     border-radius: var(--radius-md);
     color: var(--text-muted);
     font-size: 0.88rem;
+    text-align: center;
 }
 
 .admin-job-row {
     margin-top: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .admin-job-row.failed {
-    grid-template-columns: minmax(0, 1fr) auto;
-    border-color: rgba(224, 82, 82, 0.22);
+    border-color: rgba(224, 82, 82, 0.28);
+    background: rgba(224, 82, 82, 0.04);
 }
 
 .admin-job-row em,
 .import-queue-progress em {
     color: var(--text-muted);
     font-style: normal;
+    font-size: 0.78rem;
+}
+
+/* Desktop Video Table & Mobile Video Cards Switching */
+.admin-desktop-videos-table {
+    display: none;
+}
+
+.admin-mobile-video-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+.admin-video-mobile-card {
+    display: flex;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 14px;
+    padding: 10px;
+    text-decoration: none;
+    align-items: center;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.admin-video-mobile-card:active {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: var(--border-accent);
+    transform: scale(0.98);
+}
+
+.admin-video-card-thumb {
+    position: relative;
+    width: 96px;
+    min-width: 96px;
+    aspect-ratio: 16 / 9;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #12131c;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.admin-video-card-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.admin-video-card-thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+.admin-video-card-dur {
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+.admin-video-card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.admin-video-card-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.32;
+}
+
+.admin-video-card-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.admin-video-pill {
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.admin-video-pill.quality-pill {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.3);
+    color: var(--accent-gold-bright);
+    font-weight: 700;
+}
+
+.admin-video-time {
+    font-size: 0.7rem;
+    color: var(--text-muted);
 }
 
 .admin-table-wrap {
     overflow-x: auto;
+    border-radius: 12px;
 }
 
 .admin-table {
@@ -4680,14 +4897,14 @@ kbd {
 }
 
 /* ========================================
-   HAJERA MOBILE CARDS & EMPTY STATE
+   HAJERA MOBILE CARDS & EMPTY STATE (Mobile-First)
    ======================================== */
 .hajera-desktop-table {
-    display: block;
+    display: none;
 }
 
 .hajera-mobile-cards {
-    display: none;
+    display: flex;
     flex-direction: column;
     gap: 10px;
     width: 100%;
@@ -4858,6 +5075,35 @@ kbd {
     border: 1px solid var(--border-subtle);
     font-size: 0.78rem;
     color: var(--accent-gold-bright);
+}
+
+/* ========================================
+   ADMIN PAGE DESKTOP OVERRIDES (>= 900px)
+   ======================================== */
+@media (min-width: 900px) {
+    .admin-stat-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    }
+
+    .admin-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .admin-desktop-videos-table {
+        display: block !important;
+    }
+
+    .admin-mobile-video-cards {
+        display: none !important;
+    }
+
+    .hajera-desktop-table {
+        display: block !important;
+    }
+
+    .hajera-mobile-cards {
+        display: none !important;
+    }
 }
 
 /* ========================================
@@ -6279,6 +6525,18 @@ h3,
     }
 
     .hajera-mobile-cards {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+
+    /* Recent Videos View Switching on Android */
+    .admin-desktop-videos-table {
+        display: none !important;
+    }
+
+    .admin-mobile-video-cards {
         display: flex !important;
         flex-direction: column !important;
         gap: 10px !important;
