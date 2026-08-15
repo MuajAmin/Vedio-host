@@ -76,6 +76,59 @@ const cleanupHtml = (typeof cleanupResult !== 'undefined' && cleanupResult)
     ? `<div class="alert admin-alert"><span>${h(cleanupResult.deleted)} files deleted, ${h(formatBytes(cleanupResult.bytesFreed))} freed.</span></div>`
     : '';
 
+const hajeraCardsHtml = hajeraActivityList.length === 0
+    ? `<div class="hajera-empty-card">
+        <div class="hajera-empty-icon-wrap">
+            <div class="hajera-empty-icon">💖</div>
+        </div>
+        <h3 class="hajera-empty-title">No Watch Activity Yet</h3>
+        <p class="hajera-empty-desc">Hajera hasn't watched any videos from her account yet. When she logs in and watches videos, her real-time progress, time spent, and watched videos will appear right here!</p>
+        <div class="hajera-empty-pill">
+            <span class="pill-dot"></span>
+            <span><strong>${videoList.length}</strong> videos in library waiting for Hajera</span>
+        </div>
+       </div>`
+    : hajeraActivityList.map(item => {
+        const pos = Number(item.position_seconds || 0);
+        const dur = Number(item.duration_seconds || 0);
+        const percent = dur > 0 ? Math.min(100, Math.round((pos / dur) * 100)) : (pos > 0 ? 100 : 0);
+        const isCompleted = dur > 0 && pos >= dur - 15;
+        const isInProgress = pos >= 10 && !isCompleted;
+        
+        let statusBadge = '';
+        if (isCompleted) {
+            statusBadge = '<span class="activity-badge badge-completed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11"><polyline points="20 6 9 17 4 12"/></svg> Completed</span>';
+        } else if (isInProgress) {
+            statusBadge = `<span class="activity-badge badge-progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Watching (${percent}%)</span>`;
+        } else {
+            statusBadge = '<span class="activity-badge badge-opened"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Opened</span>';
+        }
+
+        const thumbImg = item.thumbnail
+            ? `<img src="/thumbnails/${h(item.thumbnail)}" alt="${h(item.title)}" class="hajera-card-thumb-img" loading="lazy" />`
+            : '<div class="hajera-card-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><polygon points="6,4 20,12 6,20"/></svg></div>';
+
+        return `<a href="/watch/${encodeURIComponent(item.video_id)}" class="hajera-mobile-card">
+            <div class="hajera-mobile-card-thumb">
+                ${thumbImg}
+                <span class="hajera-thumb-duration">${h(item.formatted_duration || formatSeconds(dur))}</span>
+            </div>
+            <div class="hajera-mobile-card-details">
+                <h4 class="hajera-mobile-card-title">${h(item.title)}</h4>
+                <div class="hajera-mobile-card-meta">
+                    ${statusBadge}
+                    <span class="hajera-mobile-card-time">${h(timeAgo(item.updated_at))}</span>
+                </div>
+                <div class="hajera-mobile-progress-wrap">
+                    <div class="activity-progress-bar">
+                        <div class="activity-progress-fill ${isCompleted ? 'is-complete' : ''}" style="width: ${percent}%;"></div>
+                    </div>
+                    <span class="hajera-mobile-time-spent">${h(formatSeconds(pos))} / ${h(item.formatted_duration || formatSeconds(dur))}</span>
+                </div>
+            </div>
+        </a>`;
+    }).join('');
+
 const hajeraRows = hajeraActivityList.length === 0
     ? '<tr><td colspan="6" class="admin-empty-table">No watch activity recorded for Hajera yet.</td></tr>'
     : hajeraActivityList.map(item => {
@@ -287,7 +340,8 @@ const videoRows = recentVideos.length === 0
                     </div>
                 </div>
             </div>
-            <div class="admin-table-wrap">
+            <!-- Desktop View: Table -->
+            <div class="admin-table-wrap hajera-desktop-table">
                 <table class="admin-table hajera-activity-table">
                     <thead>
                         <tr>
@@ -301,6 +355,11 @@ const videoRows = recentVideos.length === 0
                     </thead>
                     <tbody>${hajeraRows}</tbody>
                 </table>
+            </div>
+
+            <!-- Mobile / Android View: Native Touch Cards & Rich Empty State -->
+            <div class="hajera-mobile-cards">
+                ${hajeraCardsHtml}
             </div>
         </section>
 
