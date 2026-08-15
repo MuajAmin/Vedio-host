@@ -92,7 +92,7 @@ function renderVideoCard(v, extraClass) {
             </div>
             <div class="card-duration">${v.duration ? h(v.duration) : h(formatSize(v.size))}</div>
             ${progressHtml}
-        </div>`
+        </div>
         <div class="card-info">
             <div class="card-avatar" title="Uploaded by ${h(uploaderName)}">
                 ${renderAvatar(uploader, 'card-avatar-img')}
