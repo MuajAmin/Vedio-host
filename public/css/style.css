@@ -7572,72 +7572,82 @@ kbd {
     font-size: 0.98rem;
 }
 
-/* ========================================
-   VIBRANT & MINIMAL ANDROID BOTTOM NAVIGATION
-   Material 3 Pro, Radiant Color Accents & Fluid Touch
-   ======================================== */
-/* ============================================================
-   ANDROID MATERIAL YOU — BOTTOM NAVIGATION BAR
-   Premium redesign with floating pill indicator + ripple
-   ============================================================ */
+/* ================================================================
+   ANDROID MATERIAL YOU 3 — PREMIUM FLOATING BOTTOM NAVIGATION
+   Floating rounded bar · Filled active icons · Elevated FAB
+   Touch ripple · Spring physics · Surface tint
+   ================================================================ */
 
 .mobile-bottom-bar {
     display: none;
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    /* Taller bar for comfortable Android touch targets */
-    height: calc(68px + env(safe-area-inset-bottom, 0px));
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: rgba(8, 8, 14, 0.97);
-    backdrop-filter: blur(32px) saturate(200%) brightness(0.85);
-    -webkit-backdrop-filter: blur(32px) saturate(200%) brightness(0.85);
-    /* Fine hairline border with noise-like depth */
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    /* Float above the bottom edge — Android 14 floating style */
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    left: 10px;
+    right: 10px;
+    height: 72px;
+    /* Full rounded corners — a floating island */
+    border-radius: 28px;
+    background: rgba(18, 18, 26, 0.92);
+    backdrop-filter: blur(40px) saturate(220%);
+    -webkit-backdrop-filter: blur(40px) saturate(220%);
+    /* Soft border for depth against dark BG */
+    border: 1px solid rgba(255, 255, 255, 0.07);
     z-index: 1000;
-    align-items: stretch;
-    justify-content: space-around;
-    /* Layered shadow for elevation */
+    align-items: center;
+    justify-content: space-evenly;
+    /* Heavy elevation — floating above content */
     box-shadow:
-        0 -1px 0 rgba(255, 255, 255, 0.05),
-        0 -8px 32px rgba(0, 0, 0, 0.55),
-        0 -24px 60px rgba(0, 0, 0, 0.2);
+        0 8px 40px rgba(0, 0, 0, 0.55),
+        0 2px 12px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
     user-select: none;
     -webkit-user-select: none;
-    /* Subtle surface tint for Material You depth */
+    /* Entrance animation */
+    animation: bottombar-float-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
     isolation: isolate;
 }
 
-/* Top ambient glow sheen — narrower and more refined */
+@keyframes bottombar-float-in {
+    0% {
+        opacity: 0;
+        transform: translateY(30px) scale(0.96);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Subtle ambient glow on top edge */
 .mobile-bottom-bar::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 12%;
-    right: 12%;
+    top: -1px;
+    left: 20%;
+    right: 20%;
     height: 1px;
     background: linear-gradient(
         90deg,
         transparent 0%,
-        rgba(245, 175, 25, 0.5) 20%,
-        rgba(236, 72, 153, 0.5) 50%,
-        rgba(56, 189, 248, 0.5) 80%,
+        rgba(245, 200, 66, 0.35) 25%,
+        rgba(244, 114, 182, 0.3) 50%,
+        rgba(56, 189, 248, 0.35) 75%,
         transparent 100%
     );
+    border-radius: 1px;
     pointer-events: none;
-    opacity: 0.7;
-    border-radius: 0 0 50% 50%;
-    filter: blur(0.5px);
+    opacity: 0.6;
 }
 
-/* Surface noise texture for Material depth */
+/* Micro noise texture for surface depth */
 .mobile-bottom-bar::after {
     content: '';
     position: absolute;
     inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-    opacity: 0.018;
+    border-radius: inherit;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    opacity: 0.025;
     pointer-events: none;
     mix-blend-mode: overlay;
 }
@@ -7648,7 +7658,37 @@ kbd {
     }
 }
 
-/* ---- Nav Item Base — Android touch target sizing ---- */
+/* ---- ICON OUTLINE / FILLED SWITCHING ---- */
+/* Material You: outline when inactive, filled when active */
+.nav-icon-outline,
+.nav-icon-filled {
+    position: absolute;
+    transition: opacity 0.25s cubic-bezier(0.2, 0, 0, 1),
+                transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.nav-icon-outline {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.nav-icon-filled {
+    opacity: 0;
+    transform: scale(0.7);
+}
+
+/* When active: swap icons */
+.bottom-nav-item.active .nav-icon-outline {
+    opacity: 0;
+    transform: scale(0.7);
+}
+
+.bottom-nav-item.active .nav-icon-filled {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* ---- Nav Item Base ---- */
 .bottom-nav-item {
     position: relative;
     display: flex;
@@ -7658,33 +7698,38 @@ kbd {
     flex: 1;
     height: 100%;
     gap: 4px;
-    padding: 8px 4px 6px;
-    color: rgba(160, 155, 185, 0.75);
+    padding: 6px 2px;
+    color: rgba(180, 175, 200, 0.6);
     text-decoration: none;
     background: transparent;
     border: none;
     cursor: pointer;
-    /* Spring physics — feels native Android */
     transition:
         color 0.25s cubic-bezier(0.2, 0, 0, 1),
-        transform 0.18s cubic-bezier(0.2, 0, 0, 1);
+        transform 0.15s cubic-bezier(0.2, 0, 0, 1);
     -webkit-tap-highlight-color: transparent;
     outline: none;
-    /* Overflow for ripple */
     overflow: hidden;
+    border-radius: 20px;
 }
 
-/* Android ripple effect on tap */
+/* Touch ripple — radiates from center on press */
 .bottom-nav-item::before {
     content: '';
     position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.12) 0%, transparent 70%);
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(
+        circle at center,
+        rgba(255, 255, 255, 0.1) 0%,
+        transparent 65%
+    );
     opacity: 0;
     transform: scale(0);
     border-radius: inherit;
-    transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease;
     pointer-events: none;
+    transition: transform 0.45s cubic-bezier(0.2, 0, 0, 1),
+                opacity 0.35s ease;
 }
 
 .bottom-nav-item:active::before {
@@ -7696,160 +7741,201 @@ kbd {
 .bottom-nav-item:not(:active)::before {
     opacity: 0;
     transform: scale(0);
-    transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease;
+    transition: transform 0.55s cubic-bezier(0.2, 0, 0, 1),
+                opacity 0.4s ease;
 }
 
-/* Active spring: icon bounces up slightly */
+/* Press scale */
+.bottom-nav-item:active {
+    transform: scale(0.92);
+}
+
+/* Active state colors */
 .bottom-nav-item.active {
     color: var(--accent-gold-bright, #f5c842);
 }
 
-.bottom-nav-item:active {
-    transform: scale(0.9);
-}
-
-/* ---- Icon Pill Container — Material You floating pill ---- */
+/* ---- Icon Pill Container — Material You wide indicator ---- */
 .bottom-nav-icon-wrap {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 52px;
+    width: 36px;
     height: 32px;
     border-radius: 16px;
-    overflow: hidden;
     transition:
-        background 0.3s cubic-bezier(0.2, 0, 0, 1),
-        width 0.35s cubic-bezier(0.2, 0, 0, 1),
-        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        background 0.35s cubic-bezier(0.2, 0, 0, 1),
+        width 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.3s ease;
 }
 
-/* Glowing surface behind active icon */
-.bottom-nav-icon-wrap::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: transparent;
-    transition: background 0.3s cubic-bezier(0.2, 0, 0, 1);
-    z-index: 0;
+/* Active pill expands wide — signature Material You effect */
+.bottom-nav-item.active .bottom-nav-icon-wrap {
+    background: var(--accent-gold-glow, rgba(245, 200, 66, 0.18));
+    width: 64px;
+    box-shadow: 0 0 16px rgba(245, 200, 66, 0.08);
 }
 
 .bottom-nav-icon-wrap svg {
     position: relative;
     z-index: 1;
-    transition:
-        transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-        stroke-width 0.2s ease;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Active icon: scale up with spring bounce */
-.bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: var(--accent-gold-glow, rgba(245, 200, 66, 0.16));
-    /* Slightly widen pill on active — Material You pattern */
-    width: 58px;
-}
-
-.bottom-nav-item.active .bottom-nav-icon-wrap svg {
-    transform: translateY(-1px) scale(1.1);
-    stroke-width: 2.5;
+.bottom-nav-item.active .bottom-nav-icon-wrap svg.nav-icon-filled {
+    transform: scale(1.05);
 }
 
 /* ---- Nav Micro-Label ---- */
 .bottom-nav-label {
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     font-weight: 500;
     line-height: 1;
-    letter-spacing: 0.025em;
+    letter-spacing: 0.02em;
     color: inherit;
+    white-space: nowrap;
     transition:
         color 0.25s cubic-bezier(0.2, 0, 0, 1),
         font-weight 0.2s ease,
-        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+        opacity 0.2s ease;
 }
 
-/* Active label: slightly bolder + nudged up */
 .bottom-nav-item.active .bottom-nav-label {
     font-weight: 700;
     letter-spacing: 0.03em;
     color: var(--accent-gold-bright, #f5c842);
-    transform: translateY(-0.5px);
 }
 
-/* ---- Message / Chat Tab Active ---- */
+/* ---- Chat Tab Colors ---- */
 .bottom-nav-item.nav-msg-btn.active {
     color: #38bdf8;
 }
 
 .bottom-nav-item.nav-msg-btn.active .bottom-nav-icon-wrap {
-    background: rgba(56, 189, 248, 0.15);
-    width: 58px;
+    background: rgba(56, 189, 248, 0.16);
+    width: 64px;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.08);
 }
 
 .bottom-nav-item.nav-msg-btn.active .bottom-nav-label {
     color: #38bdf8;
 }
 
-/* ---- UPLOAD FAB — Floating Action Button style ---- */
-/* Slightly elevated, always visible as the primary action */
+/* ============================================================
+   UPLOAD FAB — True Floating Action Button
+   Extends ABOVE the bar, circular, hero gradient, glow ring
+   ============================================================ */
+
 .bottom-nav-upload {
+    /* Don't stretch like siblings — fixed size */
     flex: 0 0 auto;
-    width: 68px;
+    width: 72px;
+    /* Override parent overflow so FAB can extend above */
+    overflow: visible;
+    border-radius: 0;
+    padding: 0;
     position: relative;
 }
 
+.bottom-nav-upload::before {
+    display: none; /* no ripple on FAB wrapper */
+}
+
+/* The outer glow ring around the FAB */
+.bottom-nav-fab-ring {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    /* Shift FAB above the bar */
+    margin-top: -26px;
+    /* Subtle outer glow ring */
+    background: radial-gradient(
+        circle,
+        rgba(245, 158, 11, 0.12) 0%,
+        transparent 70%
+    );
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* The actual FAB button surface */
 .bottom-nav-upload .upload-btn-pill {
-    /* FAB: circular / squircle shape, more prominent */
-    width: 48px;
-    height: 48px;
+    width: 52px;
+    height: 52px;
     border-radius: 16px;
-    background: linear-gradient(145deg, #fbbf24 0%, #f59e0b 40%, #ea580c 75%, #e11d48 100%);
+    background: linear-gradient(145deg,
+        #fbbf24 0%,
+        #f59e0b 30%,
+        #ea580c 65%,
+        #dc2626 100%
+    );
     color: #ffffff !important;
     box-shadow:
-        0 4px 16px rgba(245, 158, 11, 0.45),
-        0 1px 4px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        0 6px 24px rgba(245, 158, 11, 0.5),
+        0 2px 8px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.15);
     transition:
         transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
         box-shadow 0.25s ease;
-    /* Float above the nav bar slightly */
-    margin-top: -10px;
+    /* Center within ring */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
 }
 
 .bottom-nav-upload .upload-btn-pill svg {
     stroke: #ffffff !important;
-    stroke-width: 2.6;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+/* Press state */
+.bottom-nav-upload:active .bottom-nav-fab-ring {
+    transform: scale(0.88);
 }
 
 .bottom-nav-upload:active .upload-btn-pill {
-    transform: scale(0.9);
     box-shadow:
-        0 2px 8px rgba(245, 158, 11, 0.35),
-        0 1px 2px rgba(0, 0, 0, 0.4),
+        0 2px 10px rgba(245, 158, 11, 0.4),
+        0 1px 3px rgba(0, 0, 0, 0.5),
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.bottom-nav-upload:not(:active) .upload-btn-pill {
-    transform: scale(1);
-}
-
-.bottom-nav-upload .bottom-nav-label {
-    font-size: 0.6rem;
-    font-weight: 600;
-    color: rgba(251, 191, 36, 0.7);
-    margin-top: 2px;
-}
-
+/* Active state glow */
 .bottom-nav-upload.active .upload-btn-pill {
     box-shadow:
-        0 6px 22px rgba(245, 158, 11, 0.6),
-        0 2px 6px rgba(0, 0, 0, 0.3),
+        0 8px 32px rgba(245, 158, 11, 0.65),
+        0 3px 10px rgba(0, 0, 0, 0.35),
         inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
+.bottom-nav-upload .bottom-nav-label {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: rgba(251, 191, 36, 0.65);
+    margin-top: 1px;
+}
+
 .bottom-nav-upload.active .bottom-nav-label {
-    color: #f59e0b;
+    color: #fbbf24;
     font-weight: 700;
+}
+
+/* Subtle floating animation for the FAB */
+@keyframes fab-gentle-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+}
+
+.bottom-nav-upload .bottom-nav-fab-ring {
+    animation: fab-gentle-float 3s ease-in-out infinite;
+    animation-delay: 1s;
 }
 
 /* ---- Form Wrapper for Logout ---- */
@@ -7864,26 +7950,25 @@ kbd {
 /* ---- Chat Unread Badge ---- */
 .bottom-nav-badge {
     position: absolute;
-    top: 0px;
-    right: 3px;
-    min-width: 17px;
-    height: 17px;
-    padding: 0 4px;
+    top: -1px;
+    right: -2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
     border-radius: 9px;
-    background: linear-gradient(135deg, #f87171, #ef4444);
+    background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
     color: #ffffff;
-    font-size: 9px;
+    font-size: 9.5px;
     font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
-    /* Crisp ring to separate from icon */
     box-shadow:
-        0 0 0 2.5px var(--bg-deep, #08080e),
+        0 0 0 2.5px rgba(18, 18, 26, 0.95),
         0 2px 8px rgba(239, 68, 68, 0.55);
     z-index: 3;
     animation: badge-spring-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
 }
 
 @keyframes badge-spring-in {
@@ -7892,48 +7977,23 @@ kbd {
     100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
-/* ---- Active sliding indicator line (Material style) ---- */
-/* A subtle indicator dot below the active icon */
-.bottom-nav-item.active::after {
-    content: '';
-    position: absolute;
-    bottom: 4px;
-    left: 50%;
-    transform: translateX(-50%) scaleX(1);
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: currentColor;
-    opacity: 0.6;
-    animation: nav-dot-appear 0.3s cubic-bezier(0.2, 0, 0, 1) both;
-}
+/* ================================================================
+   THEME VARIANTS — Surface tint per theme
+   ================================================================ */
 
-.bottom-nav-upload::after {
-    display: none; /* no dot for FAB */
-}
-
-@keyframes nav-dot-appear {
-    0% { transform: translateX(-50%) scale(0); opacity: 0; }
-    100% { transform: translateX(-50%) scale(1); opacity: 0.6; }
-}
-
-/* ============================================================
-   THEME INTEGRATION — bottom bar tint per theme
-   ============================================================ */
-
-/* Theme: Hajera Mode (Rose / Pink) */
+/* ---- Hajera Mode (Rose / Romantic) ---- */
 .hajera-mode .mobile-bottom-bar {
-    background: rgba(14, 6, 12, 0.97);
-    border-top-color: rgba(244, 63, 94, 0.12);
+    background: rgba(22, 10, 18, 0.92);
+    border-color: rgba(244, 63, 94, 0.1);
 }
 
 .hajera-mode .mobile-bottom-bar::before {
     background: linear-gradient(
         90deg,
         transparent 0%,
-        rgba(253, 164, 175, 0.55) 25%,
-        rgba(244, 63, 94, 0.55) 50%,
-        rgba(225, 29, 72, 0.55) 75%,
+        rgba(253, 164, 175, 0.4) 30%,
+        rgba(244, 63, 94, 0.4) 50%,
+        rgba(225, 29, 72, 0.35) 70%,
         transparent 100%
     );
 }
@@ -7943,7 +8003,8 @@ kbd {
 }
 
 .hajera-mode .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(244, 63, 94, 0.18);
+    background: rgba(244, 63, 94, 0.2);
+    box-shadow: 0 0 16px rgba(244, 63, 94, 0.08);
 }
 
 .hajera-mode .bottom-nav-item.active .bottom-nav-label {
@@ -7953,31 +8014,35 @@ kbd {
 .hajera-mode .bottom-nav-upload .upload-btn-pill {
     background: linear-gradient(145deg, #fda4af 0%, #f43f5e 45%, #be123c 100%);
     box-shadow:
-        0 4px 16px rgba(244, 63, 94, 0.5),
-        0 1px 4px rgba(0, 0, 0, 0.3),
+        0 6px 24px rgba(244, 63, 94, 0.5),
+        0 2px 8px rgba(0, 0, 0, 0.35),
         inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
+.hajera-mode .bottom-nav-fab-ring {
+    background: radial-gradient(circle, rgba(244, 63, 94, 0.12) 0%, transparent 70%);
+}
+
 .hajera-mode .bottom-nav-upload .bottom-nav-label {
-    color: rgba(253, 164, 175, 0.7);
+    color: rgba(253, 164, 175, 0.65);
 }
 
 .hajera-mode .bottom-nav-upload.active .bottom-nav-label {
     color: #fb7185;
 }
 
-/* Theme: Cyberpunk (Cyan / Magenta) */
+/* ---- Cyberpunk (Cyan / Magenta) ---- */
 html[data-theme="cyberpunk"] .mobile-bottom-bar {
-    background: rgba(4, 4, 14, 0.97);
-    border-top-color: rgba(0, 240, 255, 0.12);
+    background: rgba(6, 6, 18, 0.93);
+    border-color: rgba(0, 240, 255, 0.1);
 }
 
 html[data-theme="cyberpunk"] .mobile-bottom-bar::before {
     background: linear-gradient(
         90deg,
         transparent 0%,
-        rgba(0, 240, 255, 0.6) 30%,
-        rgba(236, 72, 153, 0.6) 70%,
+        rgba(0, 240, 255, 0.5) 30%,
+        rgba(236, 72, 153, 0.45) 70%,
         transparent 100%
     );
 }
@@ -7987,7 +8052,8 @@ html[data-theme="cyberpunk"] .bottom-nav-item.active {
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(0, 240, 255, 0.14);
+    background: rgba(0, 240, 255, 0.16);
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.1);
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-item.active .bottom-nav-label {
@@ -7998,8 +8064,8 @@ html[data-theme="cyberpunk"] .bottom-nav-upload .upload-btn-pill {
     background: linear-gradient(145deg, #67e8f9 0%, #00f0ff 35%, #38bdf8 65%, #ec4899 100%);
     color: #04040e !important;
     box-shadow:
-        0 4px 18px rgba(0, 240, 255, 0.55),
-        0 1px 4px rgba(0, 0, 0, 0.4),
+        0 6px 28px rgba(0, 240, 255, 0.55),
+        0 2px 8px rgba(0, 0, 0, 0.45),
         inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
@@ -8007,23 +8073,27 @@ html[data-theme="cyberpunk"] .bottom-nav-upload .upload-btn-pill svg {
     stroke: #04040e !important;
 }
 
-html[data-theme="cyberpunk"] .bottom-nav-upload .bottom-nav-label {
-    color: rgba(56, 189, 248, 0.7);
+html[data-theme="cyberpunk"] .bottom-nav-fab-ring {
+    background: radial-gradient(circle, rgba(0, 240, 255, 0.1) 0%, transparent 70%);
 }
 
-/* Theme: Emerald (Green / Teal) */
+html[data-theme="cyberpunk"] .bottom-nav-upload .bottom-nav-label {
+    color: rgba(56, 189, 248, 0.65);
+}
+
+/* ---- Emerald (Green / Nature) ---- */
 html[data-theme="emerald"] .mobile-bottom-bar {
-    background: rgba(3, 10, 6, 0.97);
-    border-top-color: rgba(16, 185, 129, 0.12);
+    background: rgba(6, 14, 10, 0.93);
+    border-color: rgba(16, 185, 129, 0.1);
 }
 
 html[data-theme="emerald"] .mobile-bottom-bar::before {
     background: linear-gradient(
         90deg,
         transparent 0%,
-        rgba(52, 211, 153, 0.55) 25%,
-        rgba(16, 185, 129, 0.55) 50%,
-        rgba(251, 191, 36, 0.45) 75%,
+        rgba(52, 211, 153, 0.4) 25%,
+        rgba(16, 185, 129, 0.4) 50%,
+        rgba(251, 191, 36, 0.3) 75%,
         transparent 100%
     );
 }
@@ -8033,7 +8103,8 @@ html[data-theme="emerald"] .bottom-nav-item.active {
 }
 
 html[data-theme="emerald"] .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(16, 185, 129, 0.16);
+    background: rgba(16, 185, 129, 0.18);
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.08);
 }
 
 html[data-theme="emerald"] .bottom-nav-item.active .bottom-nav-label {
@@ -8044,8 +8115,8 @@ html[data-theme="emerald"] .bottom-nav-upload .upload-btn-pill {
     background: linear-gradient(145deg, #6ee7b7 0%, #10b981 45%, #059669 80%, #047857 100%);
     color: #021a0a !important;
     box-shadow:
-        0 4px 16px rgba(16, 185, 129, 0.5),
-        0 1px 4px rgba(0, 0, 0, 0.35),
+        0 6px 24px rgba(16, 185, 129, 0.5),
+        0 2px 8px rgba(0, 0, 0, 0.4),
         inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
@@ -8053,8 +8124,12 @@ html[data-theme="emerald"] .bottom-nav-upload .upload-btn-pill svg {
     stroke: #021a0a !important;
 }
 
+html[data-theme="emerald"] .bottom-nav-fab-ring {
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+}
+
 html[data-theme="emerald"] .bottom-nav-upload .bottom-nav-label {
-    color: rgba(110, 231, 183, 0.7);
+    color: rgba(110, 231, 183, 0.65);
 }
 
 /* Screen reader only */
@@ -8576,7 +8651,7 @@ html[data-theme="emerald"] .bottom-nav-upload .bottom-nav-label {
     }
 
     .main-content {
-        padding: 20px 16px 90px;
+        padding: 20px 16px calc(100px + env(safe-area-inset-bottom, 0px));
     }
 
     .dashboard-header-bar {

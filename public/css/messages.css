@@ -1533,7 +1533,7 @@
     }
 
     .msg-floating-launcher {
-        bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+        bottom: calc(92px + env(safe-area-inset-bottom, 0px));
         right: 16px;
         width: 54px;
         height: 54px;
