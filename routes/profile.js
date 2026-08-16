@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { isAuthenticated } = require('../middleware/auth');
-const { requireCsrf } = require('../utils/security');
+const { requireCsrf, invalidateAvatarCache } = require('../utils/security');
 const db = require('../database');
 
 const avatarsDir = path.join(__dirname, '..', 'uploads', 'avatars');
@@ -64,6 +64,7 @@ router.post('/profile/avatar', isAuthenticated, (req, res) => {
         }
 
         db.setUserAvatar(req.session.user, req.file.filename);
+        invalidateAvatarCache(); // flush cache so new avatar shows immediately
 
         if (isJson) {
             return res.json({
@@ -94,6 +95,7 @@ router.post('/profile/avatar/remove', isAuthenticated, (req, res) => {
         }
     }
     db.deleteUserAvatar(req.session.user);
+    invalidateAvatarCache(); // flush cache so removal shows immediately
 
     if (isJson) {
         return res.json({ success: true });

@@ -3,6 +3,35 @@ const ejs = require('ejs');
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+// --- Avatar in-memory cache -------------------------------------------
+// getAllUserAvatars() was being called on every HTTP request (including
+// video streams, thumbnails, etc). With only 2 users this is fine
+// functionally, but unnecessary SQLite I/O on a 1GB VPS. Cache it.
+let _avatarCache = null;
+let _avatarCacheAt = 0;
+const AVATAR_CACHE_TTL = 30 * 1000; // 30 seconds
+
+function getCachedAvatars() {
+    const now = Date.now();
+    if (_avatarCache && (now - _avatarCacheAt) < AVATAR_CACHE_TTL) {
+        return _avatarCache;
+    }
+    let db;
+    try { db = require('../database'); } catch { return {}; }
+    const avatars = db && typeof db.getAllUserAvatars === 'function'
+        ? db.getAllUserAvatars()
+        : {};
+    _avatarCache = avatars;
+    _avatarCacheAt = now;
+    return avatars;
+}
+
+function invalidateAvatarCache() {
+    _avatarCache = null;
+    _avatarCacheAt = 0;
+}
+// -----------------------------------------------------------------------
+
 function escapeHtml(value) {
     return ejs.escapeXML(value == null ? '' : String(value));
 }
@@ -35,12 +64,7 @@ function renderAvatar(username, extraClass = '', userAvatars = {}) {
 
 function attachLocals(req, res, next) {
     const user = req.session ? req.session.user : null;
-    let db;
-    try {
-        db = require('../database');
-    } catch {}
-
-    const avatars = db && typeof db.getAllUserAvatars === 'function' ? db.getAllUserAvatars() : {};
+    const avatars = getCachedAvatars();
 
     res.locals.user = user;
     res.locals.csrfToken = req.session ? getCsrfToken(req) : '';
@@ -75,6 +99,7 @@ module.exports = {
     attachLocals,
     escapeHtml,
     getCsrfToken,
+    invalidateAvatarCache,
     renderAvatar,
     requireCsrf,
     timingSafeCompare
