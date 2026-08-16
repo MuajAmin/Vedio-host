@@ -2694,7 +2694,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
                 keepalive: true
-            }).catch(() => {});
+            })
+            .then(res => {
+                if (res.status === 401 || (res.redirected && (res.url.endsWith('/') || res.url.includes('/login')))) {
+                    window.location.href = '/';
+                    return null;
+                }
+                return res.json();
+            })
+            .then(data => {
+                if (data && data.loggedOut) {
+                    window.location.href = '/';
+                }
+            })
+            .catch(() => {});
 
             lastPing = Date.now();
         }
@@ -3020,16 +3033,142 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (todayEl && data.watchStats.todayFormatted) todayEl.textContent = data.watchStats.todayFormatted;
                     }
 
-                    // Update Session Count Badge
-                    const sessBadge = document.getElementById('hajeraSessionBadge');
-                    if (sessBadge && typeof data.sessionCount === 'number') {
-                        sessBadge.innerHTML = `
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-                                <circle cx="12" cy="12" r="10"/>
-                                <path d="M12 6v6l4 2"/>
-                            </svg>
-                            ${data.sessionCount} session${data.sessionCount !== 1 ? 's' : ''}
-                        `;
+                    // Update Hajera Session Count Badge & Button
+                    const hajeraSessText = document.getElementById('hajeraSessionText');
+                    if (hajeraSessText && typeof data.hajeraSessionCount === 'number') {
+                        hajeraSessText.textContent = `${data.hajeraSessionCount} Hajera Session${data.hajeraSessionCount !== 1 ? 's' : ''}`;
+                    }
+                    const btnHajeraLogout = document.getElementById('btnHajeraLogoutAll');
+                    if (btnHajeraLogout && typeof data.hajeraSessionCount === 'number') {
+                        btnHajeraLogout.disabled = (data.hajeraSessionCount === 0);
+                    }
+
+                    // Update Muaj Session Count Badge & Button
+                    const muajSessText = document.getElementById('muajSessionText');
+                    if (muajSessText && typeof data.muajSessionCount === 'number') {
+                        muajSessText.textContent = `${data.muajSessionCount} Muaj Session${data.muajSessionCount !== 1 ? 's' : ''}`;
+                    }
+                    const btnMuajLogout = document.getElementById('btnMuajLogoutOther');
+                    if (btnMuajLogout && typeof data.muajSessionCount === 'number') {
+                        btnMuajLogout.disabled = (data.muajSessionCount <= 1);
+                    }
+
+                    // Update Total Sessions Counter
+                    const sessCountEl = document.getElementById('detailedSessionsCount');
+                    if (sessCountEl && typeof data.totalSessionCount === 'number') {
+                        sessCountEl.textContent = data.totalSessionCount;
+                    }
+
+                    // Update Detailed Sessions Table & Cards (if available)
+                    if (Array.isArray(data.detailedSessions)) {
+                        const tableBody = document.getElementById('sessionsTableBody');
+                        const mobileList = document.getElementById('sessionsMobileList');
+                        const csrfInput = document.querySelector('input[name="_csrf"]');
+                        const currentCsrf = csrfInput ? csrfInput.value : '';
+
+                        if (tableBody) {
+                            if (data.detailedSessions.length === 0) {
+                                tableBody.innerHTML = '<tr><td colspan="7" class="empty-sessions-cell">কোনো সক্রিয় সেশন পাওয়া যায়নি।</td></tr>';
+                            } else {
+                                tableBody.innerHTML = data.detailedSessions.map(s => {
+                                    const isMuajUser = (s.user === 'muaj');
+                                    const userBadge = isMuajUser 
+                                        ? '<span class="session-user-pill pill-muaj"><span class="user-role-icon">👑</span> Muaj (Admin)</span>'
+                                        : '<span class="session-user-pill pill-hajera"><span class="user-role-icon">💖</span> Hajera (Viewer)</span>';
+                                    const currentTag = s.isCurrent 
+                                        ? '<span class="session-current-badge"><span class="live-dot-pulse"></span> This Device (Active)</span>' 
+                                        : '<span class="session-other-badge">Connected Device</span>';
+                                    const lastActiveFmt = s.lastActive ? formatRelTimeHelper(s.lastActive) : 'Just now';
+                                    const loginTimeFmt = s.loginTime ? new Date(parseSqliteDateHelper(s.loginTime)).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' }) : '-';
+                                    const shortSid = s.sid ? s.sid.substring(0, 10) + '...' : '-';
+                                    const devIcon = (s.device && (s.device.toLowerCase().includes('android') || s.device.toLowerCase().includes('iphone'))) ? '📱' : '💻';
+
+                                    return `
+                                        <tr class="session-row ${s.isCurrent ? 'is-current-session' : ''}" id="session-row-${s.sid}">
+                                            <td>${userBadge}</td>
+                                            <td>
+                                                <div class="session-device-cell">
+                                                    <span class="device-icon">${devIcon}</span>
+                                                    <div class="device-meta">
+                                                        <span class="device-name">${s.device || 'Web Browser'}</span>
+                                                        <span class="device-sid" title="Session ID: ${s.sid}">${shortSid}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td><code class="session-ip-code">${s.ip || '—'}</code></td>
+                                            <td><span class="session-time">${loginTimeFmt}</span></td>
+                                            <td><span class="session-active-time">⏱️ ${lastActiveFmt}</span></td>
+                                            <td>${currentTag}</td>
+                                            <td class="session-actions-cell">
+                                                <form action="/admin/sessions/destroy/${encodeURIComponent(s.sid)}" method="POST" data-confirm="${s.isCurrent ? '⚠️ এটি আপনার বর্তমান সেশন! এটি বন্ধ করলে আপনি এখনই লগআউট হয়ে যাবেন। চালিয়ে যেতে চান?' : 'এই ডিভাইসটির সেশন বন্ধ (Force Logout) করতে চান?'}">
+                                                    <input type="hidden" name="_csrf" value="${currentCsrf}">
+                                                    <button type="submit" class="btn-terminate-session ${s.isCurrent ? 'btn-terminate-self' : ''}" title="${s.isCurrent ? 'Logout This Device' : 'Force Logout This Device'}">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                                            <line x1="18" y1="6" x2="6" y2="18"/>
+                                                            <line x1="6" y1="6" x2="18" y2="18"/>
+                                                        </svg>
+                                                        <span>${s.isCurrent ? 'Logout Self' : 'Terminate'}</span>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('');
+                            }
+                        }
+
+                        if (mobileList) {
+                            if (data.detailedSessions.length === 0) {
+                                mobileList.innerHTML = '<div class="empty-sessions-card"><p>কোনো সক্রিয় সেশন পাওয়া যায়নি।</p></div>';
+                            } else {
+                                mobileList.innerHTML = data.detailedSessions.map(s => {
+                                    const isMuajUser = (s.user === 'muaj');
+                                    const userBadge = isMuajUser 
+                                        ? '<span class="session-user-pill pill-muaj"><span class="user-role-icon">👑</span> Muaj (Admin)</span>'
+                                        : '<span class="session-user-pill pill-hajera"><span class="user-role-icon">💖</span> Hajera (Viewer)</span>';
+                                    const currentTag = s.isCurrent 
+                                        ? '<span class="session-current-badge"><span class="live-dot-pulse"></span> This Device</span>' 
+                                        : '<span class="session-other-badge">Connected</span>';
+                                    const lastActiveFmt = s.lastActive ? formatRelTimeHelper(s.lastActive) : 'Just now';
+                                    const loginTimeFmt = s.loginTime ? new Date(parseSqliteDateHelper(s.loginTime)).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' }) : '-';
+
+                                    return `
+                                        <div class="session-mobile-card ${s.isCurrent ? 'is-current-card' : ''}" id="session-card-${s.sid}">
+                                            <div class="session-card-top">
+                                                <div class="session-card-user-info">
+                                                    ${userBadge}
+                                                    ${currentTag}
+                                                </div>
+                                                <form action="/admin/sessions/destroy/${encodeURIComponent(s.sid)}" method="POST" data-confirm="${s.isCurrent ? '⚠️ এটি আপনার বর্তমান সেশন! আপনি লগআউট হয়ে যাবেন।' : 'এই ডিভাইসটির সেশন বন্ধ করতে চান?'}">
+                                                    <input type="hidden" name="_csrf" value="${currentCsrf}">
+                                                    <button type="submit" class="btn-terminate-session btn-sm ${s.isCurrent ? 'btn-terminate-self' : ''}" title="Terminate Session">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                                                            <line x1="18" y1="6" x2="6" y2="18"/>
+                                                            <line x1="6" y1="6" x2="18" y2="18"/>
+                                                        </svg>
+                                                        <span>${s.isCurrent ? 'Logout' : 'Kill'}</span>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                            <div class="session-card-body">
+                                                <div class="session-card-detail-row">
+                                                    <span class="session-detail-lbl">📱 Device:</span>
+                                                    <strong class="session-detail-val">${s.device || 'Web Browser'}</strong>
+                                                </div>
+                                                <div class="session-card-detail-row">
+                                                    <span class="session-detail-lbl">🌐 IP Address:</span>
+                                                    <code class="session-detail-ip">${s.ip || '—'}</code>
+                                                </div>
+                                                <div class="session-card-detail-row">
+                                                    <span class="session-detail-lbl">⏱️ Last Active:</span>
+                                                    <span class="session-detail-val">${lastActiveFmt} (${loginTimeFmt})</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('');
+                            }
+                        }
                     }
 
                     // Update Timeline List & Count

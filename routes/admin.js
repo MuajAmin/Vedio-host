@@ -244,15 +244,18 @@ function collectSystemMetrics() {
     };
 }
 
-function collectAdminStats() {
+function collectAdminStats(currentSid = null) {
     const videos = db.prepare(
         'SELECT id, title, filename, thumbnail, size, duration, uploaded_by, uploaded_at, import_quality FROM videos ORDER BY uploaded_at DESC'
     ).all();
     const commentsCount = db.prepare('SELECT COUNT(*) AS count FROM comments').get().count;
     const progressCount = db.prepare('SELECT COUNT(*) AS count FROM watch_progress').get().count;
-    const sessionCount = db.prepare(
-        'SELECT COUNT(*) AS count FROM sessions WHERE expires_at > ? AND sess LIKE \'%"user":%\''
-    ).get(Date.now()).count;
+    
+    const muajSessionCount = db.countUserSessions('muaj');
+    const hajeraSessionCount = db.countUserSessions('hajera');
+    const sessionCount = muajSessionCount + hajeraSessionCount;
+    const detailedSessions = db.getAllActiveSessions(currentSid);
+
     const importJobs = getImportJobs().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
     const videoFiles = listFiles(videosDir);
@@ -333,9 +336,11 @@ function collectAdminStats() {
         commentsCount,
         progressCount,
         sessionCount,
+        muajSessionCount,
+        hajeraSessionCount,
+        detailedSessions,
         importJobs,
         hajeraStats,
-        hajeraSessionCount: db.countUserSessions('hajera'),
         hajeraBlocked: db.isUserBlocked('hajera'),
         hajeraBlockReason: (() => {
             try {
@@ -357,14 +362,14 @@ function collectAdminStats() {
 router.get('/admin', isMuaj, (req, res) => {
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(),
+        stats: collectAdminStats(req.sessionID),
         cleanupResult: null,
         accessMessage: null
     });
 });
 
 router.post('/admin/cleanup', isMuaj, async (req, res) => {
-    const stats = collectAdminStats();
+    const stats = collectAdminStats(req.sessionID);
     const targets = [...stats.orphanVideos, ...stats.orphanThumbnails];
     let deleted = 0;
     let bytesFreed = 0;
@@ -379,7 +384,7 @@ router.post('/admin/cleanup', isMuaj, async (req, res) => {
 
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(),
+        stats: collectAdminStats(req.sessionID),
         cleanupResult: { deleted, bytesFreed },
         accessMessage: null
     });
@@ -390,9 +395,58 @@ router.post('/admin/hajera/logout-sessions', isMuaj, (req, res) => {
     const destroyed = db.destroyUserSessions('hajera');
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(),
+        stats: collectAdminStats(req.sessionID),
         cleanupResult: null,
         accessMessage: { type: 'success', text: `Hajera-র ${destroyed}টা session logout করা হয়েছে।` }
+    });
+});
+
+// Force logout other Muaj sessions (keeps current device session)
+router.post('/admin/muaj/logout-other-sessions', isMuaj, (req, res) => {
+    const destroyed = db.destroyOtherUserSessions('muaj', req.sessionID);
+    res.render('admin', {
+        user: req.session.user,
+        stats: collectAdminStats(req.sessionID),
+        cleanupResult: null,
+        accessMessage: { type: 'success', text: `Muaj-এর অন্যান্য ${destroyed}টা session logout করা হয়েছে। বর্তমান ডিভাইসটি সক্রিয় রয়েছে।` }
+    });
+});
+
+// Force logout all Muaj sessions (including current)
+router.post('/admin/muaj/logout-all-sessions', isMuaj, (req, res) => {
+    db.destroyUserSessions('muaj');
+    req.session.destroy(() => {
+        res.redirect('/');
+    });
+});
+
+// Terminate a single specific session
+router.post('/admin/sessions/destroy/:sid', isMuaj, (req, res) => {
+    const targetSid = req.params.sid;
+    const isSelf = (targetSid === req.sessionID);
+    const destroyed = db.destroySingleSession(targetSid);
+
+    if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
+        return res.json({ 
+            success: destroyed, 
+            isSelf, 
+            remainingSessions: db.getAllActiveSessions(req.sessionID),
+            muajSessionCount: db.countUserSessions('muaj'),
+            hajeraSessionCount: db.countUserSessions('hajera')
+        });
+    }
+
+    if (isSelf) {
+        return req.session.destroy(() => {
+            res.redirect('/');
+        });
+    }
+
+    res.render('admin', {
+        user: req.session.user,
+        stats: collectAdminStats(req.sessionID),
+        cleanupResult: null,
+        accessMessage: { type: 'success', text: `Session (${targetSid.substring(0, 8)}...) সফলভাবে বন্ধ করা হয়েছে।` }
     });
 });
 
@@ -402,7 +456,7 @@ router.post('/admin/hajera/block', isMuaj, (req, res) => {
     db.blockUser('hajera', reason);
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(),
+        stats: collectAdminStats(req.sessionID),
         cleanupResult: null,
         accessMessage: { type: 'warning', text: `Hajera-কে block করা হয়েছে। কারণ: ${reason}` }
     });
@@ -413,7 +467,7 @@ router.post('/admin/hajera/unblock', isMuaj, (req, res) => {
     db.unblockUser('hajera');
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(),
+        stats: collectAdminStats(req.sessionID),
         cleanupResult: null,
         accessMessage: { type: 'success', text: 'Hajera-কে unblock করা হয়েছে। এখন login করতে পারবে।' }
     });
@@ -422,13 +476,18 @@ router.post('/admin/hajera/unblock', isMuaj, (req, res) => {
 // GET /admin/hajera/live-status — Live polling endpoint for Admin Dashboard
 router.get('/admin/hajera/live-status', isMuaj, (req, res) => {
     const presence = db.getUserPresence('hajera');
+    const muajPresence = db.getUserPresence('muaj');
     const rawWatchStats = db.getUserWatchStats('hajera');
     const activityTimeline = db.getRecentActivities('hajera', 30);
-    const sessionCount = db.countUserSessions('hajera');
+    const hajeraSessionCount = db.countUserSessions('hajera');
+    const muajSessionCount = db.countUserSessions('muaj');
+    const totalSessionCount = hajeraSessionCount + muajSessionCount;
+    const detailedSessions = db.getAllActiveSessions(req.sessionID);
     const isBlocked = db.isUserBlocked('hajera');
 
     res.json({
         presence,
+        muajPresence,
         watchStats: {
             totalSeconds: rawWatchStats.totalSeconds,
             todaySeconds: rawWatchStats.todaySeconds,
@@ -436,7 +495,11 @@ router.get('/admin/hajera/live-status', isMuaj, (req, res) => {
             todayFormatted: formatWatchTime(rawWatchStats.todaySeconds)
         },
         activityTimeline,
-        sessionCount,
+        sessionCount: hajeraSessionCount,
+        hajeraSessionCount,
+        muajSessionCount,
+        totalSessionCount,
+        detailedSessions,
         isBlocked,
         timestamp: Date.now()
     });

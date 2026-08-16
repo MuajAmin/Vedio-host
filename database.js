@@ -259,14 +259,136 @@ function getBlockedUsers() {
     }
 }
 
+function pruneExpiredSessions() {
+    try {
+        db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now());
+        // Clean unauthenticated / ghost sessions older than 30 minutes
+        db.prepare("DELETE FROM sessions WHERE sess NOT LIKE '%\"user\":%' AND expires_at <= ?").run(Date.now() + 30 * 60 * 1000);
+    } catch (err) {
+        console.error('[db] Error pruning expired sessions:', err.message);
+    }
+}
+
+function getAllActiveSessions(currentSid = null) {
+    pruneExpiredSessions();
+    try {
+        const rows = db.prepare('SELECT sid, sess, expires_at FROM sessions WHERE expires_at > ? ORDER BY expires_at DESC').all(Date.now());
+        const hajeraPresence = getUserPresence('hajera');
+        const muajPresence = getUserPresence('muaj');
+
+        const list = [];
+        for (const row of rows) {
+            try {
+                const data = JSON.parse(row.sess);
+                if (data && data.user) {
+                    const u = String(data.user).toLowerCase();
+                    const isCurrent = currentSid ? (row.sid === currentSid) : false;
+                    const fallbackPresence = u === 'hajera' ? hajeraPresence : muajPresence;
+
+                    list.push({
+                        sid: row.sid,
+                        user: u,
+                        device: data.device || (fallbackPresence && fallbackPresence.deviceInfo) || 'Web Browser',
+                        ip: data.ip || (fallbackPresence && fallbackPresence.ipAddress) || '—',
+                        loginTime: data.loginTime || null,
+                        lastActive: data.lastActive || (fallbackPresence && fallbackPresence.lastSeen) || null,
+                        expiresAt: row.expires_at,
+                        isCurrent
+                    });
+                }
+            } catch {}
+        }
+        return list;
+    } catch (err) {
+        console.error('[db] Error getting active sessions:', err.message);
+        return [];
+    }
+}
+
 function destroyUserSessions(username) {
     if (!username) return 0;
     try {
         const pattern = `%"user":"${username}"%`;
         const result = db.prepare('DELETE FROM sessions WHERE sess LIKE ?').run(pattern);
-        return result.changes || 0;
+        const count = result.changes || 0;
+
+        // Force user presence to offline
+        updateUserPresence(username, { status: 'offline' });
+
+        logActivity(username, 'logout', {
+            details: `All active sessions (${count}) force-terminated by admin`
+        });
+        return count;
     } catch (err) {
         console.error('[db] Error destroying user sessions:', err.message);
+        return 0;
+    }
+}
+
+function destroyOtherUserSessions(username, currentSid) {
+    if (!username) return 0;
+    try {
+        let result;
+        const pattern = `%"user":"${username}"%`;
+        if (currentSid) {
+            result = db.prepare('DELETE FROM sessions WHERE sess LIKE ? AND sid != ?').run(pattern, currentSid);
+        } else {
+            result = db.prepare('DELETE FROM sessions WHERE sess LIKE ?').run(pattern);
+        }
+        const count = result.changes || 0;
+
+        logActivity(username, 'logout', {
+            details: `Other active sessions (${count}) force-terminated by admin`
+        });
+        return count;
+    } catch (err) {
+        console.error('[db] Error destroying other user sessions:', err.message);
+        return 0;
+    }
+}
+
+function destroySingleSession(sid) {
+    if (!sid) return false;
+    try {
+        const row = db.prepare('SELECT sid, sess FROM sessions WHERE sid = ?').get(sid);
+        if (!row) return false;
+
+        let user = null;
+        try {
+            const parsed = JSON.parse(row.sess);
+            user = parsed && parsed.user ? parsed.user : null;
+        } catch {}
+
+        db.prepare('DELETE FROM sessions WHERE sid = ?').run(sid);
+
+        if (user) {
+            const remaining = countUserSessions(user);
+            if (remaining === 0) {
+                updateUserPresence(user, { status: 'offline' });
+            }
+            logActivity(user, 'logout', {
+                details: `Session (${sid.substring(0, 8)}...) terminated by admin`
+            });
+        }
+        return true;
+    } catch (err) {
+        console.error('[db] Error destroying single session:', err.message);
+        return false;
+    }
+}
+
+function destroyAllSessions(keepCurrentSid = null) {
+    try {
+        let result;
+        if (keepCurrentSid) {
+            result = db.prepare('DELETE FROM sessions WHERE sid != ?').run(keepCurrentSid);
+        } else {
+            result = db.prepare('DELETE FROM sessions').run();
+        }
+        updateUserPresence('hajera', { status: 'offline' });
+        return result.changes || 0;
+    } catch (err) {
+        console.error('[db] Error destroying all sessions:', err.message);
         return 0;
     }
 }
@@ -828,6 +950,11 @@ db.blockUser = blockUser;
 db.unblockUser = unblockUser;
 db.getBlockedUsers = getBlockedUsers;
 db.destroyUserSessions = destroyUserSessions;
+db.destroyOtherUserSessions = destroyOtherUserSessions;
+db.destroySingleSession = destroySingleSession;
+db.destroyAllSessions = destroyAllSessions;
+db.getAllActiveSessions = getAllActiveSessions;
+db.pruneExpiredSessions = pruneExpiredSessions;
 db.countUserSessions = countUserSessions;
 db.updateUserPresence = updateUserPresence;
 db.getUserPresence = getUserPresence;

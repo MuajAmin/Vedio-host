@@ -321,6 +321,12 @@ router.post('/api/presence/ping', isAuthenticated, (req, res) => {
     const pos = Number(currentTime) || 0;
     const dur = Number(duration) || 0;
 
+    if (req.session) {
+        req.session.lastActive = new Date().toISOString();
+        if (!req.session.device) req.session.device = deviceInfo;
+        if (!req.session.ip) req.session.ip = ipAddress;
+    }
+
     db.updateUserPresence(user, {
         page: page || '/dashboard',
         videoId: videoId || null,

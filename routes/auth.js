@@ -82,9 +82,16 @@ router.post('/login', (req, res) => {
                 });
             }
 
-            req.session.user = user;
             const deviceInfo = parseUserAgent(req.headers['user-agent']);
             const ipAddress = getClientIp(req);
+            const nowIso = new Date().toISOString();
+
+            req.session.user = user;
+            req.session.device = deviceInfo;
+            req.session.ip = ipAddress;
+            req.session.userAgent = req.headers['user-agent'] || '';
+            req.session.loginTime = nowIso;
+            req.session.lastActive = nowIso;
 
             db.updateUserPresence(user, {
                 status: 'online',

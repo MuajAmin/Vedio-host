@@ -10906,3 +10906,579 @@ h3,
     }
 }
 
+/* ========================================================
+   ADMIN SESSION MANAGEMENT & ACCESS CONTROL STYLING
+   ======================================================== */
+.access-control-card {
+    background: linear-gradient(145deg, rgba(17, 19, 28, 0.95), rgba(10, 11, 18, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(16px);
+}
+
+.access-control-card.is-blocked {
+    border-color: rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.15);
+}
+
+.access-control-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+    padding-bottom: 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.access-control-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.access-control-heading {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 2px 0;
+    letter-spacing: -0.01em;
+}
+
+.access-control-subtitle {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.access-status-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.session-count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.session-badge-muaj {
+    background: rgba(139, 92, 246, 0.12);
+    border-color: rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
+}
+
+.session-badge-hajera {
+    background: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.35);
+    color: #fda4af;
+}
+
+.block-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.block-status-badge.active {
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+}
+
+.block-status-badge.blocked {
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    color: #f87171;
+    animation: blockedPulse 2s infinite ease-in-out;
+}
+
+@keyframes blockedPulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(239, 68, 68, 0); }
+    50% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.4); }
+}
+
+/* Actions Grid */
+.access-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.access-box {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+}
+
+.access-box:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.access-box-hajera {
+    border-left: 3px solid #f43f5e;
+}
+
+.access-box-muaj {
+    border-left: 3px solid #8b5cf6;
+}
+
+.access-box-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.access-box-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.access-box-title h4 {
+    margin: 0;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.access-box-pill {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.access-box-pill.pill-active {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+}
+
+.access-box-pill.pill-blocked {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+.access-box-pill.pill-muaj {
+    background: rgba(139, 92, 246, 0.18);
+    color: #c4b5fd;
+}
+
+.access-box-desc {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin: 0 0 14px 0;
+    line-height: 1.45;
+}
+
+.access-box-btns {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-access-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-access-action:active {
+    transform: scale(0.96);
+}
+
+.btn-access-action:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-logout-sessions {
+    background: rgba(244, 63, 94, 0.15);
+    border-color: rgba(244, 63, 94, 0.35);
+    color: #fda4af;
+}
+
+.btn-logout-sessions:hover:not(:disabled) {
+    background: rgba(244, 63, 94, 0.28);
+    border-color: rgba(244, 63, 94, 0.6);
+    color: #fff;
+    box-shadow: 0 0 14px rgba(244, 63, 94, 0.35);
+}
+
+.btn-logout-other {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
+}
+
+.btn-logout-other:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.28);
+    border-color: rgba(139, 92, 246, 0.6);
+    color: #fff;
+    box-shadow: 0 0 14px rgba(139, 92, 246, 0.35);
+}
+
+.btn-logout-all-danger {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+}
+
+.btn-logout-all-danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fff;
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.3);
+}
+
+.btn-block {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
+}
+
+.btn-block:hover {
+    background: rgba(239, 68, 68, 0.35);
+    color: #fff;
+}
+
+.btn-unblock {
+    background: rgba(16, 185, 129, 0.18);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #34d399;
+}
+
+.btn-unblock:hover {
+    background: rgba(16, 185, 129, 0.3);
+    color: #fff;
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.3);
+}
+
+.block-form-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 180px;
+}
+
+.block-reason-input {
+    flex: 1;
+    min-width: 100px;
+    padding: 6px 10px;
+    font-size: 0.76rem;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #fff;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.block-reason-input:focus {
+    border-color: #f43f5e;
+}
+
+.block-reason-display {
+    margin-top: 10px;
+    padding: 6px 10px;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 8px;
+    font-size: 0.74rem;
+    color: #fca5a5;
+}
+
+/* Detailed Active Sessions Container */
+.detailed-sessions-container {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.detailed-sessions-header {
+    margin-bottom: 14px;
+}
+
+.detailed-sessions-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.detailed-sessions-heading {
+    margin: 0 0 2px 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.detailed-sessions-sub {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+}
+
+.sessions-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sessions-table th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.sessions-table td {
+    padding: 10px 12px;
+    font-size: 0.8rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    vertical-align: middle;
+}
+
+.session-row.is-current-session {
+    background: rgba(16, 185, 129, 0.04);
+}
+
+.session-user-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.74rem;
+    font-weight: 700;
+}
+
+.session-user-pill.pill-muaj {
+    background: rgba(139, 92, 246, 0.15);
+    color: #c4b5fd;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.session-user-pill.pill-hajera {
+    background: rgba(244, 63, 94, 0.15);
+    color: #fda4af;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.session-device-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.device-icon {
+    font-size: 1.1rem;
+}
+
+.device-meta {
+    display: flex;
+    flex-direction: column;
+}
+
+.device-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.device-sid {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+
+.session-ip-code {
+    background: rgba(255, 255, 255, 0.06);
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 0.74rem;
+    color: #93c5fd;
+}
+
+.session-current-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.session-other-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+}
+
+.btn-terminate-session {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    font-size: 0.74rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-terminate-session:hover {
+    background: rgba(239, 68, 68, 0.28);
+    border-color: rgba(239, 68, 68, 0.6);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+
+.btn-terminate-session.btn-terminate-self {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #fcd34d;
+}
+
+.btn-terminate-session.btn-terminate-self:hover {
+    background: rgba(245, 158, 11, 0.28);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+/* Mobile Sessions List */
+.sessions-mobile-list {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.session-mobile-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.session-mobile-card.is-current-card {
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.03);
+}
+
+.session-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.session-card-user-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.session-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.78rem;
+}
+
+.session-card-detail-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+}
+
+.session-detail-val {
+    color: var(--text-primary);
+}
+
+.session-detail-ip {
+    background: rgba(255, 255, 255, 0.06);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: #93c5fd;
+    font-size: 0.72rem;
+}
+
+.empty-sessions-cell,
+.empty-sessions-card {
+    text-align: center;
+    padding: 18px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+@media (max-width: 900px) {
+    .access-actions-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .sessions-desktop-table {
+        display: none;
+    }
+
+    .sessions-mobile-list {
+        display: flex;
+    }
+}
+

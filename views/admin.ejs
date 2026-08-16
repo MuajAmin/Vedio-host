@@ -196,9 +196,107 @@ const timelineHtml = activityTimeline.length === 0
     }).join('');
 
 const hajeraBlocked = stats && stats.hajeraBlocked;
+const muajSessionCount = (stats && stats.muajSessionCount) || 0;
 const hajeraSessionCount = (stats && stats.hajeraSessionCount) || 0;
+const totalSessionCount = (stats && typeof stats.sessionCount === 'number') ? stats.sessionCount : (muajSessionCount + hajeraSessionCount);
+const detailedSessions = (stats && Array.isArray(stats.detailedSessions)) ? stats.detailedSessions : [];
 const hajeraBlockReason = (stats && stats.hajeraBlockReason) || '';
 const accessMsg = (typeof accessMessage !== 'undefined' && accessMessage) ? accessMessage : null;
+
+let sessionsTableRows = '';
+let sessionsCardsHtml = '';
+
+if (detailedSessions.length === 0) {
+    sessionsTableRows = `<tr><td colspan="7" class="empty-sessions-cell">কোনো সক্রিয় সেশন পাওয়া যায়নি।</td></tr>`;
+    sessionsCardsHtml = `<div class="empty-sessions-card"><p>কোনো সক্রিয় সেশন পাওয়া যায়নি।</p></div>`;
+} else {
+    sessionsTableRows = detailedSessions.map(s => {
+        const isMuajUser = (s.user === 'muaj');
+        const userBadge = isMuajUser 
+            ? `<span class="session-user-pill pill-muaj"><span class="user-role-icon">👑</span> Muaj (Admin)</span>`
+            : `<span class="session-user-pill pill-hajera"><span class="user-role-icon">💖</span> Hajera (Viewer)</span>`;
+        const currentTag = s.isCurrent 
+            ? `<span class="session-current-badge"><span class="live-dot-pulse"></span> This Device (Active)</span>` 
+            : `<span class="session-other-badge">Connected Device</span>`;
+        const lastActiveFmt = s.lastActive ? timeAgo(s.lastActive) : 'Just now';
+        const loginTimeFmt = s.loginTime ? formatDate(s.loginTime) : '-';
+        const shortSid = s.sid ? s.sid.substring(0, 10) + '...' : '-';
+
+        return `<tr class="session-row ${s.isCurrent ? 'is-current-session' : ''}" id="session-row-${h(s.sid)}">
+            <td>${userBadge}</td>
+            <td>
+                <div class="session-device-cell">
+                    <span class="device-icon">${s.device && s.device.toLowerCase().includes('android') ? '📱' : (s.device && s.device.toLowerCase().includes('iphone') ? '📱' : '💻')}</span>
+                    <div class="device-meta">
+                        <span class="device-name">${h(s.device || 'Web Browser')}</span>
+                        <span class="device-sid" title="Session ID: ${h(s.sid)}">${h(shortSid)}</span>
+                    </div>
+                </div>
+            </td>
+            <td><code class="session-ip-code">${h(s.ip || '—')}</code></td>
+            <td><span class="session-time">${h(loginTimeFmt)}</span></td>
+            <td><span class="session-active-time" title="${h(s.lastActive || '')}">⏱️ ${h(lastActiveFmt)}</span></td>
+            <td>${currentTag}</td>
+            <td class="session-actions-cell">
+                <form action="/admin/sessions/destroy/${encodeURIComponent(s.sid)}" method="POST" data-confirm="${s.isCurrent ? '⚠️ এটি আপনার বর্তমান সেশন! এটি বন্ধ করলে আপনি এখনই লগআউট হয়ে যাবেন। চালিয়ে যেতে চান?' : 'এই ডিভাইসটির সেশন বন্ধ (Force Logout) করতে চান?'}">
+                    <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                    <button type="submit" class="btn-terminate-session ${s.isCurrent ? 'btn-terminate-self' : ''}" title="${s.isCurrent ? 'Logout This Device' : 'Force Logout This Device'}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                        <span>${s.isCurrent ? 'Logout Self' : 'Terminate'}</span>
+                    </button>
+                </form>
+            </td>
+        </tr>`;
+    }).join('');
+
+    sessionsCardsHtml = detailedSessions.map(s => {
+        const isMuajUser = (s.user === 'muaj');
+        const userBadge = isMuajUser 
+            ? `<span class="session-user-pill pill-muaj"><span class="user-role-icon">👑</span> Muaj (Admin)</span>`
+            : `<span class="session-user-pill pill-hajera"><span class="user-role-icon">💖</span> Hajera (Viewer)</span>`;
+        const currentTag = s.isCurrent 
+            ? `<span class="session-current-badge"><span class="live-dot-pulse"></span> This Device</span>` 
+            : `<span class="session-other-badge">Connected</span>`;
+        const lastActiveFmt = s.lastActive ? timeAgo(s.lastActive) : 'Just now';
+        const loginTimeFmt = s.loginTime ? formatDate(s.loginTime) : '-';
+
+        return `<div class="session-mobile-card ${s.isCurrent ? 'is-current-card' : ''}" id="session-card-${h(s.sid)}">
+            <div class="session-card-top">
+                <div class="session-card-user-info">
+                    ${userBadge}
+                    ${currentTag}
+                </div>
+                <form action="/admin/sessions/destroy/${encodeURIComponent(s.sid)}" method="POST" data-confirm="${s.isCurrent ? '⚠️ এটি আপনার বর্তমান সেশন! আপনি লগআউট হয়ে যাবেন।' : 'এই ডিভাইসটির সেশন বন্ধ করতে চান?'}">
+                    <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                    <button type="submit" class="btn-terminate-session btn-sm ${s.isCurrent ? 'btn-terminate-self' : ''}" title="Terminate Session">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                        <span>${s.isCurrent ? 'Logout' : 'Kill'}</span>
+                    </button>
+                </form>
+            </div>
+            <div class="session-card-body">
+                <div class="session-card-detail-row">
+                    <span class="session-detail-lbl">📱 Device:</span>
+                    <strong class="session-detail-val">${h(s.device || 'Web Browser')}</strong>
+                </div>
+                <div class="session-card-detail-row">
+                    <span class="session-detail-lbl">🌐 IP Address:</span>
+                    <code class="session-detail-ip">${h(s.ip || '—')}</code>
+                </div>
+                <div class="session-card-detail-row">
+                    <span class="session-detail-lbl">⏱️ Last Active:</span>
+                    <span class="session-detail-val">${h(lastActiveFmt)} (Login: ${h(loginTimeFmt)})</span>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
 
 const accessMsgHtml = accessMsg
     ? `<div class="alert admin-alert access-alert access-alert-${h(accessMsg.type)}">
@@ -876,71 +974,173 @@ const videoRows = recentVideos.length === 0
                 </div>
             </div>
 
-            <!-- Hajera Access Control Panel -->
-            <div class="access-control-card ${hajeraBlocked ? 'is-blocked' : ''}">
+            <!-- ========================================================
+                 SESSION & ACCESS MANAGEMENT CENTER (MUAJ & HAJERA)
+                 ======================================================== -->
+            <div class="access-control-card ${hajeraBlocked ? 'is-blocked' : ''}" id="sessionsManagementSection">
                 <div class="access-control-header">
                     <div class="access-control-title-group">
                         <div class="icon-bubble icon-shield">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                             </svg>
                         </div>
-                        <h3 class="access-control-heading">Access Control</h3>
+                        <div>
+                            <h3 class="access-control-heading">Active Sessions &amp; Security Control</h3>
+                            <p class="access-control-subtitle">Real-time device tracking, individual termination &amp; user access controls</p>
+                        </div>
                     </div>
                     <div class="access-status-badges">
-                        <span class="session-count-badge" id="hajeraSessionBadge" title="Active sessions">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-                                <circle cx="12" cy="12" r="10"/>
-                                <path d="M12 6v6l4 2"/>
-                            </svg>
-                            ${h(hajeraSessionCount)} session${hajeraSessionCount !== 1 ? 's' : ''}
+                        <span class="session-count-badge session-badge-muaj" id="muajSessionBadge" title="Muaj Active Sessions">
+                            <span class="badge-icon">👑</span>
+                            <span id="muajSessionText">${h(muajSessionCount)} Muaj Session${muajSessionCount !== 1 ? 's' : ''}</span>
+                        </span>
+                        <span class="session-count-badge session-badge-hajera" id="hajeraSessionBadge" title="Hajera Active Sessions">
+                            <span class="badge-icon">💖</span>
+                            <span id="hajeraSessionText">${h(hajeraSessionCount)} Hajera Session${hajeraSessionCount !== 1 ? 's' : ''}</span>
                         </span>
                         ${hajeraBlocked
-                            ? '<span class="block-status-badge blocked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Blocked</span>'
-                            : '<span class="block-status-badge active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg> Active</span>'
+                            ? '<span class="block-status-badge blocked" id="hajeraBlockStatusBadge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Hajera Blocked</span>'
+                            : '<span class="block-status-badge active" id="hajeraBlockStatusBadge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg> Hajera Active</span>'
                         }
                     </div>
                 </div>
 
                 <div class="access-control-body">
-                    <!-- Force Logout Sessions -->
-                    <div class="access-action-row">
-                        <div class="access-action-info">
-                            <h4>Force Logout</h4>
-                            <p>Hajera-র সব active sessions destroy করো। সে immediately logged out হয়ে যাবে।</p>
+                    <!-- Quick Force-Logout Action Grid -->
+                    <div class="access-actions-grid">
+                        <!-- Hajera Control Box -->
+                        <div class="access-box access-box-hajera">
+                            <div class="access-box-header">
+                                <div class="access-box-title">
+                                    <span class="box-icon">💖</span>
+                                    <h4>Hajera Access Control</h4>
+                                </div>
+                                <span class="access-box-pill ${hajeraBlocked ? 'pill-blocked' : 'pill-active'}">${hajeraBlocked ? 'Blocked' : 'Allowed'}</span>
+                            </div>
+                            <p class="access-box-desc">Hajera-র সমস্ত active session ধ্বংস করুন অথবা ওয়েবসাইটের অ্যাক্সেস সাময়িকভাবে রেস্ট্রিক্ট করুন।</p>
+                            
+                            <div class="access-box-btns">
+                                <form action="/admin/hajera/logout-sessions" method="POST" data-confirm="Hajera-র সব active sessions এখনই logout করতে চান?">
+                                    <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                                    <button type="submit" class="btn-access-action btn-logout-sessions" id="btnHajeraLogoutAll" ${hajeraSessionCount === 0 ? 'disabled' : ''}>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                                            <polyline points="16 17 21 12 16 7"/>
+                                            <line x1="21" y1="12" x2="9" y2="12"/>
+                                        </svg>
+                                        <span>Force Logout Hajera</span>
+                                    </button>
+                                </form>
+
+                                ${hajeraBlocked
+                                    ? `<form action="/admin/hajera/unblock" method="POST" data-confirm="Hajera-কে unblock করতে চান? আবার login করতে পারবে।">
+                                        <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                                        <button type="submit" class="btn-access-action btn-unblock">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                                <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+                                            </svg>
+                                            <span>Unblock Hajera</span>
+                                        </button>
+                                       </form>`
+                                    : `<form action="/admin/hajera/block" method="POST" data-confirm="Hajera-কে block করতে চান? সব sessions সাথে সাথে ধ্বংস হয়ে যাবে!" class="block-form-inline">
+                                        <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                                        <input type="text" name="reason" class="block-reason-input" placeholder="Block reason (optional)..." maxlength="150" />
+                                        <button type="submit" class="btn-access-action btn-block">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                                            </svg>
+                                            <span>Block</span>
+                                        </button>
+                                       </form>`
+                                }
+                            </div>
+                            ${hajeraBlocked && hajeraBlockReason ? `<div class="block-reason-display"><strong>🚫 Blocked Reason:</strong> ${h(hajeraBlockReason)}</div>` : ''}
                         </div>
-                        <form action="/admin/hajera/logout-sessions" method="POST" data-confirm="Hajera-র সব active sessions logout করতে চাও?">
-                            <input type="hidden" name="_csrf" value="${h(csrfToken)}">
-                            <button type="submit" class="btn-access-action btn-logout-sessions" ${hajeraSessionCount === 0 ? 'disabled' : ''}>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                                    <polyline points="16 17 21 12 16 7"/>
-                                    <line x1="21" y1="12" x2="9" y2="12"/>
-                                </svg>
-                                Logout All
-                            </button>
-                        </form>
+
+                        <!-- Muaj Admin Control Box -->
+                        <div class="access-box access-box-muaj">
+                            <div class="access-box-header">
+                                <div class="access-box-title">
+                                    <span class="box-icon">👑</span>
+                                    <h4>Muaj Admin Session Control</h4>
+                                </div>
+                                <span class="access-box-pill pill-muaj">Admin</span>
+                            </div>
+                            <p class="access-box-desc">অন্যান্য ডিভাইস (মোবাইল/অন্যান্য ব্রাউজার) থেকে Muaj-এর সেশন বন্ধ করুন অথবা জরুরি ফোর্স লগআউট করুন।</p>
+                            
+                            <div class="access-box-btns">
+                                <form action="/admin/muaj/logout-other-sessions" method="POST" data-confirm="Muaj-এর অন্যান্য সব ডিভাইস থেকে সেশন লগআউট করতে চান? আপনার বর্তমান ডিভাইসটি সচল থাকবে।">
+                                    <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                                    <button type="submit" class="btn-access-action btn-logout-other" id="btnMuajLogoutOther" ${muajSessionCount <= 1 ? 'disabled' : ''}>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                            <line x1="8" y1="21" x2="16" y2="21"/>
+                                            <line x1="12" y1="17" x2="12" y2="21"/>
+                                        </svg>
+                                        <span>Logout Other Devices</span>
+                                    </button>
+                                </form>
+
+                                <form action="/admin/muaj/logout-all-sessions" method="POST" data-confirm="⚠️ সতর্কতা: এটি Muaj-এর বর্তমান ডিভাইস সহ সমস্ত সেশন বন্ধ করে দেবে! আপনি এখনই লগআউট হয়ে যাবেন। চালিয়ে যেতে চান?">
+                                    <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                                    <button type="submit" class="btn-access-action btn-logout-all-danger" id="btnMuajLogoutAll">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                                            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                                            <line x1="12" y1="2" x2="12" y2="12"/>
+                                        </svg>
+                                        <span>Logout All (Global)</span>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="access-divider"></div>
-
-                    <!-- Block / Unblock Toggle -->
-                    <div class="access-action-row danger-zone ${hajeraBlocked ? 'is-blocked-zone' : ''}">
-                        <div class="access-action-info">
-                            <h4>${hajeraBlocked ? '🚫 Access Restricted' : '🔓 Access Allowed'}</h4>
-                            <p>${hajeraBlocked
-                                ? 'Hajera এখন blocked। Login করতে পারবে না এবং existing sessions destroy হয়ে গেছে।'
-                                : 'Hajera-র access restrict করলে সে login করতে পারবে না এবং সব sessions destroy হয়ে যাবে।'
-                            }</p>
-                            ${hajeraBlocked && hajeraBlockReason
-                                ? '<div class="block-reason-display"><strong>কারণ:</strong> ' + h(hajeraBlockReason) + '</div>'
-                                : ''
-                            }
+                    <!-- Detailed Active Sessions List (Table & Cards) -->
+                    <div class="detailed-sessions-container">
+                        <div class="detailed-sessions-header">
+                            <div class="detailed-sessions-title-group">
+                                <div class="icon-bubble icon-cyan">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                                        <line x1="7" y1="2" x2="7" y2="22"/>
+                                        <line x1="17" y1="2" x2="17" y2="22"/>
+                                        <line x1="2" y1="12" x2="22" y2="12"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 class="detailed-sessions-heading">Connected Device Sessions</h4>
+                                    <span class="detailed-sessions-sub" id="detailedSessionsSub">Total <strong id="detailedSessionsCount">${h(detailedSessions.length)}</strong> active session${detailedSessions.length !== 1 ? 's' : ''} currently authenticated</span>
+                                </div>
+                            </div>
                         </div>
-                        ${hajeraBlocked
-                            ? '<form action="/admin/hajera/unblock" method="POST" data-confirm="Hajera-কে unblock করতে চাও? আবার login করতে পারবে।"><input type="hidden" name="_csrf" value="' + h(csrfToken) + '"><button type="submit" class="btn-access-action btn-unblock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg> Unblock</button></form>'
-                            : '<form action="/admin/hajera/block" method="POST" data-confirm="Hajera-কে block করতে চাও? সব sessions destroy হয়ে যাবে!" class="block-form"><input type="hidden" name="_csrf" value="' + h(csrfToken) + '"><input type="text" name="reason" class="block-reason-input" placeholder="Block reason (optional)..." maxlength="200" /><button type="submit" class="btn-access-action btn-block"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Block</button></form>'
-                        }
+
+                        <!-- Desktop Table View -->
+                        <div class="admin-table-wrap sessions-desktop-table">
+                            <table class="admin-table sessions-table" id="sessionsDesktopTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 150px;">User</th>
+                                        <th>Device / Browser</th>
+                                        <th style="width: 140px;">IP Address</th>
+                                        <th style="width: 150px;">Login Time</th>
+                                        <th style="width: 130px;">Last Active</th>
+                                        <th style="width: 150px;">Status</th>
+                                        <th style="width: 120px; text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sessionsTableBody">
+                                    ${sessionsTableRows}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Mobile Touch Cards View -->
+                        <div class="sessions-mobile-list" id="sessionsMobileList">
+                            ${sessionsCardsHtml}
+                        </div>
                     </div>
                 </div>
             </div>
