@@ -267,8 +267,18 @@
 
     function formatTime(isoStr) {
         if (!isoStr) return '';
-        const d = new Date(isoStr);
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        try {
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return '';
+            return d.toLocaleTimeString('en-US', {
+                timeZone: 'Asia/Dhaka',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        } catch {
+            return '';
+        }
     }
 
     function renderReactionsHtml(reactions, currentU) {
@@ -838,6 +848,17 @@
                 }, 2500);
             });
 
+            textarea.addEventListener('focus', () => {
+                setTimeout(() => {
+                    getActiveContainers().forEach(scrollToBottom);
+                    if (window.innerWidth <= 900) {
+                        try {
+                            textarea.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                        } catch {}
+                    }
+                }, 250);
+            });
+
             textarea.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -1057,6 +1078,19 @@
             setTimeout(() => {
                 shareToChatBtn.innerHTML = originalHtml;
             }, 2000);
+        });
+    }
+
+    // ------------------------------------------------------------
+    //  15. MOBILE VIRTUAL KEYBOARD / VIEWPORT ADAPTER
+    // ------------------------------------------------------------
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => {
+            if (fullPageMessagesList || (drawer && drawer.classList.contains('is-open'))) {
+                setTimeout(() => {
+                    getActiveContainers().forEach(scrollToBottom);
+                }, 100);
+            }
         });
     }
 

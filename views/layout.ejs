@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="description" content="VideoHost — Private Video Hosting Platform">
     <title>VideoHost - <%= typeof pageTitle !=='undefined' ? pageTitle : 'Private Video Hub' %>
     </title>
@@ -14,13 +14,13 @@
     <link rel="manifest" href="/manifest.json">
     <script src="/js/theme-init.js?v=6.4"></script>
     <link rel="stylesheet" href="/css/style.css?v=6.4">
-    <link rel="stylesheet" href="/css/messages.css?v=2.3">
+    <link rel="stylesheet" href="/css/messages.css?v=2.4">
 </head>
 
-<body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>">
+<body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
     <%- body %>
 
-        <% if (typeof user !=='undefined' && user) { %>
+        <% if (typeof user !=='undefined' && user && (typeof isMessagesPage === 'undefined' || !isMessagesPage) && (typeof page === 'undefined' || page !== 'messages')) { %>
             <!-- Global Floating Chat Launcher & Drawer Widget -->
             <% const partnerName = user === 'muaj' ? 'Hajera' : 'Muaj'; %>
             <% const partnerUsername = user === 'muaj' ? 'hajera' : 'muaj'; %>
@@ -227,7 +227,7 @@
             <% } %>
 
                 <script src="/js/app.js?v=6.1"></script>
-                <script src="/js/messages.js?v=2.3"></script>
+                <script src="/js/messages.js?v=2.4"></script>
                 <script>
                     if ('serviceWorker' in navigator) {
                         navigator.serviceWorker.register('/sw.js').catch(function() {});
