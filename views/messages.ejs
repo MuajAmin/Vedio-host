@@ -142,35 +142,48 @@ const videoOptionsHtml = videoList.map(v => `
     </div>
 
     <!-- Navigation Bar -->
-    <nav class="navbar">
+    <nav class="navbar" id="mainNavbar">
         <div class="nav-left">
-            <a href="/dashboard" class="nav-logo">
+            <a href="/dashboard" class="nav-logo" title="VideoHost Home">
                 <div class="logo-icon-wrapper">
-                    <svg viewBox="0 0 48 48" fill="none" width="24" height="24">
-                        <rect x="4" y="8" width="40" height="32" rx="6" stroke="currentColor" stroke-width="2.5"/>
+                    <svg viewBox="0 0 48 48" fill="none" width="22" height="22">
+                        <rect x="4" y="8" width="40" height="32" rx="7" stroke="currentColor" stroke-width="2.5"/>
                         <polygon points="20,16 34,24 20,32" fill="currentColor"/>
                     </svg>
+                    <span class="logo-shine"></span>
                 </div>
-                <span>Video<em>Host</em></span>
+                <div class="logo-text-group">
+                    <span class="logo-main-text">Video<em>Host</em></span>
+                    <span class="nav-brand-pill">CHAT</span>
+                </div>
             </a>
         </div>
         <div class="nav-right">
-            <a href="/dashboard" class="btn btn-ghost">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <a href="/dashboard" class="btn btn-ghost btn-back-nav" title="Back to Library">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
                     <line x1="19" y1="12" x2="5" y2="12"/>
                     <polyline points="12 19 5 12 12 5"/>
                 </svg>
-                <span>Dashboard</span>
+                <span class="nav-btn-text">Dashboard</span>
             </a>
-            <button type="button" class="btn btn-ghost btn-icon" id="themeSwitcherNavBtn" title="Change Theme">
+            <button type="button" class="btn btn-ghost btn-icon nav-theme-toggle" id="themeSwitcherNavBtn" title="Change Theme & Appearance">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                     <circle cx="12" cy="12" r="10"/>
                     <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
                 </svg>
             </button>
             <div class="user-badge ${currentUser === 'muaj' ? 'badge-admin' : 'badge-viewer'} user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture">
-                <div class="badge-avatar">${typeof renderAvatar === 'function' ? renderAvatar(currentUser, 'nav-avatar') : ''}</div>
-                <span>${currentUser === 'muaj' ? 'Muaj' : 'Hajera'}</span>
+                <div class="badge-avatar-wrap">
+                    <div class="badge-avatar">${typeof renderAvatar === 'function' ? renderAvatar(currentUser, 'nav-avatar') : ''}</div>
+                    <span class="badge-status-dot"></span>
+                </div>
+                <div class="badge-info">
+                    <span class="user-name">${currentUser === 'muaj' ? 'Muaj' : 'Hajera'}</span>
+                    <span class="badge-role">${currentUser === 'muaj' ? 'Admin' : 'Viewer'}</span>
+                </div>
+                <svg class="badge-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
             </div>
         </div>
     </nav>

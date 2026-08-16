@@ -20,6 +20,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const prefersReducedMotion = window.matchMedia &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    // Dynamic navbar elevation on scroll
+    const navbars = document.querySelectorAll('.navbar, .android-app-bar');
+    if (navbars.length > 0) {
+        let lastScrollY = window.scrollY;
+        const handleNavScroll = () => {
+            const isScrolled = window.scrollY > 12;
+            navbars.forEach(nav => {
+                if (isScrolled) {
+                    nav.classList.add('is-scrolled');
+                } else {
+                    nav.classList.remove('is-scrolled');
+                }
+            });
+        };
+        window.addEventListener('scroll', handleNavScroll, { passive: true });
+        handleNavScroll();
+    }
+
     // Thumbnail error fallback — replaces inline onerror blocked by CSP
     document.addEventListener('error', (e) => {
         if (e.target.matches && e.target.matches('.thumb-img')) {
