@@ -65,8 +65,18 @@ function renderAvatar(username, extraClass = '', userAvatars = {}) {
 function attachLocals(req, res, next) {
     const user = req.session ? req.session.user : null;
     const avatars = getCachedAvatars();
+    let unreadCount = 0;
+    if (user) {
+        try {
+            const db = require('../database');
+            if (db && typeof db.getUnreadMessageCount === 'function') {
+                unreadCount = db.getUnreadMessageCount(user);
+            }
+        } catch {}
+    }
 
     res.locals.user = user;
+    res.locals.unreadCount = unreadCount;
     res.locals.csrfToken = req.session ? getCsrfToken(req) : '';
     res.locals.escapeHtml = escapeHtml;
     res.locals.userAvatars = avatars;

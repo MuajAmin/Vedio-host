@@ -66,14 +66,20 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     color: #08090f;
     border: none;
     cursor: pointer;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     box-shadow: 0 10px 32px var(--msg-primary-glow), inset 0 1px 1px rgba(255, 255, 255, 0.6);
     z-index: 995;
-    transition: transform 0.35s var(--msg-spring), box-shadow 0.3s ease;
+    transition: transform 0.35s var(--msg-spring), box-shadow 0.3s ease, opacity 0.3s ease;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
+}
+
+.msg-floating-launcher.has-unread,
+.msg-floating-launcher.is-open {
+    display: flex;
+    animation: msgBadgeSpring 0.45s var(--msg-spring);
 }
 
 .msg-floating-launcher::before {

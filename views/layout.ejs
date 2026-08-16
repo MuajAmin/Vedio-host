@@ -14,7 +14,7 @@
     <link rel="manifest" href="/manifest.json">
     <script src="/js/theme-init.js?v=6.4"></script>
     <link rel="stylesheet" href="/css/style.css?v=6.4">
-    <link rel="stylesheet" href="/css/messages.css?v=2.4">
+    <link rel="stylesheet" href="/css/messages.css?v=2.5">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -25,7 +25,8 @@
             <% const partnerName = user === 'muaj' ? 'Hajera' : 'Muaj'; %>
             <% const partnerUsername = user === 'muaj' ? 'hajera' : 'muaj'; %>
 
-            <button type="button" class="msg-floating-launcher" id="msgFloatingLauncher" aria-label="Open Direct Messages" title="Chat with <%= partnerName %>">
+            <% const hasUnread = typeof unreadCount !== 'undefined' && unreadCount > 0; %>
+            <button type="button" class="msg-floating-launcher <%= hasUnread ? 'has-unread' : '' %>" id="msgFloatingLauncher" aria-label="Open Direct Messages" title="Chat with <%= partnerName %>" style="<%= hasUnread ? 'display:flex;' : 'display:none;' %>">
                 <div class="msg-launcher-icon-wrap">
                     <svg class="msg-launcher-icon" viewBox="0 0 28 28" fill="none" width="28" height="28">
                         <path d="M19.5 4.5C14.8 4.5 11 7.8 11 11.8C11 13 11.4 14.1 12.1 15.1C11.5 16.3 10.3 17.5 9.2 18.1C10.8 18.2 12.5 17.7 13.7 16.8C15.3 17.9 17.3 18.6 19.5 18.6C24.2 18.6 28 15.3 28 11.3C28 7.3 24.2 4.5 19.5 4.5Z" fill="#08090f" opacity="0.32"/>
@@ -39,7 +40,7 @@
                         <line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
                 </div>
-                <span class="msg-unread-badge-pill" id="msgLauncherUnreadBadge" style="display:none;">0</span>
+                <span class="msg-unread-badge-pill" id="msgLauncherUnreadBadge" style="<%= hasUnread ? 'display:flex;' : 'display:none;' %>"><%= typeof unreadCount !== 'undefined' ? unreadCount : 0 %></span>
             </button>
 
             <div class="msg-drawer-widget" id="msgDrawerWidget">
@@ -227,7 +228,7 @@
             <% } %>
 
                 <script src="/js/app.js?v=6.1"></script>
-                <script src="/js/messages.js?v=2.4"></script>
+                <script src="/js/messages.js?v=2.5"></script>
                 <script>
                     if ('serviceWorker' in navigator) {
                         navigator.serviceWorker.register('/sw.js').catch(function() {});

@@ -86,6 +86,19 @@
                 unreadPill.style.display = 'none';
             }
         }
+
+        // Show launcher only when there is a new/unread message or the drawer is open
+        if (launcher) {
+            const isDrawerOpen = drawer && drawer.classList.contains('is-open');
+            if (num > 0 || isDrawerOpen) {
+                launcher.classList.add('has-unread');
+                launcher.style.display = 'flex';
+            } else {
+                launcher.classList.remove('has-unread');
+                launcher.style.display = 'none';
+            }
+        }
+
         navMsgBadges.forEach(badge => {
             if (num > 0) {
                 badge.textContent = num > 99 ? '99+' : num;
@@ -966,6 +979,11 @@
             closeBtn.addEventListener('click', () => {
                 drawer.classList.remove('is-open');
                 launcher.classList.remove('is-open');
+                const badgeCount = parseInt(unreadPill ? unreadPill.textContent : '0', 10) || 0;
+                if (badgeCount <= 0) {
+                    launcher.classList.remove('has-unread');
+                    launcher.style.display = 'none';
+                }
             });
         }
     }
