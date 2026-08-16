@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
+const db = require('../database');
+const { parseUserAgent, getClientIp } = require('../utils/device');
 
 const attempts = new Map();
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -81,6 +83,23 @@ router.post('/login', (req, res) => {
             }
 
             req.session.user = user;
+            const deviceInfo = parseUserAgent(req.headers['user-agent']);
+            const ipAddress = getClientIp(req);
+
+            db.updateUserPresence(user, {
+                status: 'online',
+                page: '/dashboard',
+                deviceInfo,
+                ipAddress,
+                sessionId: req.sessionID
+            });
+
+            db.logActivity(user, 'login', {
+                details: `Logged in from ${deviceInfo}`,
+                deviceInfo,
+                ipAddress
+            });
+
             return res.redirect('/dashboard');
         });
     }
@@ -91,6 +110,17 @@ router.post('/login', (req, res) => {
 
 // POST /logout
 router.post('/logout', (req, res) => {
+    const user = req.session ? req.session.user : null;
+    if (user) {
+        const deviceInfo = parseUserAgent(req.headers['user-agent']);
+        const ipAddress = getClientIp(req);
+        db.updateUserPresence(user, { status: 'offline' });
+        db.logActivity(user, 'logout', {
+            details: 'User logged out',
+            deviceInfo,
+            ipAddress
+        });
+    }
     req.session.destroy((err) => {
         res.redirect('/');
     });

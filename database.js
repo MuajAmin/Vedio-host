@@ -79,10 +79,52 @@ db.exec(`
         blocked_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS user_presence (
+        username TEXT PRIMARY KEY,
+        status TEXT DEFAULT 'offline',
+        last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+        current_page TEXT,
+        current_video_id TEXT,
+        video_title TEXT,
+        is_playing INTEGER DEFAULT 0,
+        current_time REAL DEFAULT 0,
+        duration REAL DEFAULT 0,
+        device_info TEXT,
+        ip_address TEXT,
+        session_id TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS activity_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        action TEXT NOT NULL,
+        video_id TEXT,
+        video_title TEXT,
+        position_seconds REAL DEFAULT 0,
+        duration_seconds REAL DEFAULT 0,
+        details TEXT,
+        device_info TEXT,
+        ip_address TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS watch_time_ledger (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user TEXT NOT NULL,
+        video_id TEXT NOT NULL,
+        seconds_watched REAL DEFAULT 0,
+        watch_date TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user, video_id, watch_date)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_at ON videos(uploaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_watch_progress_user_updated ON watch_progress(user, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_activity_logs_user_time ON activity_logs(username, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_watch_ledger_user_date ON watch_time_ledger(user, watch_date);
 `);
 
 // Migrations for older SQLite files.
@@ -214,6 +256,292 @@ function countUserSessions(username) {
     }
 }
 
+function getLocalDateString(d = new Date()) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function updateUserPresence(username, data = {}) {
+    if (!username) return;
+    try {
+        let status = data.status || 'online';
+        const isPlaying = (data.isPlaying === true || data.isPlaying === 1 || data.isPlaying === '1') ? 1 : 0;
+        const isIdle = (data.isIdle === true || data.isIdle === 1 || data.isIdle === '1');
+
+        if (status === 'offline') {
+            // mark offline
+        } else if (isPlaying) {
+            status = 'watching';
+        } else if (isIdle) {
+            status = 'idle';
+        } else {
+            status = 'online';
+        }
+
+        let videoTitle = data.videoTitle || null;
+        if (data.videoId && !videoTitle) {
+            const v = db.prepare('SELECT title FROM videos WHERE id = ?').get(data.videoId);
+            if (v) videoTitle = v.title;
+        }
+
+        const currentTime = Number(data.currentTime || data.position || 0);
+        const duration = Number(data.duration || 0);
+        const page = data.page || data.currentPage || null;
+        const deviceInfo = data.deviceInfo || null;
+        const ipAddress = data.ipAddress || null;
+        const sessionId = data.sessionId || null;
+
+        db.prepare(`
+            INSERT INTO user_presence (
+                username, status, last_seen, current_page, current_video_id,
+                video_title, is_playing, current_time, duration, device_info, ip_address, session_id, updated_at
+            ) VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(username) DO UPDATE SET
+                status = excluded.status,
+                last_seen = CURRENT_TIMESTAMP,
+                current_page = COALESCE(excluded.current_page, user_presence.current_page),
+                current_video_id = excluded.current_video_id,
+                video_title = COALESCE(excluded.video_title, user_presence.video_title),
+                is_playing = excluded.is_playing,
+                current_time = excluded.current_time,
+                duration = excluded.duration,
+                device_info = COALESCE(excluded.device_info, user_presence.device_info),
+                ip_address = COALESCE(excluded.ip_address, user_presence.ip_address),
+                session_id = COALESCE(excluded.session_id, user_presence.session_id),
+                updated_at = CURRENT_TIMESTAMP
+        `).run(
+            username, status, page, data.videoId || null, videoTitle,
+            isPlaying, currentTime, duration, deviceInfo, ipAddress, sessionId
+        );
+    } catch (err) {
+        console.error('[db] Error updating user presence:', err.message);
+    }
+}
+
+function parseSqliteDate(str) {
+    if (!str) return 0;
+    if (typeof str === 'number') return str;
+    const s = String(str);
+    const iso = s.includes('T') ? (s.endsWith('Z') ? s : s + 'Z') : s.replace(' ', 'T') + 'Z';
+    const t = new Date(iso).getTime();
+    return isNaN(t) ? new Date(str).getTime() : t;
+}
+
+function getUserPresence(username) {
+    if (!username) return null;
+    try {
+        const row = db.prepare('SELECT * FROM user_presence WHERE username = ?').get(username);
+        if (!row) {
+            return {
+                username,
+                status: 'offline',
+                isOnline: false,
+                isWatching: false,
+                isIdle: false,
+                lastSeen: null,
+                lastSeenSecondsAgo: null,
+                currentPage: null,
+                currentVideoId: null,
+                videoTitle: null,
+                thumbnail: null,
+                isPlaying: false,
+                currentTime: 0,
+                duration: 0,
+                deviceInfo: null,
+                ipAddress: null
+            };
+        }
+
+        const now = Date.now();
+        const lastSeenTime = parseSqliteDate(row.last_seen || row.updated_at);
+        const secondsAgo = Math.max(0, Math.floor((now - lastSeenTime) / 1000));
+
+        let computedStatus = row.status || 'offline';
+        // Auto offline if heartbeat timed out (> 40s)
+        if (secondsAgo > 40) {
+            computedStatus = 'offline';
+        } else if (computedStatus === 'watching' && !row.is_playing) {
+            computedStatus = 'online';
+        }
+
+        const isOnline = computedStatus !== 'offline';
+        const isWatching = computedStatus === 'watching' && row.is_playing === 1;
+        const isIdle = computedStatus === 'idle';
+
+        // If watching, fetch thumbnail if available
+        let thumbnail = null;
+        if (row.current_video_id) {
+            const v = db.prepare('SELECT thumbnail, title FROM videos WHERE id = ?').get(row.current_video_id);
+            if (v) {
+                thumbnail = v.thumbnail;
+                if (!row.video_title) row.video_title = v.title;
+            }
+        }
+
+        return {
+            username: row.username,
+            status: computedStatus,
+            isOnline,
+            isWatching,
+            isIdle,
+            lastSeen: row.last_seen,
+            lastSeenSecondsAgo: secondsAgo,
+            currentPage: row.current_page,
+            currentVideoId: row.current_video_id,
+            videoTitle: row.video_title,
+            thumbnail,
+            isPlaying: row.is_playing === 1,
+            currentTime: Number(row.current_time || 0),
+            duration: Number(row.duration || 0),
+            deviceInfo: row.device_info,
+            ipAddress: row.ip_address,
+            updatedAt: row.updated_at
+        };
+    } catch (err) {
+        console.error('[db] Error getting user presence:', err.message);
+        return null;
+    }
+}
+
+function logActivity(username, action, data = {}) {
+    if (!username || !action) return;
+    try {
+        // Anti-spam debounce: check if identical action on same video happened in last 10s
+        const recent = db.prepare(`
+            SELECT id, action, video_id, created_at
+            FROM activity_logs
+            WHERE username = ? AND action = ?
+            ORDER BY created_at DESC LIMIT 1
+        `).get(username, action);
+
+        if (recent) {
+            const diffSeconds = (Date.now() - new Date(recent.created_at).getTime()) / 1000;
+            if (diffSeconds < 10 && String(recent.video_id || '') === String(data.videoId || '')) {
+                db.prepare(`
+                    UPDATE activity_logs
+                    SET position_seconds = ?, duration_seconds = ?, details = ?, created_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                `).run(
+                    Number(data.position || data.position_seconds || 0),
+                    Number(data.duration || data.duration_seconds || 0),
+                    data.details || null,
+                    recent.id
+                );
+                return;
+            }
+        }
+
+        let videoTitle = data.videoTitle || null;
+        if (data.videoId && !videoTitle) {
+            const v = db.prepare('SELECT title FROM videos WHERE id = ?').get(data.videoId);
+            if (v) videoTitle = v.title;
+        }
+
+        db.prepare(`
+            INSERT INTO activity_logs (
+                username, action, video_id, video_title, position_seconds, duration_seconds, details, device_info, ip_address, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `).run(
+            username,
+            action,
+            data.videoId || null,
+            videoTitle,
+            Number(data.position || data.position_seconds || 0),
+            Number(data.duration || data.duration_seconds || 0),
+            data.details || null,
+            data.deviceInfo || null,
+            data.ipAddress || null
+        );
+    } catch (err) {
+        console.error('[db] Error logging activity:', err.message);
+    }
+}
+
+function getRecentActivities(username, limit = 25) {
+    try {
+        const rows = db.prepare(`
+            SELECT a.*, v.thumbnail AS video_thumbnail
+            FROM activity_logs a
+            LEFT JOIN videos v ON v.id = a.video_id
+            WHERE a.username = ?
+            ORDER BY a.created_at DESC
+            LIMIT ?
+        `).all(username, limit);
+        return rows;
+    } catch (err) {
+        console.error('[db] Error getting recent activities:', err.message);
+        return [];
+    }
+}
+
+function recordWatchPulse(user, videoId, position, duration, isPlaying, deltaSeconds = 5) {
+    if (!user || !videoId) return;
+    try {
+        const safeDelta = (isPlaying && deltaSeconds > 0) ? Math.min(deltaSeconds, 30) : 0;
+        if (safeDelta > 0) {
+            const today = getLocalDateString();
+            db.prepare(`
+                INSERT INTO watch_time_ledger (user, video_id, seconds_watched, watch_date, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user, video_id, watch_date) DO UPDATE SET
+                    seconds_watched = seconds_watched + excluded.seconds_watched,
+                    updated_at = CURRENT_TIMESTAMP
+            `).run(user, videoId, safeDelta, today);
+        }
+    } catch (err) {
+        console.error('[db] Error recording watch pulse:', err.message);
+    }
+}
+
+function getUserWatchStats(username) {
+    if (!username) return { totalSeconds: 0, todaySeconds: 0 };
+    try {
+        const totalRow = db.prepare(`
+            SELECT SUM(seconds_watched) AS total FROM watch_time_ledger WHERE user = ?
+        `).get(username);
+
+        const today = getLocalDateString();
+        const todayRow = db.prepare(`
+            SELECT SUM(seconds_watched) AS today FROM watch_time_ledger WHERE user = ? AND watch_date = ?
+        `).get(username, today);
+
+        let totalSeconds = totalRow && totalRow.total ? Number(totalRow.total) : 0;
+        const todaySeconds = todayRow && todayRow.today ? Number(todayRow.today) : 0;
+
+        // If ledger is empty (new migration), fallback compute from watch_progress table
+        if (totalSeconds === 0) {
+            const wpRow = db.prepare(`
+                SELECT SUM(position_seconds) AS total FROM watch_progress WHERE user = ?
+            `).get(username);
+            if (wpRow && wpRow.total) totalSeconds = Number(wpRow.total);
+        }
+
+        return {
+            totalSeconds: Math.round(totalSeconds),
+            todaySeconds: Math.round(todaySeconds)
+        };
+    } catch (err) {
+        console.error('[db] Error getting user watch stats:', err.message);
+        return { totalSeconds: 0, todaySeconds: 0 };
+    }
+}
+
+function clearOldActivityLogs(username) {
+    if (!username) return;
+    try {
+        db.prepare(`
+            DELETE FROM activity_logs
+            WHERE username = ? AND id NOT IN (
+                SELECT id FROM activity_logs WHERE username = ? ORDER BY created_at DESC LIMIT 500
+            )
+        `).run(username, username);
+    } catch (err) {
+        console.error('[db] Error clearing old activity logs:', err.message);
+    }
+}
+
 db.getUserAvatar = getUserAvatar;
 db.getAllUserAvatars = getAllUserAvatars;
 db.setUserAvatar = setUserAvatar;
@@ -224,5 +552,13 @@ db.unblockUser = unblockUser;
 db.getBlockedUsers = getBlockedUsers;
 db.destroyUserSessions = destroyUserSessions;
 db.countUserSessions = countUserSessions;
+db.updateUserPresence = updateUserPresence;
+db.getUserPresence = getUserPresence;
+db.logActivity = logActivity;
+db.getRecentActivities = getRecentActivities;
+db.recordWatchPulse = recordWatchPulse;
+db.getUserWatchStats = getUserWatchStats;
+db.clearOldActivityLogs = clearOldActivityLogs;
 
 module.exports = db;
+

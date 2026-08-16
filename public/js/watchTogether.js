@@ -1,21 +1,28 @@
 /**
- * Watch Together — Client-Side Sync Engine
+ * Watch Together — Cinema Real-Time Sync & Live Chat Engine
  * Real-time video sync + chat between Muaj & Hajera
  */
 (function () {
     'use strict';
 
-    // Only run on watch pages
-    const video = document.getElementById('vpVideo');
-    if (!video) return;
+    // Prevent double initialization
+    if (window.__WATCH_TOGETHER_INITIALIZED__) return;
+    window.__WATCH_TOGETHER_INITIALIZED__ = true;
 
-    const videoId = video.dataset.videoId;
-    const csrfToken = video.dataset.csrfToken;
-    const currentUser = document.body.querySelector('.user-badge') ?
-        (document.body.querySelector('.badge-admin') ? 'muaj' : 'hajera') : null;
-    if (!currentUser) return;
+    // Detect user from body attribute or badge
+    const currentUser = (document.body.dataset.user ||
+        (document.body.querySelector('.badge-admin') ? 'muaj' :
+            (document.body.querySelector('.badge-viewer') ? 'hajera' : ''))).toLowerCase();
+
+    if (!currentUser) return; // Not logged in
 
     const isHost = currentUser === 'muaj';
+    const isGuest = currentUser === 'hajera';
+
+    // Video element on watch pages
+    const video = document.getElementById('vpVideo');
+    const isWatchPage = !!video;
+    const currentVideoId = video ? video.dataset.videoId : null;
 
     // State
     let roomId = null;
@@ -25,12 +32,12 @@
     let ignoreNextPlay = false;
     let ignoreNextPause = false;
     let lastSyncTime = 0;
-    const SYNC_THROTTLE_MS = 300;
-    const SYNC_TOLERANCE_SEC = 1.5;
+    let dismissedRoomId = null;
+    let dismissExpiry = 0;
+    const SYNC_THROTTLE_MS = 250;
+    const SYNC_TOLERANCE_SEC = 1.2;
 
-    // ============================================================
-    //  DOM ELEMENTS
-    // ============================================================
+    // DOM Elements (Watch page)
     const wtPanel = document.getElementById('wtPanel');
     const wtChatPanel = document.getElementById('wtChatPanel');
     const wtStartBtn = document.getElementById('wtStartBtn');
@@ -48,7 +55,11 @@
     const wtUnreadBadge = document.getElementById('wtUnreadBadge');
     const wtSyncOverlay = document.getElementById('wtSyncOverlay');
 
-    if (!wtPanel) return;
+    // DOM Elements (Global layout)
+    const globalWtToast = document.getElementById('globalWtToast');
+    const globalWtToastTitle = document.getElementById('globalWtToastTitle');
+    const globalWtToastJoin = document.getElementById('globalWtToastJoin');
+    const globalWtToastClose = document.getElementById('globalWtToastClose');
 
     let chatOpen = false;
     let unreadCount = 0;
@@ -65,15 +76,6 @@
         }).then(r => r.json());
     }
 
-    function formatTime(seconds) {
-        const s = Math.floor(seconds || 0);
-        const h = Math.floor(s / 3600);
-        const m = Math.floor((s % 3600) / 60);
-        const sec = s % 60;
-        if (h > 0) return `${h}:${m < 10 ? '0' : ''}${m}:${sec < 10 ? '0' : ''}${sec}`;
-        return `${m}:${sec < 10 ? '0' : ''}${sec}`;
-    }
-
     function timeAgo(ts) {
         const diff = Math.floor((Date.now() - ts) / 1000);
         if (diff < 60) return 'just now';
@@ -88,46 +90,123 @@
     }
 
     // ============================================================
-    //  CHECK FOR ACTIVE ROOM ON PAGE LOAD
+    //  CHECK ACTIVE ROOM (POLLING EVERY 2.5s)
     // ============================================================
     async function checkActiveRoom() {
+        if (syncActive && roomId) return; // Already connected in an active session
+
         try {
             const data = await fetch('/watch-together/active', { credentials: 'same-origin' }).then(r => r.json());
-            if (!data) return;
+            if (!data) {
+                // No active room
+                hideInvites();
+                return;
+            }
 
-            if (data.role === 'host' && data.videoId === videoId) {
-                // Reconnect to own room
-                roomId = data.roomId;
-                startSSE();
-                showSyncActive();
-            } else if ((data.role === 'invited' || data.role === 'guest') && !isHost) {
-                // Show invite banner
-                if (wtInviteBanner) {
-                    const titleEl = wtInviteBanner.querySelector('.wt-invite-video-title');
-                    if (titleEl) titleEl.textContent = data.videoTitle || 'a video';
-                    wtInviteBanner.classList.add('visible');
+            // Host reconnecting on watch page
+            if (isHost && isWatchPage && data.role === 'host' && data.videoId === currentVideoId) {
+                if (!roomId) {
                     roomId = data.roomId;
+                    startSSE();
+                    showSyncActive();
+                }
+                return;
+            }
 
-                    // If we're on the same video, auto-connect
-                    if (data.videoId === videoId && data.role === 'guest') {
+            // Guest (Hajera) invited
+            if (isGuest || (!isHost && data.host !== currentUser)) {
+                // Check if user temporarily dismissed this room
+                if (dismissedRoomId === data.roomId && Date.now() < dismissExpiry) {
+                    return;
+                }
+
+                roomId = data.roomId;
+
+                if (isWatchPage && data.videoId === currentVideoId) {
+                    // Hajera is on the same video watch page
+                    showInPageInvite(data);
+
+                    // Auto-join if URL param ?join=1 was passed
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.get('join') === '1' || urlParams.get('join') === 'true') {
                         joinRoom();
                     }
+                } else {
+                    // Hajera is on dashboard or another video page
+                    showGlobalToast(data);
                 }
             }
-        } catch {}
+        } catch (err) {
+            // Ignore polling errors
+        }
     }
 
+    function showInPageInvite(data) {
+        if (!wtInviteBanner) return;
+        const titleEl = wtInviteBanner.querySelector('.wt-invite-video-title');
+        if (titleEl) titleEl.textContent = data.videoTitle || 'this video';
+        wtInviteBanner.classList.add('visible');
+    }
+
+    function showGlobalToast(data) {
+        if (!globalWtToast) return;
+        if (globalWtToastTitle) {
+            globalWtToastTitle.textContent = `Muaj invited you to watch: "${data.videoTitle || 'a video'}" together!`;
+        }
+        if (globalWtToastJoin) {
+            globalWtToastJoin.href = `/watch/${encodeURIComponent(data.videoId)}?join=1`;
+        }
+        globalWtToast.style.display = 'flex';
+        globalWtToast.classList.add('visible');
+    }
+
+    function hideInvites() {
+        if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
+        if (globalWtToast) {
+            globalWtToast.classList.remove('visible');
+            globalWtToast.style.display = 'none';
+        }
+    }
+
+    // Dismiss buttons
+    if (wtDismissBtn) {
+        wtDismissBtn.addEventListener('click', () => {
+            if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
+            dismissedRoomId = roomId;
+            dismissExpiry = Date.now() + (60 * 1000); // 1 minute dismiss
+        });
+    }
+
+    if (globalWtToastClose) {
+        globalWtToastClose.addEventListener('click', () => {
+            hideInvites();
+            dismissedRoomId = roomId;
+            dismissExpiry = Date.now() + (60 * 1000);
+        });
+    }
+
+    // Join button on in-page banner
+    if (wtJoinBtn) {
+        wtJoinBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            joinRoom();
+        });
+    }
+
+    // Polling timer every 2.5 seconds
+    setInterval(checkActiveRoom, 2500);
+
     // ============================================================
-    //  HOST: CREATE ROOM
+    //  HOST: CREATE ROOM (MUAJ)
     // ============================================================
-    if (wtStartBtn) {
+    if (wtStartBtn && isWatchPage && isHost) {
         wtStartBtn.addEventListener('click', async () => {
             try {
                 wtStartBtn.disabled = true;
                 const titleEl = document.getElementById('videoTitleText');
                 const videoTitle = titleEl ? titleEl.textContent.trim() : '';
 
-                const data = await postJSON('/watch-together/create', { videoId, videoTitle });
+                const data = await postJSON('/watch-together/create', { videoId: currentVideoId, videoTitle });
                 if (data.roomId) {
                     roomId = data.roomId;
                     startSSE();
@@ -141,159 +220,175 @@
     }
 
     // ============================================================
-    //  HOST: STOP SESSION
+    //  STOP / LEAVE SESSION (HOST OR GUEST)
     // ============================================================
-    if (wtStopBtn) {
-        wtStopBtn.addEventListener('click', async () => {
-            if (!roomId) return;
+    async function endOrLeaveSession() {
+        if (!roomId) {
+            cleanup();
+            return;
+        }
+
+        const confirmMsg = isHost ?
+            'Watch Together সেশনটি বন্ধ করতে চাও? (উভয়ের জন্য সেশন শেষ হবে)' :
+            'Watch Together সেশন থেকে বের হতে চাও?';
+
+        if (window.confirm(confirmMsg)) {
             try {
                 await postJSON(`/watch-together/leave/${roomId}`);
-                cleanup();
             } catch {}
-        });
+            cleanup();
+        }
     }
 
+    document.querySelectorAll('.wt-stop-session-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            endOrLeaveSession();
+        });
+    });
+
     // ============================================================
-    //  GUEST: JOIN ROOM
+    //  GUEST: JOIN ROOM (HAJERA)
     // ============================================================
     async function joinRoom() {
+        if (!roomId) {
+            try {
+                const data = await fetch('/watch-together/active', { credentials: 'same-origin' }).then(r => r.json());
+                if (data && data.roomId) {
+                    roomId = data.roomId;
+                }
+            } catch {}
+        }
         if (!roomId) return;
+
         try {
             const data = await postJSON(`/watch-together/join/${roomId}`);
             if (data.status === 'joined' || data.status === 'already-host') {
+                hideInvites();
+
+                // If not on the right watch page, redirect
+                if (data.videoId && data.videoId !== currentVideoId) {
+                    window.location.href = `/watch/${encodeURIComponent(data.videoId)}?join=1`;
+                    return;
+                }
+
                 startSSE();
                 showSyncActive();
 
                 // Apply initial video state
-                if (data.videoState) {
+                if (data.videoState && video) {
                     applyVideoState(data.videoState);
                 }
 
                 // Load chat history
-                if (data.chatHistory) {
+                if (data.chatHistory && wtChatMessages) {
+                    wtChatMessages.innerHTML = '';
                     data.chatHistory.forEach(msg => appendChatMessage(msg, false));
                 }
-
-                // If different video, redirect
-                if (data.videoId && data.videoId !== videoId) {
-                    window.location.href = `/watch/${encodeURIComponent(data.videoId)}`;
-                }
-
-                if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
             }
         } catch (err) {
             console.error('[WT] Join error:', err);
         }
     }
 
-    if (wtJoinBtn) {
-        wtJoinBtn.addEventListener('click', () => {
-            // If we need to redirect to the room's video
-            fetch('/watch-together/active', { credentials: 'same-origin' })
-                .then(r => r.json())
-                .then(data => {
-                    if (data && data.videoId !== videoId) {
-                        // Redirect to the correct video first
-                        window.location.href = `/watch/${encodeURIComponent(data.videoId)}`;
-                    } else {
-                        joinRoom();
-                    }
-                })
-                .catch(() => joinRoom());
-        });
-    }
-
-    if (wtDismissBtn) {
-        wtDismissBtn.addEventListener('click', () => {
-            if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
-        });
-    }
-
     // ============================================================
     //  SSE CONNECTION
     // ============================================================
     function startSSE() {
+        if (!roomId) return;
         if (eventSource) eventSource.close();
 
         eventSource = new EventSource(`/watch-together/stream/${roomId}`);
 
         eventSource.addEventListener('connected', (e) => {
-            const data = JSON.parse(e.data);
-            syncActive = true;
-            updateStatusBar('connected', data.guest ? 2 : 1);
+            try {
+                const data = JSON.parse(e.data);
+                syncActive = true;
+                updateStatusBar('connected', data.guest ? 2 : 1);
 
-            if (!isHost && data.chatHistory) {
-                if (wtChatMessages) wtChatMessages.innerHTML = '';
-                data.chatHistory.forEach(msg => appendChatMessage(msg, false));
-            }
+                if (!isHost && data.chatHistory && wtChatMessages) {
+                    wtChatMessages.innerHTML = '';
+                    data.chatHistory.forEach(msg => appendChatMessage(msg, false));
+                }
+            } catch {}
         });
 
         eventSource.addEventListener('sync', (e) => {
             if (isHost) return; // Host doesn't sync from server
-            const data = JSON.parse(e.data);
-            applyVideoState(data);
+            try {
+                const data = JSON.parse(e.data);
+                applyVideoState(data);
+            } catch {}
         });
 
         eventSource.addEventListener('chat', (e) => {
-            const msg = JSON.parse(e.data);
-            appendChatMessage(msg, true);
+            try {
+                const msg = JSON.parse(e.data);
+                appendChatMessage(msg, true);
+            } catch {}
         });
 
         eventSource.addEventListener('user-joined', (e) => {
-            const data = JSON.parse(e.data);
-            updateStatusBar('connected', 2);
-            appendSystemMessage(`${data.user === 'hajera' ? 'Hajera' : 'Muaj'} joined the session 🎉`);
+            try {
+                const data = JSON.parse(e.data);
+                updateStatusBar('connected', 2);
+                appendSystemMessage(`${data.user === 'hajera' ? 'Hajera' : 'Muaj'} joined the session 🎉`);
 
-            // Re-sync current state for the new guest
-            if (isHost) {
-                sendSync('join-sync');
-            }
+                // Re-sync current video state for the new guest
+                if (isHost && video) {
+                    sendSync('join-sync');
+                }
+            } catch {}
         });
 
         eventSource.addEventListener('user-left', (e) => {
-            const data = JSON.parse(e.data);
-            updateStatusBar('waiting', 1);
-            appendSystemMessage(`${data.user === 'hajera' ? 'Hajera' : 'Muaj'} left the session`);
+            try {
+                const data = JSON.parse(e.data);
+                updateStatusBar('waiting', 1);
+                appendSystemMessage(`${data.user === 'hajera' ? 'Hajera' : 'Muaj'} left the session`);
+            } catch {}
         });
 
         eventSource.addEventListener('user-disconnected', (e) => {
-            const data = JSON.parse(e.data);
-            updateStatusBar('waiting', data.memberCount || 1);
+            try {
+                const data = JSON.parse(e.data);
+                updateStatusBar('waiting', data.memberCount || 1);
+            } catch {}
         });
 
         eventSource.addEventListener('room-closed', (e) => {
-            const data = JSON.parse(e.data);
-            appendSystemMessage(`Session ended: ${data.reason}`);
-            cleanup();
+            try {
+                const data = JSON.parse(e.data);
+                appendSystemMessage(`Session ended: ${data.reason || 'Closed'}`);
+                cleanup();
+            } catch {}
         });
 
         eventSource.onerror = () => {
             updateStatusBar('reconnecting', 0);
-            // EventSource auto-reconnects
         };
     }
 
     // ============================================================
-    //  VIDEO SYNC
+    //  VIDEO SYNC LOGIC
     // ============================================================
     function applyVideoState(state) {
-        if (!state || isHost) return;
+        if (!state || isHost || !video) return;
 
         const timeDiff = Math.abs(video.currentTime - state.currentTime);
 
-        // Seek if time is significantly different
+        // Seek if time drift exceeds tolerance
         if (timeDiff > SYNC_TOLERANCE_SEC) {
             ignoreNextSeek = true;
             video.currentTime = state.currentTime;
 
-            // Show sync overlay briefly
             if (wtSyncOverlay) {
                 wtSyncOverlay.classList.add('visible');
-                setTimeout(() => wtSyncOverlay.classList.remove('visible'), 1200);
+                setTimeout(() => wtSyncOverlay.classList.remove('visible'), 1400);
             }
         }
 
-        // Sync play/pause
+        // Sync play / pause
         if (state.playing && video.paused) {
             ignoreNextPlay = true;
             video.play().catch(() => {});
@@ -302,14 +397,14 @@
             video.pause();
         }
 
-        // Sync playback rate
+        // Sync speed
         if (state.playbackRate && video.playbackRate !== state.playbackRate) {
             video.playbackRate = state.playbackRate;
         }
     }
 
     function sendSync(action = 'update') {
-        if (!isHost || !roomId || !syncActive) return;
+        if (!isHost || !roomId || !syncActive || !video) return;
 
         const now = Date.now();
         if (action === 'update' && now - lastSyncTime < SYNC_THROTTLE_MS) return;
@@ -323,8 +418,8 @@
         }).catch(() => {});
     }
 
-    // Host video event listeners
-    if (isHost) {
+    // Host Video Event Listeners
+    if (isHost && video) {
         video.addEventListener('play', () => {
             if (ignoreNextPlay) { ignoreNextPlay = false; return; }
             sendSync('play');
@@ -344,16 +439,16 @@
             sendSync('ratechange');
         });
 
-        // Periodic time sync every 3 seconds while playing
+        // Periodic sync every 2.5s while playing
         setInterval(() => {
             if (!video.paused && syncActive) {
                 sendSync('update');
             }
-        }, 3000);
+        }, 2500);
     }
 
     // ============================================================
-    //  CHAT
+    //  LIVE CHAT
     // ============================================================
     function appendChatMessage(msg, animate = true) {
         if (!wtChatMessages) return;
@@ -379,7 +474,7 @@
         wtChatMessages.appendChild(msgEl);
         wtChatMessages.scrollTop = wtChatMessages.scrollHeight;
 
-        // Unread badge
+        // Unread Badge
         if (!chatOpen && !isMine) {
             unreadCount++;
             updateUnreadBadge();
@@ -404,7 +499,7 @@
         wtChatInput.value = '';
 
         postJSON(`/watch-together/chat/${roomId}`, { text }).catch(err => {
-            console.error('[WT] Chat send error:', err);
+            console.error('[WT] Chat error:', err);
         });
     }
 
@@ -421,7 +516,7 @@
         });
     }
 
-    // Chat panel toggle
+    // Chat Drawer Toggle
     function toggleChat(forceState) {
         chatOpen = typeof forceState === 'boolean' ? forceState : !chatOpen;
         if (wtChatPanel) wtChatPanel.classList.toggle('open', chatOpen);
@@ -460,12 +555,23 @@
         }
     }
 
+    // Emoji Bar
+    const emojiBar = document.getElementById('wtEmojiBar');
+    if (emojiBar) {
+        emojiBar.addEventListener('click', (e) => {
+            const btn = e.target.closest('.wt-emoji-btn');
+            if (!btn || !wtChatInput) return;
+            wtChatInput.value += btn.textContent;
+            wtChatInput.focus();
+        });
+    }
+
     // ============================================================
     //  UI STATE MANAGEMENT
     // ============================================================
     function showSyncActive() {
         syncActive = true;
-        wtPanel.classList.add('wt-active');
+        if (wtPanel) wtPanel.classList.add('wt-active');
 
         if (isHost) {
             if (wtStartBtn) wtStartBtn.style.display = 'none';
@@ -481,9 +587,10 @@
     function updateStatusBar(status, count) {
         if (!wtStatusText) return;
 
+        const otherName = isHost ? 'Hajera' : 'Muaj';
         const statusMap = {
-            'connected': `🟢 Watch Together • ${count} connected`,
-            'waiting': `🟡 Waiting for ${isHost ? 'Hajera' : 'Muaj'}...`,
+            'connected': `🟢 Watch Together • 2 connected`,
+            'waiting': `🟡 Waiting for ${otherName}...`,
             'reconnecting': '🔴 Reconnecting...'
         };
 
@@ -503,7 +610,7 @@
             eventSource = null;
         }
 
-        wtPanel.classList.remove('wt-active');
+        if (wtPanel) wtPanel.classList.remove('wt-active');
 
         if (isHost) {
             if (wtStartBtn) { wtStartBtn.style.display = ''; wtStartBtn.disabled = false; }
@@ -513,7 +620,7 @@
         if (wtStatusBar) wtStatusBar.classList.remove('visible');
         if (wtChatToggle) wtChatToggle.style.display = 'none';
         if (wtChatPanel) wtChatPanel.classList.remove('open');
-        if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
+        hideInvites();
 
         chatOpen = false;
         unreadCount = 0;
@@ -521,27 +628,21 @@
     }
 
     // ============================================================
-    //  EMOJI QUICK ACCESS
-    // ============================================================
-    const emojiBar = document.getElementById('wtEmojiBar');
-    if (emojiBar) {
-        emojiBar.addEventListener('click', (e) => {
-            const btn = e.target.closest('.wt-emoji-btn');
-            if (!btn || !wtChatInput) return;
-            wtChatInput.value += btn.textContent;
-            wtChatInput.focus();
-        });
-    }
-
-    // ============================================================
-    //  INIT
+    //  INITIAL TRIGGER
     // ============================================================
     checkActiveRoom();
 
-    // Cleanup on page unload
+    // Auto-join check on watch page load
+    if (isWatchPage) {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('join') === '1' || urlParams.get('join') === 'true') {
+            joinRoom();
+        }
+    }
+
+    // Best-effort cleanup on window close
     window.addEventListener('beforeunload', () => {
-        if (roomId && eventSource) {
-            // Best-effort leave
+        if (roomId && eventSource && isHost) {
             navigator.sendBeacon(`/watch-together/leave/${roomId}`,
                 new Blob([JSON.stringify({})], { type: 'application/json' }));
         }

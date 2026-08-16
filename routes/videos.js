@@ -8,6 +8,7 @@ const { spawn } = require('child_process');
 const { isAuthenticated, isMuaj } = require('../middleware/auth');
 const { requireCsrf } = require('../utils/security');
 const db = require('../database');
+const { parseUserAgent, getClientIp } = require('../utils/device');
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads', 'videos');
@@ -308,6 +309,83 @@ router.post('/delete/:id', isAuthenticated, (req, res) => {
 res.redirect('/dashboard');
 });
 
+// POST /api/presence/ping - Client heartbeat ping (every 10s or on user interaction)
+router.post('/api/presence/ping', isAuthenticated, (req, res) => {
+    const user = req.session.user;
+    const { page, videoId, videoTitle, isPlaying, currentTime, duration, isIdle, action, deltaSeconds } = req.body;
+    const deviceInfo = parseUserAgent(req.headers['user-agent']);
+    const ipAddress = getClientIp(req);
+
+    const playing = (isPlaying === true || isPlaying === 1 || isPlaying === 'true' || isPlaying === '1');
+    const idle = (isIdle === true || isIdle === 1 || isIdle === 'true' || isIdle === '1');
+    const pos = Number(currentTime) || 0;
+    const dur = Number(duration) || 0;
+
+    db.updateUserPresence(user, {
+        page: page || '/dashboard',
+        videoId: videoId || null,
+        videoTitle: videoTitle || null,
+        isPlaying: playing,
+        currentTime: pos,
+        duration: dur,
+        isIdle: idle,
+        deviceInfo,
+        ipAddress,
+        sessionId: req.sessionID
+    });
+
+    if (videoId && playing) {
+        const delta = Math.min(Number(deltaSeconds) || 10, 30);
+        db.recordWatchPulse(user, videoId, pos, dur, true, delta);
+    }
+
+    if (action) {
+        let details = null;
+        if (action === 'watch_start') {
+            details = `Started watching "${videoTitle || 'video'}"`;
+        } else if (action === 'watch_pause') {
+            const percent = (dur > 0) ? ` (${Math.round((pos / dur) * 100)}%)` : '';
+            details = `Paused at ${Math.floor(pos / 60)}:${String(Math.floor(pos % 60)).padStart(2, '0')}${percent}`;
+        } else if (action === 'watch_resume') {
+            details = `Resumed watching "${videoTitle || 'video'}"`;
+        } else if (action === 'watch_complete') {
+            details = `Finished watching "${videoTitle || 'video'}" (100%)`;
+        } else if (action === 'went_idle') {
+            details = 'Screen inactive / tab in background';
+        } else if (action === 'came_online') {
+            details = 'Active on screen';
+        }
+
+        db.logActivity(user, action, {
+            videoId: videoId || null,
+            videoTitle: videoTitle || null,
+            position: pos,
+            duration: dur,
+            details,
+            deviceInfo,
+            ipAddress
+        });
+    }
+
+    res.json({ success: true, presence: db.getUserPresence(user) });
+});
+
+// POST /api/presence/leave - Client leaving beacon (pagehide / beforeunload)
+router.post('/api/presence/leave', (req, res) => {
+    const user = req.session ? req.session.user : null;
+    if (user) {
+        const deviceInfo = parseUserAgent(req.headers['user-agent']);
+        const ipAddress = getClientIp(req);
+        db.updateUserPresence(user, { status: 'offline' });
+        db.logActivity(user, 'went_offline', {
+            details: 'Left the website / closed tab',
+            deviceInfo,
+            ipAddress
+        });
+    }
+    res.json({ success: true });
+});
+
 // POST /watch-progress/:id - Save or update playback position for current user
 router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
     const position = Number(req.body.position);
@@ -320,6 +398,11 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
 
     const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
     const nearEnd = safeDuration > 0 && position >= safeDuration - 10;
+    const user = req.session.user;
+    const video = db.prepare('SELECT title FROM videos WHERE id = ?').get(req.params.id);
+    const videoTitle = video ? video.title : null;
+    const deviceInfo = parseUserAgent(req.headers['user-agent']);
+    const ipAddress = getClientIp(req);
 
     if (ended || nearEnd) {
         // Video finished — keep progress record with safeDuration so it does NOT appear in "Continue Watching" but also never reverts to "NEW"
@@ -330,7 +413,19 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
                 position_seconds = excluded.position_seconds,
                 duration_seconds = excluded.duration_seconds,
                 updated_at = CURRENT_TIMESTAMP`
-        ).run(req.params.id, req.session.user, Math.floor(safeDuration || position), Math.floor(safeDuration));
+        ).run(req.params.id, user, Math.floor(safeDuration || position), Math.floor(safeDuration));
+
+        db.recordWatchPulse(user, req.params.id, safeDuration || position, safeDuration, true, 5);
+        db.logActivity(user, 'watch_complete', {
+            videoId: req.params.id,
+            videoTitle,
+            position: safeDuration || position,
+            duration: safeDuration,
+            details: `Completed 100% of "${videoTitle || 'video'}"`,
+            deviceInfo,
+            ipAddress
+        });
+
         return res.json({ success: true, completed: true });
     }
 
@@ -344,7 +439,9 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
             position_seconds = excluded.position_seconds,
             duration_seconds = excluded.duration_seconds,
             updated_at = CURRENT_TIMESTAMP`
-    ).run(req.params.id, req.session.user, savePosition, Math.floor(safeDuration));
+    ).run(req.params.id, user, savePosition, Math.floor(safeDuration));
+
+    db.recordWatchPulse(user, req.params.id, savePosition, safeDuration, true, 5);
 
     res.json({ success: true });
 });

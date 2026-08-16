@@ -12,14 +12,34 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
-    <script src="/js/theme-init.js?v=5.1"></script>
-    <link rel="stylesheet" href="/css/style.css?v=5.1">
+    <script src="/js/theme-init.js?v=5.2"></script>
+    <link rel="stylesheet" href="/css/style.css?v=5.2">
 </head>
 
-<body>
+<body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>">
     <%- body %>
 
         <% if (typeof user !=='undefined' && user) { %>
+            <!-- Global Watch Together Invitation Toast (Pops up anywhere on the site for Hajera) -->
+            <div class="wt-global-invite-toast" id="globalWtToast" style="display:none;" role="alert" aria-live="assertive">
+                <div class="wt-toast-pill">
+                    <div class="wt-toast-icon">🍿</div>
+                    <div class="wt-toast-info">
+                        <span class="wt-toast-tag">Watch Together Invite</span>
+                        <h4 class="wt-toast-title" id="globalWtToastTitle">Muaj invited you to watch together!</h4>
+                    </div>
+                    <div class="wt-toast-actions">
+                        <a href="#" class="btn btn-primary btn-sm wt-toast-join-btn" id="globalWtToastJoin">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            <span>Join Stream</span>
+                        </a>
+                        <button type="button" class="wt-toast-close-btn" id="globalWtToastClose" title="Dismiss">&times;</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Profile Photo Modal -->
             <div class="theme-modal-backdrop" id="profileModal" style="display:none;">
                 <div class="theme-modal profile-modal-card">
@@ -100,7 +120,8 @@
             </div>
             <% } %>
 
-                <script src="/js/app.js?v=5.1"></script>
+                <script src="/js/app.js?v=5.2"></script>
+                <script src="/js/watchTogether.js?v=2.1"></script>
 </body>
 
 </html>

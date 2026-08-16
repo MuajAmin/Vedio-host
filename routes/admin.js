@@ -34,6 +34,16 @@ function getImportJobs() {
     return importRoutes.getImportJobs();
 }
 
+function formatWatchTime(totalSec) {
+    const s = Number(totalSec || 0);
+    if (!s || s <= 0) return '0m';
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
+    if (hrs > 0) return `${hrs}h`;
+    return `${Math.max(1, mins)}m`;
+}
+
 function collectAdminStats() {
     const videos = db.prepare(
         'SELECT id, title, filename, thumbnail, size, duration, uploaded_by, uploaded_at, import_quality FROM videos ORDER BY uploaded_at DESC'
@@ -84,6 +94,10 @@ function collectAdminStats() {
     const watchedVideos = hajeraVideos.filter(v => v.hajera_watched_at !== null);
     const unwatchedVideos = hajeraVideos.filter(v => v.hajera_watched_at === null);
 
+    const presence = db.getUserPresence('hajera');
+    const rawWatchStats = db.getUserWatchStats('hajera');
+    const activityTimeline = db.getRecentActivities('hajera', 35);
+
     const hajeraStats = {
         totalLibrary: hajeraVideos.length,
         totalWatched: watchedVideos.length,
@@ -103,7 +117,15 @@ function collectAdminStats() {
             return pos < 10;
         }).length,
         allVideos: hajeraVideos,
-        recentActivity: hajeraVideos
+        recentActivity: hajeraVideos,
+        presence,
+        watchStats: {
+            totalSeconds: rawWatchStats.totalSeconds,
+            todaySeconds: rawWatchStats.todaySeconds,
+            totalFormatted: formatWatchTime(rawWatchStats.totalSeconds),
+            todayFormatted: formatWatchTime(rawWatchStats.todaySeconds)
+        },
+        activityTimeline
     };
 
     return {
@@ -194,6 +216,35 @@ router.post('/admin/hajera/unblock', isMuaj, (req, res) => {
         cleanupResult: null,
         accessMessage: { type: 'success', text: 'Hajera-কে unblock করা হয়েছে। এখন login করতে পারবে।' }
     });
+});
+
+// GET /admin/hajera/live-status — Live polling endpoint for Admin Dashboard
+router.get('/admin/hajera/live-status', isMuaj, (req, res) => {
+    const presence = db.getUserPresence('hajera');
+    const rawWatchStats = db.getUserWatchStats('hajera');
+    const activityTimeline = db.getRecentActivities('hajera', 30);
+    const sessionCount = db.countUserSessions('hajera');
+    const isBlocked = db.isUserBlocked('hajera');
+
+    res.json({
+        presence,
+        watchStats: {
+            totalSeconds: rawWatchStats.totalSeconds,
+            todaySeconds: rawWatchStats.todaySeconds,
+            totalFormatted: formatWatchTime(rawWatchStats.totalSeconds),
+            todayFormatted: formatWatchTime(rawWatchStats.todaySeconds)
+        },
+        activityTimeline,
+        sessionCount,
+        isBlocked,
+        timestamp: Date.now()
+    });
+});
+
+// POST /admin/hajera/clear-logs — Clear older activity logs
+router.post('/admin/hajera/clear-logs', isMuaj, (req, res) => {
+    db.clearOldActivityLogs('hajera');
+    res.json({ success: true });
 });
 
 module.exports = router;

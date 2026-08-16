@@ -20,9 +20,19 @@ function formatBytes(value) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function parseSqliteDate(str) {
+    if (!str) return 0;
+    if (typeof str === 'number') return str;
+    const s = String(str);
+    const iso = s.includes('T') ? (s.endsWith('Z') ? s : s + 'Z') : s.replace(' ', 'T') + 'Z';
+    const t = new Date(iso).getTime();
+    return isNaN(t) ? new Date(str).getTime() : t;
+}
+
 function formatDate(value) {
     if (!value) return '-';
-    return new Date(value).toLocaleString('bn-BD', {
+    const t = parseSqliteDate(value);
+    return new Date(t).toLocaleString('bn-BD', {
         day: 'numeric',
         month: 'short',
         hour: '2-digit',
@@ -44,9 +54,9 @@ function formatSeconds(sec) {
 
 function timeAgo(dateString) {
     if (!dateString) return '-';
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now - date) / 1000);
+    const timestamp = parseSqliteDate(dateString);
+    const now = Date.now();
+    const seconds = Math.floor((now - timestamp) / 1000);
     if (isNaN(seconds) || seconds < 0) return '-';
     if (seconds < 60) return 'Just now';
     const minutes = Math.floor(seconds / 60);
@@ -80,9 +90,104 @@ const unwatchedCount = hajeraStats.unwatchedCount || 0;
 const openedCount = hajeraStats.openedCount || 0;
 const overallPercent = totalVideos > 0 ? Math.round((watchedCount / totalVideos) * 100) : 0;
 
+const presence = hajeraStats.presence || { status: 'offline', isOnline: false, isWatching: false, isIdle: false, lastSeen: null, lastSeenSecondsAgo: null };
+const watchStats = hajeraStats.watchStats || { totalFormatted: '0m', todayFormatted: '0m', totalSeconds: 0, todaySeconds: 0 };
+const activityTimeline = Array.isArray(hajeraStats.activityTimeline) ? hajeraStats.activityTimeline : [];
+
 const lastActiveItem = hajeraActivityList.find(item => item.hajera_watched_at || item.updated_at);
-const lastActiveTime = lastActiveItem ? (lastActiveItem.hajera_watched_at || lastActiveItem.updated_at) : null;
+const lastActiveTime = presence.lastSeen || (lastActiveItem ? (lastActiveItem.hajera_watched_at || lastActiveItem.updated_at) : null);
 const lastActiveText = lastActiveTime ? timeAgo(lastActiveTime) : 'No activity yet';
+
+let presenceBadge = '';
+let presenceDotClass = 'dot-offline';
+if (presence.isWatching) {
+    presenceDotClass = 'dot-watching';
+    presenceBadge = `<span class="hero-live-badge badge-live-watching" id="hajeraLiveBadge"><span class="live-pulse-anim"></span> 🎬 LIVE: Watching Now</span>`;
+} else if (presence.isOnline) {
+    presenceDotClass = 'dot-online';
+    presenceBadge = `<span class="hero-live-badge badge-live-online" id="hajeraLiveBadge"><span class="live-pulse-anim"></span> 🟢 Online & Active</span>`;
+} else if (presence.isIdle) {
+    presenceDotClass = 'dot-idle';
+    presenceBadge = `<span class="hero-live-badge badge-live-idle" id="hajeraLiveBadge"><span class="idle-static-dot"></span> 🟡 Away / Idle</span>`;
+} else {
+    presenceDotClass = 'dot-offline';
+    presenceBadge = `<span class="hero-live-badge badge-live-offline" id="hajeraLiveBadge">⚫ Offline</span>`;
+}
+
+const liveVideoPlayingHtml = (presence.isWatching && presence.currentVideoId)
+    ? `<div class="hajera-live-card" id="hajeraLiveCard">
+        <div class="live-card-eq">
+            <span class="eq-bar bar-1"></span>
+            <span class="eq-bar bar-2"></span>
+            <span class="eq-bar bar-3"></span>
+            <span class="eq-bar bar-4"></span>
+        </div>
+        <div class="live-card-thumb">
+            ${presence.thumbnail ? `<img src="/thumbnails/${h(presence.thumbnail)}" alt="" />` : '<div class="thumb-fallback">🎬</div>'}
+        </div>
+        <div class="live-card-info">
+            <div class="live-card-tag">
+                <span class="live-tag-pulse">▶️ PLAYING NOW</span>
+                <span class="live-tag-device">${h(presence.deviceInfo || 'Device')}</span>
+            </div>
+            <a href="/watch/${encodeURIComponent(presence.currentVideoId)}" class="live-card-title">${h(presence.videoTitle || 'Video')}</a>
+            <div class="live-card-meta">
+                <span class="live-time">${formatSeconds(presence.currentTime)} / ${formatSeconds(presence.duration)}</span>
+                <span class="live-pct">${presence.duration > 0 ? Math.round((presence.currentTime / presence.duration) * 100) : 0}%</span>
+            </div>
+            <div class="live-progress-bar">
+                <div class="live-progress-fill" style="width: ${presence.duration > 0 ? Math.min(100, Math.round((presence.currentTime / presence.duration) * 100)) : 0}%;"></div>
+            </div>
+        </div>
+        <a href="/watch/${encodeURIComponent(presence.currentVideoId)}" class="btn btn-primary btn-sm btn-join-watch" title="Watch together or view">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            <span>Watch</span>
+        </a>
+       </div>`
+    : `<div class="hajera-live-card" id="hajeraLiveCard" style="display:none;"></div>`;
+
+const timelineHtml = activityTimeline.length === 0
+    ? '<div class="timeline-empty"><p>No session activity recorded yet.</p></div>'
+    : activityTimeline.map(act => {
+        let icon = '📌';
+        let actionLabel = act.action;
+        let actClass = 'act-generic';
+        switch (act.action) {
+            case 'login': icon = '🔑'; actionLabel = 'Logged In'; actClass = 'act-login'; break;
+            case 'logout': icon = '🚪'; actionLabel = 'Logged Out'; actClass = 'act-logout'; break;
+            case 'watch_start': icon = '▶️'; actionLabel = 'Started Watching'; actClass = 'act-play'; break;
+            case 'watch_pause': icon = '⏸️'; actionLabel = 'Paused Video'; actClass = 'act-pause'; break;
+            case 'watch_resume': icon = '🔁'; actionLabel = 'Resumed Video'; actClass = 'act-play'; break;
+            case 'watch_complete': icon = '🏆'; actionLabel = 'Completed Video'; actClass = 'act-complete'; break;
+            case 'comment_added': icon = '💬'; actionLabel = 'Added Comment'; actClass = 'act-comment'; break;
+            case 'went_idle': icon = '💤'; actionLabel = 'Went Away / Idle'; actClass = 'act-idle'; break;
+            case 'came_online': icon = '⚡'; actionLabel = 'Active On Screen'; actClass = 'act-online'; break;
+            case 'went_offline': icon = '🔴'; actionLabel = 'Left / Closed Tab'; actClass = 'act-offline'; break;
+        }
+
+        const videoLink = act.video_id
+            ? `<a href="/watch/${encodeURIComponent(act.video_id)}" class="timeline-video-link">${h(act.video_title || 'Watch Video')}</a>`
+            : '';
+
+        const detailsText = act.details ? `<span class="timeline-details">${h(act.details)}</span>` : '';
+        const timeText = timeAgo(act.created_at);
+        const exactTime = formatDate(act.created_at);
+
+        return `<div class="timeline-entry ${actClass}">
+            <div class="timeline-icon-wrap">${icon}</div>
+            <div class="timeline-content">
+                <div class="timeline-head">
+                    <span class="timeline-action">${h(actionLabel)}</span>
+                    <span class="timeline-time" title="${h(exactTime)}">${h(timeText)}</span>
+                </div>
+                ${videoLink}
+                ${detailsText}
+                ${act.device_info ? `<span class="timeline-device">${h(act.device_info)}</span>` : ''}
+            </div>
+        </div>`;
+    }).join('');
 
 const hajeraBlocked = stats && stats.hajeraBlocked;
 const hajeraSessionCount = (stats && stats.hajeraSessionCount) || 0;
@@ -476,30 +581,43 @@ const videoRows = recentVideos.length === 0
                         <div class="hajera-hero-avatar">
                             ${renderAvatar('hajera', 'hajera-avatar-hero')}
                         </div>
-                        <div class="hajera-hero-online-dot" title="Tracker Active"></div>
+                        <div class="hajera-hero-online-dot ${presenceDotClass}" id="hajeraHeroOnlineDot" title="${h(presence.status)}"></div>
                     </div>
                     <div class="hajera-hero-info">
                         <div class="hajera-hero-tag">
                             <span class="heart-pulse">💖</span>
                             <span class="tag-title">Hajera's Watch Tracker</span>
-                            <span class="hero-last-active" title="Last Watch Timestamp">⏱️ ${h(lastActiveText)}</span>
+                            ${presenceBadge}
+                            <span class="hero-last-active" id="hajeraLastActiveText" title="Last Active Timestamp">⏱️ ${h(lastActiveText)}</span>
+                            <span class="live-sync-indicator" title="Live Auto-Sync Active"><span class="sync-dot"></span> Live 4s</span>
                         </div>
-                        <h2 class="hajera-hero-title">Viewing Habits & Progress</h2>
-                        <p class="hajera-hero-desc">${h(watchedCount)} of ${h(totalVideos)} library videos explored (${h(overallPercent)}%)</p>
+                        <h2 class="hajera-hero-title">Viewing Habits & Live Presence</h2>
+                        <p class="hajera-hero-desc" id="hajeraHeroDesc">${h(watchedCount)} of ${h(totalVideos)} library videos explored (${h(overallPercent)}%) ${presence.deviceInfo ? '• ' + h(presence.deviceInfo) : ''}</p>
                     </div>
                 </div>
+
+                <!-- Live Playing Card (Active video playback) -->
+                ${liveVideoPlayingHtml}
 
                 <div class="hajera-hero-metrics">
                     <div class="hero-progress-block">
                         <div class="hero-progress-labels">
-                            <span>Total Engagement Rate</span>
+                            <span>Total Library Engagement</span>
                             <strong>${h(overallPercent)}%</strong>
                         </div>
                         <div class="hero-progress-track">
                             <div class="hero-progress-fill" style="width: ${h(overallPercent)}%;"></div>
                         </div>
                     </div>
-                    <div class="hero-mini-stats">
+                    <div class="hero-mini-stats hero-stats-6">
+                        <div class="hero-mini-stat stat-watchtime" title="Total real watch time">
+                            <span class="mini-num" id="hajeraTotalWatchTime">${h(watchStats.totalFormatted)}</span>
+                            <span class="mini-label">Total Time</span>
+                        </div>
+                        <div class="hero-mini-stat stat-todaytime" title="Watch time today">
+                            <span class="mini-num" id="hajeraTodayWatchTime">${h(watchStats.todayFormatted)}</span>
+                            <span class="mini-label">Today</span>
+                        </div>
                         <div class="hero-mini-stat stat-complete">
                             <span class="mini-num">${h(completedCount)}</span>
                             <span class="mini-label">Completed</span>
@@ -532,7 +650,7 @@ const videoRows = recentVideos.length === 0
                         <h3 class="access-control-heading">Access Control</h3>
                     </div>
                     <div class="access-status-badges">
-                        <span class="session-count-badge" title="Active sessions">
+                        <span class="session-count-badge" id="hajeraSessionBadge" title="Active sessions">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
                                 <circle cx="12" cy="12" r="10"/>
                                 <path d="M12 6v6l4 2"/>
@@ -616,11 +734,15 @@ const videoRows = recentVideos.length === 0
                         <span class="chip-label">Unwatched</span>
                         <span class="chip-count">${h(unwatchedCount)}</span>
                     </button>
+                    <button type="button" class="hajera-chip chip-timeline" data-filter="timeline">
+                        <span class="chip-label">📜 Activity Timeline</span>
+                        <span class="chip-count" id="hajeraTimelineCount">${h(activityTimeline.length)}</span>
+                    </button>
                 </div>
             </div>
 
             <!-- Live Search / Quick Filter Bar -->
-            <div class="hajera-search-bar">
+            <div class="hajera-search-bar" id="hajeraSearchBarWrap">
                 <div class="hajera-search-input-wrap">
                     <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                         <circle cx="11" cy="11" r="8"/>
@@ -635,6 +757,17 @@ const videoRows = recentVideos.length === 0
                     </button>
                 </div>
                 <div class="hajera-search-status" id="hajeraFilterCount">Showing <strong>${h(hajeraActivityList.length)}</strong> of ${h(hajeraActivityList.length)}</div>
+            </div>
+
+            <!-- Activity Timeline Feed View (Shown when Timeline chip is selected) -->
+            <div class="hajera-timeline-feed" id="hajeraTimelineFeed" style="display: none;">
+                <div class="timeline-feed-header">
+                    <h4>Real-time Activity & Session History</h4>
+                    <span class="timeline-feed-sub">Live audit trail of playback, logins, comments & presence</span>
+                </div>
+                <div class="timeline-list" id="hajeraTimelineList">
+                    ${timelineHtml}
+                </div>
             </div>
 
             <!-- Mobile Android Touch Cards View -->

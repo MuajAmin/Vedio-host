@@ -473,6 +473,12 @@ const commentsHtml = comments.length === 0
                             <span>Live Chat</span>
                             <span class="wt-unread-badge" id="wtUnreadBadge" style="display:none;">0</span>
                         </button>
+                        <button type="button" class="wt-status-stop-btn wt-stop-session-btn" id="wtStatusStopBtn" title="Stop / Leave Watch Together session">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14">
+                                <rect x="6" y="6" width="12" height="12" rx="2"/>
+                            </svg>
+                            <span>${isAdmin ? 'Stop Session' : 'Leave'}</span>
+                        </button>
                     </div>
                 </div>
 
@@ -528,11 +534,11 @@ const commentsHtml = comments.length === 0
                                     </svg>
                                     <span>Watch Together</span>
                                 </button>
-                                <button type="button" class="btn btn-wt-stop btn-sm" id="wtStopBtn" style="display:none;" title="End Watch Together session">
+                                <button type="button" class="btn btn-wt-stop wt-stop-session-btn btn-sm" id="wtStopBtn" style="display:none;" title="End Watch Together session">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                         <rect x="6" y="6" width="12" height="12" rx="2"/>
                                     </svg>
-                                    <span>End Session</span>
+                                    <span>Stop Session</span>
                                 </button>
                                 ` : `
                                 <button type="button" class="btn btn-wt-chat btn-sm wt-chat-toggle-btn" id="wtChatToggleGuest" title="Open Live Chat">
@@ -540,6 +546,12 @@ const commentsHtml = comments.length === 0
                                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                                     </svg>
                                     <span>Live Chat</span>
+                                </button>
+                                <button type="button" class="btn btn-wt-stop wt-stop-session-btn btn-sm" id="wtStopBtnGuest" style="display:none;" title="Leave Watch Together session">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                        <rect x="6" y="6" width="12" height="12" rx="2"/>
+                                    </svg>
+                                    <span>Leave Session</span>
                                 </button>
                                 `}
                             </div>
@@ -810,7 +822,15 @@ const commentsHtml = comments.length === 0
                 <span class="wt-chat-sub">Muaj &amp; Hajera • Real-time Sync</span>
             </div>
         </div>
-        <button type="button" class="wt-chat-close-btn" id="wtChatClose" title="Close chat">&times;</button>
+        <div class="wt-chat-header-actions">
+            <button type="button" class="wt-chat-stop-btn wt-stop-session-btn" id="wtChatStopBtn" title="Stop / Leave Session">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                </svg>
+                <span>${isAdmin ? 'Stop' : 'Leave'}</span>
+            </button>
+            <button type="button" class="wt-chat-close-btn" id="wtChatClose" title="Close chat">&times;</button>
+        </div>
     </div>
 
     <div class="wt-chat-messages" id="wtChatMessages">
@@ -844,6 +864,4 @@ const commentsHtml = comments.length === 0
         </div>
     </div>
 </aside>
-
-<script src="/js/watchTogether.js?v=1.1"></script>
 ` }) %>

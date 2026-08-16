@@ -1348,6 +1348,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
+            vid.addEventListener('play', () => {
+                if (typeof window.__sendPresenceAction === 'function') {
+                    window.__sendPresenceAction('watch_start');
+                }
+            });
+
             let lastPositionSave = 0;
             vid.addEventListener('timeupdate', () => {
                 const now = Date.now();
@@ -1361,10 +1367,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!vid.ended && vid.currentTime > 2) {
                     saveWatchProgress();
                 }
+                if (typeof window.__sendPresenceAction === 'function') {
+                    window.__sendPresenceAction('watch_pause');
+                }
             });
 
             vid.addEventListener('ended', () => {
                 saveWatchProgress({ ended: true });
+                if (typeof window.__sendPresenceAction === 'function') {
+                    window.__sendPresenceAction('watch_complete');
+                }
             });
 
             window.addEventListener('beforeunload', () => {
@@ -2627,7 +2639,93 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ========================================
-    // Admin Control Center Interactivity
+    // Real-Time Presence & Heartbeat Engine
+    // ========================================
+    function initPresenceTracker() {
+        let isIdle = false;
+        let idleTimer = null;
+        let lastPing = 0;
+
+        function getPlayerState() {
+            const vid = document.getElementById('vpVideo');
+            if (vid && vid.getAttribute('data-video-id')) {
+                const isPlaying = !vid.paused && !vid.ended && vid.readyState > 2;
+                const videoId = vid.getAttribute('data-video-id');
+                const videoTitle = document.querySelector('.video-header-title, .watch-main-title, h1')?.textContent?.trim() || '';
+                const currentTime = Math.floor(vid.currentTime || 0);
+                const duration = Math.floor(vid.duration || 0);
+                return { videoId, videoTitle, isPlaying, currentTime, duration };
+            }
+            return { videoId: null, videoTitle: null, isPlaying: false, currentTime: 0, duration: 0 };
+        }
+
+        function sendPresencePing(action = null) {
+            const playerState = getPlayerState();
+            const payload = {
+                page: window.location.pathname,
+                isIdle: isIdle || document.hidden,
+                action,
+                deltaSeconds: 10,
+                ...playerState
+            };
+
+            fetch('/api/presence/ping', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                keepalive: true
+            }).catch(() => {});
+
+            lastPing = Date.now();
+        }
+
+        function resetIdleTimer() {
+            if (isIdle) {
+                isIdle = false;
+                sendPresencePing('came_online');
+            }
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => {
+                isIdle = true;
+                sendPresencePing('went_idle');
+            }, 120000);
+        }
+
+        ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+            window.addEventListener(evt, resetIdleTimer, { passive: true });
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                isIdle = true;
+                sendPresencePing('went_idle');
+            } else {
+                isIdle = false;
+                sendPresencePing('came_online');
+            }
+        });
+
+        window.addEventListener('pagehide', () => {
+            try {
+                navigator.sendBeacon('/api/presence/leave', JSON.stringify({ page: window.location.pathname }));
+            } catch {}
+        });
+
+        sendPresencePing();
+
+        setInterval(() => {
+            if (Date.now() - lastPing >= 9500) {
+                sendPresencePing();
+            }
+        }, 10000);
+
+        window.__sendPresenceAction = sendPresencePing;
+    }
+
+    initPresenceTracker();
+
+    // ========================================
+    // Admin Control Center Interactivity & Live Sync
     // ========================================
     const hajeraFilterChips = document.getElementById('hajeraFilterChips');
     const hajeraCardsList = document.getElementById('hajeraCardsList');
@@ -2637,12 +2735,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const hajeraFilterCount = document.getElementById('hajeraFilterCount');
     const hajeraFilteredEmpty = document.getElementById('hajeraFilteredEmpty');
     const hajeraResetFilterBtn = document.getElementById('hajeraResetFilterBtn');
+    const hajeraTimelineFeed = document.getElementById('hajeraTimelineFeed');
+    const hajeraSearchBarWrap = document.getElementById('hajeraSearchBarWrap');
 
-    if (hajeraFilterChips || hajeraSearchInput) {
+    if (hajeraFilterChips || hajeraSearchInput || hajeraTimelineFeed) {
         let activeStatusFilter = 'all';
         let searchQuery = '';
 
         function updateHajeraView() {
+            if (activeStatusFilter === 'timeline') {
+                if (hajeraTimelineFeed) hajeraTimelineFeed.style.display = 'block';
+                if (hajeraSearchBarWrap) hajeraSearchBarWrap.style.display = 'none';
+                if (hajeraCardsList) hajeraCardsList.style.display = 'none';
+                if (hajeraDesktopTable) hajeraDesktopTable.style.display = 'none';
+                if (hajeraFilteredEmpty) hajeraFilteredEmpty.style.display = 'none';
+                return;
+            }
+
+            if (hajeraTimelineFeed) hajeraTimelineFeed.style.display = 'none';
+            if (hajeraSearchBarWrap) hajeraSearchBarWrap.style.display = '';
+
             const cards = document.querySelectorAll('.hajera-android-card');
             const rows = document.querySelectorAll('#hajeraDesktopTable tbody tr');
             let visibleCount = 0;
@@ -2749,6 +2861,195 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateHajeraView();
             });
         }
+
+        // ========================================
+        // Admin Live Status Polling (4s Interval)
+        // ========================================
+        function formatSecondsHelper(sec) {
+            const s = Number(sec || 0);
+            if (!s || isNaN(s)) return '0:00';
+            const hrs = Math.floor(s / 3600);
+            const mins = Math.floor((s % 3600) / 60);
+            const secs = Math.floor(s % 60);
+            if (hrs > 0) {
+                return hrs + ':' + (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
+            }
+            return mins + ':' + (secs < 10 ? '0' : '') + secs;
+        }
+
+        function formatRelTimeHelper(dateStr) {
+            if (!dateStr) return '-';
+            const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+            if (isNaN(seconds) || seconds < 0) return '-';
+            if (seconds < 60) return 'Just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return minutes + 'm ago';
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return hours + 'h ago';
+            const days = Math.floor(hours / 24);
+            if (days === 1) return 'Yesterday';
+            return days + 'd ago';
+        }
+
+        function pollHajeraLiveStatus() {
+            fetch('/admin/hajera/live-status')
+                .then(res => res.json())
+                .then(data => {
+                    if (!data || !data.presence) return;
+                    const p = data.presence;
+
+                    // Update Online Dot
+                    const dot = document.getElementById('hajeraHeroOnlineDot');
+                    if (dot) {
+                        dot.className = 'hajera-hero-online-dot dot-' + (p.status || 'offline');
+                        dot.title = p.status || 'offline';
+                    }
+
+                    // Update Hero Live Badge
+                    const badge = document.getElementById('hajeraLiveBadge');
+                    if (badge) {
+                        if (p.isWatching) {
+                            badge.className = 'hero-live-badge badge-live-watching';
+                            badge.innerHTML = '<span class="live-pulse-anim"></span> 🎬 LIVE: Watching Now';
+                        } else if (p.isOnline) {
+                            badge.className = 'hero-live-badge badge-live-online';
+                            badge.innerHTML = '<span class="live-pulse-anim"></span> 🟢 Online & Active';
+                        } else if (p.isIdle) {
+                            badge.className = 'hero-live-badge badge-live-idle';
+                            badge.innerHTML = '<span class="idle-static-dot"></span> 🟡 Away / Idle';
+                        } else {
+                            badge.className = 'hero-live-badge badge-live-offline';
+                            badge.innerHTML = '⚫ Offline';
+                        }
+                    }
+
+                    // Update Last Active Text
+                    const lastActive = document.getElementById('hajeraLastActiveText');
+                    if (lastActive && p.lastSeen) {
+                        lastActive.textContent = '⏱️ ' + formatRelTimeHelper(p.lastSeen);
+                    }
+
+                    // Update Live Playing Card
+                    const liveCard = document.getElementById('hajeraLiveCard');
+                    if (liveCard) {
+                        if (p.isWatching && p.currentVideoId) {
+                            const curTime = formatSecondsHelper(p.currentTime);
+                            const durTime = formatSecondsHelper(p.duration);
+                            const pct = p.duration > 0 ? Math.min(100, Math.round((p.currentTime / p.duration) * 100)) : 0;
+                            const thumbHtml = p.thumbnail
+                                ? `<img src="/thumbnails/${p.thumbnail}" alt="" />`
+                                : '<div class="thumb-fallback">🎬</div>';
+
+                            liveCard.style.display = 'flex';
+                            liveCard.innerHTML = `
+                                <div class="live-card-eq">
+                                    <span class="eq-bar bar-1"></span>
+                                    <span class="eq-bar bar-2"></span>
+                                    <span class="eq-bar bar-3"></span>
+                                    <span class="eq-bar bar-4"></span>
+                                </div>
+                                <div class="live-card-thumb">${thumbHtml}</div>
+                                <div class="live-card-info">
+                                    <div class="live-card-tag">
+                                        <span class="live-tag-pulse">▶️ PLAYING NOW</span>
+                                        <span class="live-tag-device">${p.deviceInfo || 'Device'}</span>
+                                    </div>
+                                    <a href="/watch/${encodeURIComponent(p.currentVideoId)}" class="live-card-title">${p.videoTitle || 'Video'}</a>
+                                    <div class="live-card-meta">
+                                        <span class="live-time">${curTime} / ${durTime}</span>
+                                        <span class="live-pct">${pct}%</span>
+                                    </div>
+                                    <div class="live-progress-bar">
+                                        <div class="live-progress-fill" style="width: ${pct}%;"></div>
+                                    </div>
+                                </div>
+                                <a href="/watch/${encodeURIComponent(p.currentVideoId)}" class="btn btn-primary btn-sm btn-join-watch" title="Watch together or view">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                        <polygon points="5 3 19 12 5 21 5 3"/>
+                                    </svg>
+                                    <span>Watch</span>
+                                </a>
+                            `;
+                        } else {
+                            liveCard.style.display = 'none';
+                        }
+                    }
+
+                    // Update Watch Time Stats
+                    if (data.watchStats) {
+                        const totalEl = document.getElementById('hajeraTotalWatchTime');
+                        const todayEl = document.getElementById('hajeraTodayWatchTime');
+                        if (totalEl && data.watchStats.totalFormatted) totalEl.textContent = data.watchStats.totalFormatted;
+                        if (todayEl && data.watchStats.todayFormatted) todayEl.textContent = data.watchStats.todayFormatted;
+                    }
+
+                    // Update Session Count Badge
+                    const sessBadge = document.getElementById('hajeraSessionBadge');
+                    if (sessBadge && typeof data.sessionCount === 'number') {
+                        sessBadge.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2"/>
+                            </svg>
+                            ${data.sessionCount} session${data.sessionCount !== 1 ? 's' : ''}
+                        `;
+                    }
+
+                    // Update Timeline List & Count
+                    if (Array.isArray(data.activityTimeline)) {
+                        const countEl = document.getElementById('hajeraTimelineCount');
+                        if (countEl) countEl.textContent = data.activityTimeline.length;
+
+                        const timelineList = document.getElementById('hajeraTimelineList');
+                        if (timelineList && data.activityTimeline.length > 0) {
+                            timelineList.innerHTML = data.activityTimeline.map(act => {
+                                let icon = '📌';
+                                let actionLabel = act.action;
+                                let actClass = 'act-generic';
+                                switch (act.action) {
+                                    case 'login': icon = '🔑'; actionLabel = 'Logged In'; actClass = 'act-login'; break;
+                                    case 'logout': icon = '🚪'; actionLabel = 'Logged Out'; actClass = 'act-logout'; break;
+                                    case 'watch_start': icon = '▶️'; actionLabel = 'Started Watching'; actClass = 'act-play'; break;
+                                    case 'watch_pause': icon = '⏸️'; actionLabel = 'Paused Video'; actClass = 'act-pause'; break;
+                                    case 'watch_resume': icon = '🔁'; actionLabel = 'Resumed Video'; actClass = 'act-play'; break;
+                                    case 'watch_complete': icon = '🏆'; actionLabel = 'Completed Video'; actClass = 'act-complete'; break;
+                                    case 'comment_added': icon = '💬'; actionLabel = 'Added Comment'; actClass = 'act-comment'; break;
+                                    case 'went_idle': icon = '💤'; actionLabel = 'Went Away / Idle'; actClass = 'act-idle'; break;
+                                    case 'came_online': icon = '⚡'; actionLabel = 'Active On Screen'; actClass = 'act-online'; break;
+                                    case 'went_offline': icon = '🔴'; actionLabel = 'Left / Closed Tab'; actClass = 'act-offline'; break;
+                                }
+
+                                const videoLink = act.video_id
+                                    ? `<a href="/watch/${encodeURIComponent(act.video_id)}" class="timeline-video-link">${act.video_title || 'Watch Video'}</a>`
+                                    : '';
+
+                                const detailsText = act.details ? `<span class="timeline-details">${act.details}</span>` : '';
+                                const timeText = formatRelTimeHelper(act.created_at);
+
+                                return `
+                                    <div class="timeline-entry ${actClass}">
+                                        <div class="timeline-icon-wrap">${icon}</div>
+                                        <div class="timeline-content">
+                                            <div class="timeline-head">
+                                                <span class="timeline-action">${actionLabel}</span>
+                                                <span class="timeline-time">${timeText}</span>
+                                            </div>
+                                            ${videoLink}
+                                            ${detailsText}
+                                            ${act.device_info ? `<span class="timeline-device">${act.device_info}</span>` : ''}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('');
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+
+        // Start live polling every 4 seconds
+        setInterval(pollHajeraLiveStatus, 4000);
     }
 
 });
+

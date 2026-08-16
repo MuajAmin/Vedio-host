@@ -105,6 +105,16 @@ router.post('/watch-together/create', isMuaj, (req, res) => {
         return res.status(400).json({ error: 'videoId required' });
     }
 
+    // Resolve title from DB if not passed
+    let resolvedTitle = (videoTitle || '').trim();
+    if (!resolvedTitle) {
+        try {
+            const row = db.prepare('SELECT title FROM videos WHERE id = ?').get(videoId);
+            if (row && row.title) resolvedTitle = row.title;
+        } catch {}
+    }
+    if (!resolvedTitle) resolvedTitle = 'Untitled Video';
+
     // Close any existing room by this host
     const existing = getRoomByHost('muaj');
     if (existing) {
@@ -118,7 +128,7 @@ router.post('/watch-together/create', isMuaj, (req, res) => {
     const roomId = generateRoomId();
     const room = {
         videoId,
-        videoTitle: videoTitle || 'Untitled',
+        videoTitle: resolvedTitle,
         host: 'muaj',
         guest: null,
         active: true,
@@ -135,7 +145,7 @@ router.post('/watch-together/create', isMuaj, (req, res) => {
 
     rooms.set(roomId, room);
 
-    res.json({ roomId, videoId });
+    res.json({ roomId, videoId, videoTitle: resolvedTitle });
 });
 
 // POST /watch-together/join/:roomId — Guest joins a room

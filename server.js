@@ -152,6 +152,10 @@ app.use((req, res, next) => {
     if (req.path.startsWith('/watch-together/') && (req.method === 'POST' || req.method === 'GET')) {
         return next();
     }
+    // Real-time presence pings & beacons — handled via session auth
+    if (req.path.startsWith('/api/presence/') && (req.method === 'POST' || req.method === 'GET')) {
+        return next();
+    }
     return requireCsrf(req, res, next);
 });
 
