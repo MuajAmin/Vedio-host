@@ -12,14 +12,116 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
-    <script src="/js/theme-init.js?v=5.3"></script>
-    <link rel="stylesheet" href="/css/style.css?v=5.3">
+    <script src="/js/theme-init.js?v=5.4"></script>
+    <link rel="stylesheet" href="/css/style.css?v=5.4">
+    <link rel="stylesheet" href="/css/messages.css?v=1.0">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>">
     <%- body %>
 
         <% if (typeof user !=='undefined' && user) { %>
+            <!-- Global Floating Chat Launcher & Drawer Widget -->
+            <% const partnerName = user === 'muaj' ? 'Hajera' : 'Muaj'; %>
+            <% const partnerUsername = user === 'muaj' ? 'hajera' : 'muaj'; %>
+
+            <button type="button" class="msg-floating-launcher" id="msgFloatingLauncher" aria-label="Open Direct Messages" title="Chat with <%= partnerName %>">
+                <div class="msg-launcher-icon-wrap">
+                    <svg class="msg-launcher-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <svg class="msg-launcher-close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="22" height="22">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </div>
+                <span class="msg-unread-badge-pill" id="msgLauncherUnreadBadge" style="display:none;">0</span>
+            </button>
+
+            <div class="msg-drawer-widget" id="msgDrawerWidget">
+                <!-- Header -->
+                <div class="msg-header">
+                    <a href="/messages" class="msg-header-user-group" title="Open Full Screen Chat">
+                        <div class="msg-header-avatar-wrap">
+                            <%- typeof renderAvatar === 'function' ? renderAvatar(partnerUsername, 'msg-header-avatar') : '' %>
+                            <span class="msg-status-dot msg-partner-status-dot dot-offline"></span>
+                        </div>
+                        <div class="msg-header-details">
+                            <div class="msg-header-name-row">
+                                <h4 class="msg-header-name"><%= partnerName %></h4>
+                                <span class="msg-role-tag <%= user === 'muaj' ? 'tag-viewer' : 'tag-admin' %>"><%= user === 'muaj' ? 'Viewer' : 'Admin' %></span>
+                            </div>
+                            <p class="msg-header-presence-sub msg-partner-presence-text">Connecting...</p>
+                        </div>
+                    </a>
+                    <div class="msg-header-actions">
+                        <a href="/messages" class="msg-hdr-btn" title="Expand to Full Page">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                            </svg>
+                        </a>
+                        <button type="button" class="msg-hdr-btn" id="msgDrawerCloseBtn" title="Close">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Message Body -->
+                <div class="msg-body-container" id="msgDrawerList">
+                    <!-- Messages appended dynamically via JS -->
+                </div>
+
+                <!-- Footer Composer -->
+                <div class="msg-footer msg-composer-wrap">
+                    <!-- Quick Emojis -->
+                    <div class="msg-quick-emojis">
+                        <button type="button" class="msg-quick-emoji-btn" data-emoji="❤️">❤️</button>
+                        <button type="button" class="msg-quick-emoji-btn" data-emoji="🔥">🔥</button>
+                        <button type="button" class="msg-quick-emoji-btn" data-emoji="😂">😂</button>
+                        <button type="button" class="msg-quick-emoji-btn" data-emoji="🍿">🍿</button>
+                        <button type="button" class="msg-quick-emoji-btn" data-emoji="🎬">🎬</button>
+                        <button type="button" class="msg-quick-emoji-btn" data-emoji="✨">✨</button>
+                        <button type="button" class="msg-quick-emoji-btn" data-emoji="😍">😍</button>
+                        <button type="button" class="msg-quick-emoji-btn" data-emoji="💖">💖</button>
+                    </div>
+
+                    <!-- Recording Bar -->
+                    <div class="msg-recording-bar">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span class="msg-rec-dot"></span>
+                            <span><span class="msg-rec-timer">0:00</span></span>
+                        </div>
+                        <div style="display: flex; gap: 4px;">
+                            <button type="button" class="btn btn-ghost btn-sm msg-rec-cancel-btn" style="padding: 2px 8px; font-size: 11px;">Cancel</button>
+                            <button type="button" class="btn btn-primary btn-sm msg-rec-send-btn" style="padding: 2px 8px; font-size: 11px;">Send</button>
+                        </div>
+                    </div>
+
+                    <!-- Input Row -->
+                    <div class="msg-input-row">
+                        <div class="msg-input-wrap">
+                            <textarea class="msg-textarea" placeholder="Message <%= partnerName %>..." rows="1"></textarea>
+                        </div>
+                        <button type="button" class="msg-composer-btn msg-mic-btn" title="Record Voice">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                <line x1="12" y1="19" x2="12" y2="23"/>
+                                <line x1="8" y1="23" x2="16" y2="23"/>
+                            </svg>
+                        </button>
+                        <button type="button" class="msg-send-btn" title="Send">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+                                <line x1="22" y1="2" x2="11" y2="13"/>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
             <!-- Global Watch Together Invitation Toast (Pops up anywhere on the site for Hajera) -->
             <div class="wt-global-invite-toast" id="globalWtToast" style="display:none;" role="alert" aria-live="assertive">
                 <div class="wt-toast-pill">
@@ -120,8 +222,9 @@
             </div>
             <% } %>
 
-                <script src="/js/app.js?v=5.3"></script>
-                <script src="/js/watchTogether.js?v=2.1"></script>
+                <script src="/js/app.js?v=5.4"></script>
+                <script src="/js/watchTogether.js?v=2.2"></script>
+                <script src="/js/messages.js?v=1.0"></script>
 </body>
 
 </html>

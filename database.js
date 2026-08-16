@@ -119,12 +119,28 @@ db.exec(`
         UNIQUE(user, video_id, watch_date)
     );
 
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sender TEXT NOT NULL,
+        recipient TEXT NOT NULL,
+        text TEXT,
+        video_id TEXT,
+        voice_url TEXT,
+        is_read INTEGER DEFAULT 0,
+        read_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE SET NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_at ON videos(uploaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_watch_progress_user_updated ON watch_progress(user, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_activity_logs_user_time ON activity_logs(username, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_watch_ledger_user_date ON watch_time_ledger(user, watch_date);
+    CREATE INDEX IF NOT EXISTS idx_messages_recipient_unread ON messages(recipient, is_read);
+    CREATE INDEX IF NOT EXISTS idx_messages_pair_created ON messages(sender, recipient, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
 `);
 
 // Migrations for older SQLite files.
@@ -557,6 +573,171 @@ function clearOldActivityLogs(username) {
     }
 }
 
+function formatMessageRow(r) {
+    if (!r) return null;
+    return {
+        id: r.id,
+        sender: r.sender,
+        recipient: r.recipient,
+        text: r.text || null,
+        videoId: r.video_id || null,
+        voiceUrl: r.voice_url || null,
+        isRead: r.is_read === 1,
+        readAt: r.read_at ? normalizeIsoDate(r.read_at) : null,
+        createdAt: normalizeIsoDate(r.created_at),
+        senderAvatar: r.sender_avatar || null,
+        video: r.video_id ? {
+            id: r.video_id,
+            title: r.video_title || 'Video',
+            thumbnail: r.video_thumbnail || null,
+            duration: r.video_duration || null,
+            size: r.video_size || 0,
+            uploadedBy: r.video_uploaded_by || null
+        } : null
+    };
+}
+
+function saveMessage({ sender, recipient, text = null, videoId = null, voiceUrl = null }) {
+    if (!sender || !recipient) return null;
+    try {
+        const nowIso = new Date().toISOString();
+        const info = db.prepare(`
+            INSERT INTO messages (sender, recipient, text, video_id, voice_url, is_read, created_at)
+            VALUES (?, ?, ?, ?, ?, 0, ?)
+        `).run(sender, recipient, text ? String(text).trim() : null, videoId || null, voiceUrl || null, nowIso);
+
+        return getMessageById(info.lastInsertRowid);
+    } catch (err) {
+        console.error('[db] Error saving message:', err.message);
+        return null;
+    }
+}
+
+function getMessageById(id) {
+    if (!id) return null;
+    try {
+        const row = db.prepare(`
+            SELECT m.*,
+                   v.title AS video_title,
+                   v.thumbnail AS video_thumbnail,
+                   v.duration AS video_duration,
+                   v.size AS video_size,
+                   v.uploaded_by AS video_uploaded_by,
+                   p.avatar AS sender_avatar
+            FROM messages m
+            LEFT JOIN videos v ON v.id = m.video_id
+            LEFT JOIN user_profiles p ON p.username = m.sender
+            WHERE m.id = ?
+        `).get(id);
+        return formatMessageRow(row);
+    } catch (err) {
+        console.error('[db] Error getting message by id:', err.message);
+        return null;
+    }
+}
+
+function getConversationMessages(user1, user2, limit = 80, beforeId = null) {
+    if (!user1 || !user2) return [];
+    try {
+        let query = `
+            SELECT m.*,
+                   v.title AS video_title,
+                   v.thumbnail AS video_thumbnail,
+                   v.duration AS video_duration,
+                   v.size AS video_size,
+                   v.uploaded_by AS video_uploaded_by,
+                   p.avatar AS sender_avatar
+            FROM messages m
+            LEFT JOIN videos v ON v.id = m.video_id
+            LEFT JOIN user_profiles p ON p.username = m.sender
+            WHERE ((m.sender = ? AND m.recipient = ?) OR (m.sender = ? AND m.recipient = ?))
+        `;
+        const params = [user1, user2, user2, user1];
+
+        if (beforeId) {
+            query += ` AND m.id < ?`;
+            params.push(beforeId);
+        }
+
+        query += ` ORDER BY m.created_at DESC, m.id DESC LIMIT ?`;
+        params.push(Math.min(limit, 200));
+
+        const rows = db.prepare(query).all(...params);
+        return rows.map(formatMessageRow).reverse();
+    } catch (err) {
+        console.error('[db] Error getting conversation messages:', err.message);
+        return [];
+    }
+}
+
+function markMessagesAsRead(sender, recipient) {
+    if (!sender || !recipient) return 0;
+    try {
+        const nowIso = new Date().toISOString();
+        const result = db.prepare(`
+            UPDATE messages
+            SET is_read = 1, read_at = ?
+            WHERE sender = ? AND recipient = ? AND is_read = 0
+        `).run(nowIso, sender, recipient);
+        return result.changes || 0;
+    } catch (err) {
+        console.error('[db] Error marking messages as read:', err.message);
+        return 0;
+    }
+}
+
+function getUnreadMessageCount(recipient) {
+    if (!recipient) return 0;
+    try {
+        const row = db.prepare(`
+            SELECT COUNT(*) AS unread_count
+            FROM messages
+            WHERE recipient = ? AND is_read = 0
+        `).get(recipient);
+        return row ? row.unread_count : 0;
+    } catch {
+        return 0;
+    }
+}
+
+function deleteMessage(messageId, requestingUser) {
+    if (!messageId || !requestingUser) return false;
+    try {
+        const msg = db.prepare('SELECT id, sender, voice_url FROM messages WHERE id = ?').get(messageId);
+        if (!msg) return false;
+
+        if (msg.sender !== requestingUser && requestingUser !== 'muaj') {
+            return false;
+        }
+
+        db.prepare('DELETE FROM messages WHERE id = ?').run(messageId);
+        return true;
+    } catch (err) {
+        console.error('[db] Error deleting message:', err.message);
+        return false;
+    }
+}
+
+function getMessageStats(user1, user2) {
+    try {
+        const totalRow = db.prepare(`
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN video_id IS NOT NULL THEN 1 ELSE 0 END) AS videos_count,
+                   SUM(CASE WHEN voice_url IS NOT NULL THEN 1 ELSE 0 END) AS voice_count
+            FROM messages
+            WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
+        `).get(user1, user2, user2, user1);
+
+        return {
+            totalMessages: totalRow ? (totalRow.total || 0) : 0,
+            sharedVideos: totalRow ? (totalRow.videos_count || 0) : 0,
+            voiceMessages: totalRow ? (totalRow.voice_count || 0) : 0
+        };
+    } catch {
+        return { totalMessages: 0, sharedVideos: 0, voiceMessages: 0 };
+    }
+}
+
 db.getUserAvatar = getUserAvatar;
 db.getAllUserAvatars = getAllUserAvatars;
 db.setUserAvatar = setUserAvatar;
@@ -574,6 +755,13 @@ db.getRecentActivities = getRecentActivities;
 db.recordWatchPulse = recordWatchPulse;
 db.getUserWatchStats = getUserWatchStats;
 db.clearOldActivityLogs = clearOldActivityLogs;
+db.saveMessage = saveMessage;
+db.getMessageById = getMessageById;
+db.getConversationMessages = getConversationMessages;
+db.markMessagesAsRead = markMessagesAsRead;
+db.getUnreadMessageCount = getUnreadMessageCount;
+db.deleteMessage = deleteMessage;
+db.getMessageStats = getMessageStats;
 
 module.exports = db;
 

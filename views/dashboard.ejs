@@ -166,6 +166,13 @@ const videoGrid = videos.length === 0
                 <span class="user-name">${displayName}</span>
                 <span class="badge-role">${roleName}</span>
             </div>
+            <a href="/messages" class="btn btn-ghost nav-msg-btn" title="Direct Messages">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span>Chat</span>
+                <span class="nav-msg-badge" style="display:none;">0</span>
+            </a>
             ${isAdmin ? '<a href="/admin" class="btn btn-ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z"/><path d="M9 12l2 2 4-5"/></svg><span>Admin</span></a>' : ''}
             <a href="/upload" class="btn btn-primary btn-upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Upload</span></a>
             <form action="/logout" method="POST" class="nav-form desktop-only-logout">
@@ -231,6 +238,13 @@ const videoGrid = videos.length === 0
                 <rect x="3" y="14" width="7" height="7" rx="1.5"/>
             </svg>
             <span>Library</span>
+        </a>
+        <a href="/messages" class="bottom-nav-item nav-msg-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>Chat</span>
+            <span class="nav-msg-badge" style="display:none;">0</span>
         </a>
         <a href="/upload" class="bottom-nav-item bottom-nav-upload">
             <div class="upload-fab">

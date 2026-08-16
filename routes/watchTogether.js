@@ -47,6 +47,14 @@ function getRoomByHost(username) {
     return null;
 }
 
+function getUserAvatars() {
+    try {
+        return (typeof db.getAllUserAvatars === 'function') ? db.getAllUserAvatars() : {};
+    } catch {
+        return {};
+    }
+}
+
 function getActiveRoomForVideo(videoId) {
     for (const [id, room] of rooms) {
         if (room.videoId === videoId && room.active) return { id, room };
@@ -61,6 +69,7 @@ function getActiveRoomForVideo(videoId) {
 // GET /watch-together/active — Check if there's an active room (for invite banner)
 router.get('/watch-together/active', isAuthenticated, (req, res) => {
     const user = req.session.user;
+    const avatars = getUserAvatars();
 
     for (const [id, room] of rooms) {
         if (!room.active) continue;
@@ -75,7 +84,8 @@ router.get('/watch-together/active', isAuthenticated, (req, res) => {
                 guest: room.guest,
                 role: 'host',
                 videoState: room.videoState,
-                memberCount: room.sseClients.size
+                memberCount: room.sseClients.size,
+                avatars
             });
         }
 
@@ -89,7 +99,8 @@ router.get('/watch-together/active', isAuthenticated, (req, res) => {
                 guest: room.guest,
                 role: room.guest === user ? 'guest' : 'invited',
                 videoState: room.videoState,
-                memberCount: room.sseClients.size
+                memberCount: room.sseClients.size,
+                avatars
             });
         }
     }
@@ -156,8 +167,10 @@ router.post('/watch-together/join/:roomId', isAuthenticated, (req, res) => {
     }
 
     const user = req.session.user;
+    const avatars = getUserAvatars();
+
     if (user === room.host) {
-        return res.json({ status: 'already-host', videoState: room.videoState });
+        return res.json({ status: 'already-host', videoState: room.videoState, avatars });
     }
 
     room.guest = user;
@@ -166,7 +179,8 @@ router.post('/watch-together/join/:roomId', isAuthenticated, (req, res) => {
     // Notify host
     broadcastToRoom(room, 'user-joined', {
         user,
-        memberCount: room.sseClients.size
+        memberCount: room.sseClients.size,
+        avatars
     });
 
     res.json({
@@ -174,7 +188,8 @@ router.post('/watch-together/join/:roomId', isAuthenticated, (req, res) => {
         videoId: room.videoId,
         videoTitle: room.videoTitle,
         videoState: room.videoState,
-        chatHistory: room.chatHistory.slice(-50)
+        chatHistory: room.chatHistory.slice(-50),
+        avatars
     });
 });
 
@@ -226,6 +241,42 @@ router.post('/watch-together/sync/:roomId', isMuaj, (req, res) => {
     res.json({ status: 'ok' });
 });
 
+// GET /watch-together/sync-state/:roomId — Guest requests latest sync state
+router.get('/watch-together/sync-state/:roomId', isAuthenticated, (req, res) => {
+    const room = rooms.get(req.params.roomId);
+    if (!room || !room.active) {
+        return res.status(404).json({ error: 'Room not found' });
+    }
+
+    res.json({
+        videoState: room.videoState,
+        active: room.active,
+        host: room.host,
+        guest: room.guest
+    });
+});
+
+// POST /watch-together/reaction/:roomId — Send an instant live emoji reaction
+router.post('/watch-together/reaction/:roomId', isAuthenticated, (req, res) => {
+    const room = rooms.get(req.params.roomId);
+    if (!room || !room.active) {
+        return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const user = req.session.user;
+    const emoji = String(req.body.emoji || '💖').trim().slice(0, 10);
+
+    room.lastActivity = Date.now();
+
+    broadcastToRoom(room, 'reaction', {
+        user,
+        emoji,
+        timestamp: Date.now()
+    });
+
+    res.json({ status: 'ok' });
+});
+
 // POST /watch-together/chat/:roomId — Send a chat message
 router.post('/watch-together/chat/:roomId', isAuthenticated, (req, res) => {
     const room = rooms.get(req.params.roomId);
@@ -234,6 +285,7 @@ router.post('/watch-together/chat/:roomId', isAuthenticated, (req, res) => {
     }
 
     const user = req.session.user;
+    const avatars = getUserAvatars();
     const text = String(req.body.text || '').trim().slice(0, 500);
 
     if (!text) {
@@ -243,6 +295,7 @@ router.post('/watch-together/chat/:roomId', isAuthenticated, (req, res) => {
     const message = {
         id: crypto.randomBytes(4).toString('hex'),
         user,
+        avatar: avatars[user] || null,
         text,
         timestamp: Date.now()
     };
@@ -267,6 +320,8 @@ router.get('/watch-together/stream/:roomId', isAuthenticated, (req, res) => {
         return res.status(404).json({ error: 'Room not found' });
     }
 
+    const avatars = getUserAvatars();
+
     // SSE headers
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -284,6 +339,7 @@ router.get('/watch-together/stream/:roomId', isAuthenticated, (req, res) => {
         guest: room.guest,
         videoState: room.videoState,
         chatHistory: room.chatHistory.slice(-50),
+        avatars,
         user: req.session.user
     })}\n\n`);
 

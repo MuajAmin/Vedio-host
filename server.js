@@ -29,11 +29,15 @@ const { backfillMissingThumbnails } = require('./utils/thumbnail');
 // Ensure uploads directories exist
 const uploadsDir = path.join(__dirname, 'uploads', 'videos');
 const thumbnailsDir = path.join(__dirname, 'uploads', 'thumbnails');
+const voiceDir = path.join(__dirname, 'uploads', 'voice');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 if (!fs.existsSync(thumbnailsDir)) {
     fs.mkdirSync(thumbnailsDir, { recursive: true });
+}
+if (!fs.existsSync(voiceDir)) {
+    fs.mkdirSync(voiceDir, { recursive: true });
 }
 
 // View engine
@@ -54,6 +58,8 @@ app.use(compression({
         if (req.path.startsWith('/import-progress/')) return false;
         // Watch Together SSE stream — don't buffer
         if (req.path.startsWith('/watch-together/stream/')) return false;
+        // Direct Messages SSE stream — don't buffer
+        if (req.path.startsWith('/messages/stream')) return false;
         // Don't compress video streams — they're already binary and chunked
         if (req.path.startsWith('/stream/')) return false;
         return compression.filter(req, res);
@@ -69,7 +75,7 @@ app.use((req, res, next) => {
     }
     res.setHeader(
         'Content-Security-Policy',
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     );
     next();
 });
@@ -135,6 +141,19 @@ app.get('/avatars/:file', isAuthenticated, (req, res) => {
     });
 });
 
+// Serve voice audio notes behind authentication
+app.get('/voice/:file', isAuthenticated, (req, res) => {
+    const filename = path.basename(req.params.file); // prevent path traversal
+    const filePath = path.join(__dirname, 'uploads', 'voice', filename);
+    res.sendFile(filePath, {
+        headers: {
+            'Cache-Control': isProduction ? 'private, max-age=604800' : 'no-cache'
+        }
+    }, (err) => {
+        if (err && !res.headersSent) res.status(404).end();
+    });
+});
+
 app.use((req, res, next) => {
     if (req.path === '/upload' && req.method === 'POST') {
         return next();
@@ -156,6 +175,10 @@ app.use((req, res, next) => {
     if (req.path.startsWith('/api/presence/') && (req.method === 'POST' || req.method === 'GET')) {
         return next();
     }
+    // Direct Messaging API — handled via session auth
+    if (req.path.startsWith('/api/messages') && (req.method === 'POST' || req.method === 'GET')) {
+        return next();
+    }
     return requireCsrf(req, res, next);
 });
 
@@ -167,6 +190,7 @@ const importRoutes = require('./routes/import');
 const adminRoutes = require('./routes/admin');
 const profileRoutes = require('./routes/profile');
 const watchTogetherRoutes = require('./routes/watchTogether');
+const messagesRoutes = require('./routes/messages');
 
 app.use('/', authRoutes);
 app.use('/', videoRoutes);
@@ -175,6 +199,7 @@ app.use('/', importRoutes);
 app.use('/', adminRoutes);
 app.use('/', profileRoutes);
 app.use('/', watchTogetherRoutes);
+app.use('/', messagesRoutes);
 
 
 

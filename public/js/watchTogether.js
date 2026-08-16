@@ -1,6 +1,6 @@
 /**
  * Watch Together — Cinema Real-Time Sync & Live Chat Engine
- * Real-time video sync + chat between Muaj & Hajera
+ * Real-time video sync, live chat, floating reactions & dual cinema mode between Muaj & Hajera
  */
 (function () {
     'use strict';
@@ -21,6 +21,7 @@
 
     // Video element on watch pages
     const video = document.getElementById('vpVideo');
+    const playerContainer = document.getElementById('playerContainer');
     const isWatchPage = !!video;
     const currentVideoId = video ? video.dataset.videoId : null;
 
@@ -34,6 +35,7 @@
     let lastSyncTime = 0;
     let dismissedRoomId = null;
     let dismissExpiry = 0;
+    let userAvatars = {};
     const SYNC_THROTTLE_MS = 250;
     const SYNC_TOLERANCE_SEC = 1.2;
 
@@ -47,6 +49,7 @@
     const wtDismissBtn = document.getElementById('wtDismissBtn');
     const wtStatusBar = document.getElementById('wtStatusBar');
     const wtStatusText = document.getElementById('wtStatusText');
+    const wtResyncBtn = document.getElementById('wtResyncBtn');
     const wtChatToggle = document.getElementById('wtChatToggle');
     const wtChatClose = document.getElementById('wtChatClose');
     const wtChatMessages = document.getElementById('wtChatMessages');
@@ -54,6 +57,11 @@
     const wtChatSendBtn = document.getElementById('wtChatSendBtn');
     const wtUnreadBadge = document.getElementById('wtUnreadBadge');
     const wtSyncOverlay = document.getElementById('wtSyncOverlay');
+    const wtFloatingReactions = document.getElementById('wtFloatingReactions');
+    const wtPlayerChatToast = document.getElementById('wtPlayerChatToast');
+    const wtToastAvatar = document.getElementById('wtToastAvatar');
+    const wtToastSender = document.getElementById('wtToastSender');
+    const wtToastMsg = document.getElementById('wtToastMsg');
 
     // DOM Elements (Global layout)
     const globalWtToast = document.getElementById('globalWtToast');
@@ -63,9 +71,53 @@
 
     let chatOpen = false;
     let unreadCount = 0;
+    let toastTimer = null;
 
     // ============================================================
-    //  UTILITY
+    //  AUDIO FEEDBACK (SYNTHETIC ZERO-DEPENDENCY CHIME)
+    // ============================================================
+    let audioCtx = null;
+    function playChime(type = 'pop') {
+        try {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (!audioCtx || audioCtx.state === 'suspended') {
+                audioCtx && audioCtx.resume().catch(() => {});
+                return;
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+            if (type === 'reaction') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(520, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            } else if (type === 'message') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(650, now);
+                osc.frequency.exponentialRampToValueAtTime(980, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            }
+        } catch {
+            // Graceful fallback if audio is not permitted
+        }
+    }
+
+    // ============================================================
+    //  UTILITIES
     // ============================================================
     function postJSON(url, body = {}) {
         return fetch(url, {
@@ -78,7 +130,8 @@
 
     function timeAgo(ts) {
         const diff = Math.floor((Date.now() - ts) / 1000);
-        if (diff < 60) return 'just now';
+        if (diff < 30) return 'just now';
+        if (diff < 60) return `${diff}s ago`;
         if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
         return Math.floor(diff / 3600) + 'h ago';
     }
@@ -87,6 +140,104 @@
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    function renderAvatarElement(username, avatarFile, extraClass = '') {
+        const isMuaj = username === 'muaj';
+        const letter = isMuaj ? 'M' : 'H';
+        const roleClass = isMuaj ? 'wt-avatar-host' : 'wt-avatar-guest';
+
+        if (avatarFile) {
+            return `<img src="/avatars/${escapeHtml(avatarFile)}" alt="${escapeHtml(username)}" class="wt-msg-avatar-img ${extraClass}" loading="lazy" />`;
+        }
+        return `<div class="wt-msg-avatar ${roleClass} ${extraClass}">${letter}</div>`;
+    }
+
+    // ============================================================
+    //  FLOATING REACTIONS ENGINE
+    // ============================================================
+    function spawnFloatingReaction(emoji = '💖') {
+        const targetContainer = wtFloatingReactions || playerContainer || document.body;
+        if (!targetContainer) return;
+
+        const particle = document.createElement('div');
+        particle.className = 'wt-floating-emoji';
+        particle.textContent = emoji;
+
+        // Randomized trajectories for organic feel
+        const randomX = Math.floor(Math.random() * 80) + 10; // 10% to 90%
+        const randomScale = (0.9 + Math.random() * 0.5).toFixed(2);
+        const randomRotate = Math.floor(Math.random() * 40) - 20; // -20deg to 20deg
+        const swayDuration = (2.2 + Math.random() * 0.8).toFixed(2);
+
+        particle.style.left = `${randomX}%`;
+        particle.style.setProperty('--target-scale', randomScale);
+        particle.style.setProperty('--target-rotate', `${randomRotate}deg`);
+        particle.style.animationDuration = `${swayDuration}s`;
+
+        targetContainer.appendChild(particle);
+
+        // Remove element when animation completes
+        setTimeout(() => {
+            if (particle.parentNode) {
+                particle.parentNode.removeChild(particle);
+            }
+        }, parseFloat(swayDuration) * 1000 + 100);
+    }
+
+    function sendLiveReaction(emoji) {
+        if (!roomId) return;
+        spawnFloatingReaction(emoji);
+        playChime('reaction');
+
+        postJSON(`/watch-together/reaction/${roomId}`, { emoji }).catch(err => {
+            console.error('[WT] Reaction send error:', err);
+        });
+    }
+
+    // ============================================================
+    //  IN-PLAYER FLOATING CHAT TOAST
+    // ============================================================
+    function showInPlayerChatToast(msg) {
+        if (chatOpen || !wtPlayerChatToast) return;
+
+        const senderName = msg.user === 'muaj' ? 'Muaj' : 'Hajera';
+        if (wtToastSender) wtToastSender.textContent = senderName;
+        if (wtToastMsg) wtToastMsg.textContent = msg.text || '';
+
+        if (wtToastAvatar) {
+            const avatarFile = msg.avatar || userAvatars[msg.user];
+            if (avatarFile) {
+                wtToastAvatar.innerHTML = `<img src="/avatars/${escapeHtml(avatarFile)}" alt="${escapeHtml(senderName)}" class="wt-toast-avatar-img">`;
+            } else {
+                wtToastAvatar.textContent = msg.user === 'muaj' ? '👑' : '🌸';
+            }
+        }
+
+        wtPlayerChatToast.style.display = 'flex';
+        // Force reflow
+        void wtPlayerChatToast.offsetWidth;
+        wtPlayerChatToast.classList.add('visible');
+
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+            if (wtPlayerChatToast) {
+                wtPlayerChatToast.classList.remove('visible');
+                setTimeout(() => {
+                    if (wtPlayerChatToast && !wtPlayerChatToast.classList.contains('visible')) {
+                        wtPlayerChatToast.style.display = 'none';
+                    }
+                }, 300);
+            }
+        }, 4500);
+    }
+
+    if (wtPlayerChatToast) {
+        wtPlayerChatToast.addEventListener('click', () => {
+            toggleChat(true);
+            wtPlayerChatToast.classList.remove('visible');
+            wtPlayerChatToast.style.display = 'none';
+        });
     }
 
     // ============================================================
@@ -98,9 +249,12 @@
         try {
             const data = await fetch('/watch-together/active', { credentials: 'same-origin' }).then(r => r.json());
             if (!data) {
-                // No active room
                 hideInvites();
                 return;
+            }
+
+            if (data.avatars) {
+                userAvatars = Object.assign({}, userAvatars, data.avatars);
             }
 
             // Host reconnecting on watch page
@@ -151,7 +305,7 @@
     function showGlobalToast(data) {
         if (!globalWtToast) return;
         if (globalWtToastTitle) {
-            globalWtToastTitle.textContent = `Muaj invited you to watch: "${data.videoTitle || 'a video'}" together!`;
+            globalWtToastTitle.textContent = `Muaj invited you to watch "${data.videoTitle || 'a video'}" together!`;
         }
         if (globalWtToastJoin) {
             globalWtToastJoin.href = `/watch/${encodeURIComponent(data.videoId)}?join=1`;
@@ -256,6 +410,7 @@
                 const data = await fetch('/watch-together/active', { credentials: 'same-origin' }).then(r => r.json());
                 if (data && data.roomId) {
                     roomId = data.roomId;
+                    if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
                 }
             } catch {}
         }
@@ -265,6 +420,8 @@
             const data = await postJSON(`/watch-together/join/${roomId}`);
             if (data.status === 'joined' || data.status === 'already-host') {
                 hideInvites();
+
+                if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
 
                 // If not on the right watch page, redirect
                 if (data.videoId && data.videoId !== currentVideoId) {
@@ -291,6 +448,27 @@
         }
     }
 
+    // Guest manual re-sync button
+    if (wtResyncBtn) {
+        wtResyncBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            if (!roomId || isHost) return;
+
+            wtResyncBtn.classList.add('syncing');
+            try {
+                const data = await fetch(`/watch-together/sync-state/${roomId}`, { credentials: 'same-origin' }).then(r => r.json());
+                if (data && data.videoState) {
+                    applyVideoState(data.videoState, true);
+                    triggerSyncBadge('Re-synced with Host ⚡');
+                }
+            } catch (err) {
+                console.error('[WT] Manual re-sync error:', err);
+            } finally {
+                setTimeout(() => wtResyncBtn.classList.remove('syncing'), 800);
+            }
+        });
+    }
+
     // ============================================================
     //  SSE CONNECTION
     // ============================================================
@@ -304,6 +482,7 @@
             try {
                 const data = JSON.parse(e.data);
                 syncActive = true;
+                if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
                 updateStatusBar('connected', data.guest ? 2 : 1);
 
                 if (!isHost && data.chatHistory && wtChatMessages) {
@@ -325,14 +504,30 @@
             try {
                 const msg = JSON.parse(e.data);
                 appendChatMessage(msg, true);
+                if (msg.user !== currentUser) {
+                    playChime('message');
+                    showInPlayerChatToast(msg);
+                }
+            } catch {}
+        });
+
+        eventSource.addEventListener('reaction', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.user !== currentUser) {
+                    spawnFloatingReaction(data.emoji || '💖');
+                    playChime('reaction');
+                }
             } catch {}
         });
 
         eventSource.addEventListener('user-joined', (e) => {
             try {
                 const data = JSON.parse(e.data);
+                if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
                 updateStatusBar('connected', 2);
                 appendSystemMessage(`${data.user === 'hajera' ? 'Hajera' : 'Muaj'} joined the session 🎉`);
+                playChime('reaction');
 
                 // Re-sync current video state for the new guest
                 if (isHost && video) {
@@ -372,20 +567,26 @@
     // ============================================================
     //  VIDEO SYNC LOGIC
     // ============================================================
-    function applyVideoState(state) {
+    function triggerSyncBadge(customText) {
+        if (!wtSyncOverlay) return;
+        if (customText) {
+            const span = wtSyncOverlay.querySelector('span:not(.wt-sync-pulse-dot)');
+            if (span) span.textContent = customText;
+        }
+        wtSyncOverlay.classList.add('visible');
+        setTimeout(() => wtSyncOverlay.classList.remove('visible'), 1600);
+    }
+
+    function applyVideoState(state, force = false) {
         if (!state || isHost || !video) return;
 
         const timeDiff = Math.abs(video.currentTime - state.currentTime);
 
-        // Seek if time drift exceeds tolerance
-        if (timeDiff > SYNC_TOLERANCE_SEC) {
+        // Seek if time drift exceeds tolerance or forced
+        if (force || timeDiff > SYNC_TOLERANCE_SEC) {
             ignoreNextSeek = true;
             video.currentTime = state.currentTime;
-
-            if (wtSyncOverlay) {
-                wtSyncOverlay.classList.add('visible');
-                setTimeout(() => wtSyncOverlay.classList.remove('visible'), 1400);
-            }
+            triggerSyncBadge('Synced with Host ⚡');
         }
 
         // Sync play / pause
@@ -455,13 +656,13 @@
 
         const isMine = msg.user === currentUser;
         const displayName = msg.user === 'muaj' ? 'Muaj' : 'Hajera';
-        const letter = msg.user === 'muaj' ? 'M' : 'H';
-        const roleClass = msg.user === 'muaj' ? 'wt-avatar-host' : 'wt-avatar-guest';
+        const avatarFile = msg.avatar || userAvatars[msg.user];
+        const avatarHtml = renderAvatarElement(msg.user, avatarFile);
 
         const msgEl = document.createElement('div');
         msgEl.className = `wt-chat-msg ${isMine ? 'wt-msg-mine' : 'wt-msg-other'} ${animate ? 'wt-msg-enter' : ''}`;
         msgEl.innerHTML = `
-            <div class="wt-msg-avatar ${roleClass}">${letter}</div>
+            ${avatarHtml}
             <div class="wt-msg-bubble">
                 <div class="wt-msg-header">
                     <span class="wt-msg-author">${escapeHtml(displayName)}</span>
@@ -523,6 +724,10 @@
         if (chatOpen) {
             unreadCount = 0;
             updateUnreadBadge();
+            if (wtPlayerChatToast) {
+                wtPlayerChatToast.classList.remove('visible');
+                wtPlayerChatToast.style.display = 'none';
+            }
             if (wtChatInput) setTimeout(() => wtChatInput.focus(), 150);
             if (wtChatMessages) wtChatMessages.scrollTop = wtChatMessages.scrollHeight;
         }
@@ -555,14 +760,24 @@
         }
     }
 
-    // Emoji Bar
+    // Emoji Bar: Instant live floating reaction + text input append
     const emojiBar = document.getElementById('wtEmojiBar');
     if (emojiBar) {
         emojiBar.addEventListener('click', (e) => {
             const btn = e.target.closest('.wt-emoji-btn');
-            if (!btn || !wtChatInput) return;
-            wtChatInput.value += btn.textContent;
-            wtChatInput.focus();
+            if (!btn) return;
+
+            const emoji = btn.dataset.reaction || btn.textContent.trim();
+            if (emoji) {
+                // Send live floating reaction
+                sendLiveReaction(emoji);
+
+                // If user is focused on chat input, append it there too
+                if (wtChatInput && (document.activeElement === wtChatInput || wtChatInput.value.length > 0)) {
+                    wtChatInput.value += emoji;
+                    wtChatInput.focus();
+                }
+            }
         });
     }
 
@@ -576,6 +791,10 @@
         if (isHost) {
             if (wtStartBtn) wtStartBtn.style.display = 'none';
             if (wtStopBtn) wtStopBtn.style.display = '';
+        } else {
+            const guestStop = document.getElementById('wtStopBtnGuest');
+            if (guestStop) guestStop.style.display = '';
+            if (wtResyncBtn) wtResyncBtn.style.display = '';
         }
 
         if (wtStatusBar) wtStatusBar.classList.add('visible');
@@ -589,7 +808,7 @@
 
         const otherName = isHost ? 'Hajera' : 'Muaj';
         const statusMap = {
-            'connected': `🟢 Watch Together • 2 connected`,
+            'connected': `🟢 Watch Together • Connected (${count || 2}/2)`,
             'waiting': `🟡 Waiting for ${otherName}...`,
             'reconnecting': '🔴 Reconnecting...'
         };
@@ -598,6 +817,10 @@
 
         if (wtStatusBar) {
             wtStatusBar.className = 'wt-status-bar visible wt-status-' + status;
+        }
+
+        if (!isHost && wtResyncBtn) {
+            wtResyncBtn.style.display = status === 'connected' ? '' : 'none';
         }
     }
 
@@ -615,11 +838,19 @@
         if (isHost) {
             if (wtStartBtn) { wtStartBtn.style.display = ''; wtStartBtn.disabled = false; }
             if (wtStopBtn) wtStopBtn.style.display = 'none';
+        } else {
+            const guestStop = document.getElementById('wtStopBtnGuest');
+            if (guestStop) guestStop.style.display = 'none';
+            if (wtResyncBtn) wtResyncBtn.style.display = 'none';
         }
 
         if (wtStatusBar) wtStatusBar.classList.remove('visible');
         if (wtChatToggle) wtChatToggle.style.display = 'none';
         if (wtChatPanel) wtChatPanel.classList.remove('open');
+        if (wtPlayerChatToast) {
+            wtPlayerChatToast.classList.remove('visible');
+            wtPlayerChatToast.style.display = 'none';
+        }
         hideInvites();
 
         chatOpen = false;

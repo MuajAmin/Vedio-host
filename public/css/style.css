@@ -8802,16 +8802,17 @@ h3,
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
-    background: rgba(15, 23, 42, 0.88);
-    border: 1px solid rgba(56, 189, 248, 0.4);
+    padding: 6px 14px;
+    background: rgba(10, 10, 18, 0.88);
+    border: 1px solid rgba(56, 189, 248, 0.5);
     border-radius: 999px;
     color: #7dd3fc;
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.03em;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(56, 189, 248, 0.25);
 }
 
 .wt-sync-pulse-dot {
@@ -8819,13 +8820,139 @@ h3,
     height: 8px;
     border-radius: 50%;
     background: #38bdf8;
-    box-shadow: 0 0 8px #38bdf8;
+    box-shadow: 0 0 10px #38bdf8;
     animation: wt-pulse 1.2s ease-in-out infinite;
 }
 
 @keyframes wt-pulse {
     0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.5); opacity: 0.5; }
+    50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+/* ---- Floating Live Reactions Layer ---- */
+.wt-floating-reactions-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 55;
+}
+
+.wt-floating-emoji {
+    position: absolute;
+    bottom: 24px;
+    font-size: 2.2rem;
+    pointer-events: none;
+    user-select: none;
+    filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.65));
+    animation: wt-float-up cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    will-change: transform, opacity;
+}
+
+@keyframes wt-float-up {
+    0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.35) rotate(0deg);
+    }
+    15% {
+        opacity: 1;
+        transform: translateY(0) scale(var(--target-scale, 1.2)) rotate(var(--target-rotate, 10deg));
+    }
+    40% {
+        transform: translateY(-80px) scale(var(--target-scale, 1.1)) translateX(18px) rotate(calc(var(--target-rotate, 10deg) * -1));
+    }
+    70% {
+        opacity: 0.92;
+        transform: translateY(-190px) scale(var(--target-scale, 1)) translateX(-15px) rotate(var(--target-rotate, 5deg));
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-310px) scale(0.8) translateX(25px) rotate(calc(var(--target-rotate, 10deg) * 1.5));
+    }
+}
+
+/* ---- In-Player Floating Message Toast ---- */
+.wt-player-chat-toast {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px 8px 10px;
+    background: rgba(15, 23, 42, 0.88);
+    border: 1px solid rgba(236, 72, 153, 0.55);
+    border-radius: 999px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 24px rgba(236, 72, 153, 0.3);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    color: #ffffff;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    max-width: min(340px, 85vw);
+    pointer-events: auto;
+}
+
+.wt-player-chat-toast.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.wt-player-chat-toast:hover {
+    transform: translateY(-2px) scale(1.03);
+    border-color: #f472b6;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.8), 0 0 28px rgba(236, 72, 153, 0.45);
+}
+
+.wt-toast-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(236, 72, 153, 0.3), rgba(168, 85, 247, 0.3));
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.wt-toast-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.wt-toast-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.wt-toast-sender {
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #f472b6;
+    line-height: 1.2;
+}
+
+.wt-toast-msg {
+    font-size: 0.82rem;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
 }
 
 /* ---- Status Bar Underneath Player ---- */
@@ -8838,10 +8965,11 @@ h3,
     margin-top: 10px;
     margin-bottom: 14px;
     border-radius: var(--radius-md);
-    background: rgba(15, 23, 42, 0.65);
-    border: 1px solid rgba(59, 130, 246, 0.25);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.75), rgba(30, 27, 75, 0.65));
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     font-size: 0.84rem;
 }
 
@@ -8876,6 +9004,44 @@ h3,
     box-shadow: 0 0 10px #ef4444;
 }
 
+.wt-status-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wt-status-resync-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    color: #7dd3fc;
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.wt-status-resync-btn:hover {
+    background: rgba(56, 189, 248, 0.3);
+    border-color: #38bdf8;
+    color: #ffffff;
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.35);
+    transform: translateY(-1px);
+}
+
+.wt-status-resync-btn.syncing svg {
+    animation: wt-spin 0.6s linear infinite;
+}
+
+@keyframes wt-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 .wt-status-chat-btn {
     display: inline-flex;
     align-items: center;
@@ -8886,10 +9052,9 @@ h3,
     border: 1px solid rgba(236, 72, 153, 0.4);
     color: #fbcfe8;
     font-size: 0.78rem;
-.wt-status-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
 .wt-status-chat-btn:hover {
@@ -9011,31 +9176,55 @@ h3,
     height: 28px;
 }
 
-.wt-mini-av {
+.wt-mini-av-slot {
     width: 26px;
     height: 26px;
     border-radius: 50%;
+    position: absolute;
     display: flex;
     align-items: center;
     justify-content: center;
+    border: 2px solid rgba(10, 10, 16, 0.9);
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.wt-mini-av-slot.av-slot-host {
+    left: 0;
+    z-index: 1;
+    background: linear-gradient(135deg, #eab308, #d97706);
+}
+
+.wt-mini-av-slot.av-slot-guest {
+    left: 14px;
+    z-index: 2;
+    background: linear-gradient(135deg, #ec4899, #be185d);
+}
+
+.wt-mini-av-slot .wt-mini-av-img,
+.wt-mini-av-slot .avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.wt-mini-av-slot .avatar-letter {
     font-size: 0.72rem;
     font-weight: 800;
     color: #ffffff;
-    border: 2px solid rgba(10, 10, 16, 0.9);
 }
 
-.av-muaj {
-    background: linear-gradient(135deg, #eab308, #d97706);
-    position: absolute;
-    left: 0;
-    z-index: 1;
-}
-
-.av-hajera {
-    background: linear-gradient(135deg, #ec4899, #be185d);
-    position: absolute;
-    left: 14px;
-    z-index: 2;
+.wt-live-beacon {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 8px #22c55e;
+    margin-right: 5px;
+    vertical-align: middle;
+    animation: wt-pulse 1.4s ease-in-out infinite;
 }
 
 .wt-chat-heading {
@@ -9147,6 +9336,16 @@ h3,
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
+.wt-msg-avatar-img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
 .wt-avatar-host {
     background: linear-gradient(135deg, #eab308, #b45309);
 }
@@ -9212,15 +9411,20 @@ h3,
     margin: 4px 0;
 }
 
-/* ---- Quick Emoji Bar ---- */
+/* ---- Quick Emoji & Reactions Bar ---- */
 .wt-emoji-bar {
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 6px 14px;
+    padding: 6px 12px;
     background: rgba(255, 255, 255, 0.02);
     border-top: 1px solid rgba(255, 255, 255, 0.05);
     overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.wt-emoji-bar::-webkit-scrollbar {
+    display: none;
 }
 
 .wt-emoji-btn {
@@ -9240,11 +9444,11 @@ h3,
 
 .wt-emoji-btn:hover {
     transform: scale(1.25);
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .wt-emoji-btn:active {
-    transform: scale(0.95);
+    transform: scale(0.92);
 }
 
 /* ---- Chat Footer / Input ---- */

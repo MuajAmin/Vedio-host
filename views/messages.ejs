@@ -1,0 +1,314 @@
+<%
+const h = escapeHtml;
+const partnerName = partner === 'muaj' ? 'Muaj' : 'Hajera';
+const partnerRole = partner === 'muaj' ? 'Admin' : 'Viewer';
+const partnerRoleClass = partner === 'muaj' ? 'tag-admin' : 'tag-viewer';
+const presence = partnerPresence || { status: 'offline', isOnline: false, isWatching: false, isIdle: false };
+const isOnline = presence.isOnline || presence.isWatching;
+const isWatching = presence.isWatching;
+const isIdle = presence.isIdle;
+const statusClass = isWatching ? 'dot-watching' : (isOnline ? 'dot-online' : (isIdle ? 'dot-idle' : 'dot-offline'));
+
+let presenceText = '⚫ Offline';
+if (isWatching && presence.videoTitle) {
+    presenceText = `<span class="watching-highlight">🎬 Watching:</span> ${h(presence.videoTitle)}`;
+} else if (isOnline) {
+    presenceText = '🟢 Active Now';
+} else if (isIdle) {
+    presenceText = '🟡 Away';
+}
+
+function formatTime(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDateHeader(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    const today = new Date();
+    if (d.toDateString() === today.toDateString()) return 'Today';
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+%>
+
+<%- include('layout', { pageTitle: 'Messages with ' + partnerName, body: `
+<div class="app-container">
+    <div class="ambient-background">
+        <div class="ambient-orb orb-1"></div>
+        <div class="ambient-orb orb-2"></div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="/dashboard" class="nav-logo">
+                <div class="logo-icon-wrapper">
+                    <svg viewBox="0 0 48 48" fill="none" width="24" height="24">
+                        <rect x="4" y="8" width="40" height="32" rx="6" stroke="currentColor" stroke-width="2.5"/>
+                        <polygon points="20,16 34,24 20,32" fill="currentColor"/>
+                    </svg>
+                </div>
+                <span>Video<em>Host</em></span>
+            </a>
+        </div>
+        <div class="nav-right">
+            <a href="/dashboard" class="btn btn-ghost">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <line x1="19" y1="12" x2="5" y2="12"/>
+                    <polyline points="12 19 5 12 12 5"/>
+                </svg>
+                <span>Dashboard</span>
+            </a>
+            <button type="button" class="btn btn-ghost btn-icon" id="themeSwitcherNavBtn" title="Change Theme">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
+                </svg>
+            </button>
+            <div class="user-badge ${user === 'muaj' ? 'badge-admin' : 'badge-viewer'} user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture">
+                <div class="badge-avatar">${renderAvatar(user, 'nav-avatar')}</div>
+                <span>${user === 'muaj' ? 'Muaj' : 'Hajera'}</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Full-Screen Messages Container -->
+    <main class="msg-fullpage-container">
+        <!-- Sidebar: Partner Profile & Quick Stats -->
+        <aside class="msg-fullpage-sidebar">
+            <div class="msg-sidebar-profile">
+                <div class="msg-sidebar-avatar-wrap">
+                    ${renderAvatar(partner, 'msg-sidebar-avatar')}
+                    <span class="msg-status-dot msg-partner-status-dot ${statusClass}"></span>
+                </div>
+                <h3 class="msg-header-name" style="font-size: 18px; margin-bottom: 4px;">${h(partnerName)}</h3>
+                <span class="msg-role-tag ${partnerRoleClass}">${partnerRole}</span>
+                <p class="msg-header-presence-sub msg-partner-presence-text" style="margin-top: 8px; justify-content: center;">
+                    ${presenceText}
+                </p>
+            </div>
+
+            <div class="msg-sidebar-stats-grid">
+                <div class="msg-stat-card">
+                    <div class="msg-stat-value">${h(stats.totalMessages || 0)}</div>
+                    <div class="msg-stat-label">Total Messages</div>
+                </div>
+                <div class="msg-stat-card">
+                    <div class="msg-stat-value">${h(stats.sharedVideos || 0)}</div>
+                    <div class="msg-stat-label">Shared Videos</div>
+                </div>
+                <div class="msg-stat-card">
+                    <div class="msg-stat-value">${h(stats.voiceMessages || 0)}</div>
+                    <div class="msg-stat-label">Voice Notes</div>
+                </div>
+                <div class="msg-stat-card">
+                    <div class="msg-stat-value">${h(user === 'muaj' ? 'VIP' : 'Queen')}</div>
+                    <div class="msg-stat-label">Status</div>
+                </div>
+            </div>
+
+            <div class="msg-sidebar-quick-links" style="display: flex; flex-direction: column; gap: 8px; margin-top: auto;">
+                <a href="/dashboard" class="btn btn-ghost btn-sm" style="justify-content: flex-start;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+                        <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+                        <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+                        <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+                    </svg>
+                    <span>Browse Videos</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <section class="msg-fullpage-main">
+            <!-- Header -->
+            <div class="msg-header">
+                <div class="msg-header-user-group">
+                    <div class="msg-header-avatar-wrap">
+                        ${renderAvatar(partner, 'msg-header-avatar')}
+                        <span class="msg-status-dot msg-partner-status-dot ${statusClass}"></span>
+                    </div>
+                    <div class="msg-header-details">
+                        <div class="msg-header-name-row">
+                            <h2 class="msg-header-name">${h(partnerName)}</h2>
+                            <span class="msg-role-tag ${partnerRoleClass}">${partnerRole}</span>
+                        </div>
+                        <div class="msg-header-presence-sub msg-partner-presence-text">${presenceText}</div>
+                    </div>
+                </div>
+                <div class="msg-header-actions">
+                    <a href="/dashboard" class="msg-hdr-btn" title="Back to Dashboard">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Messages Thread -->
+            <div class="msg-body-container" id="msgFullpageList">
+                <% 
+                let lastDate = '';
+                initialMessages.forEach(msg => {
+                    const isOut = msg.sender === user;
+                    const rowClass = isOut ? 'msg-row-outgoing' : 'msg-row-incoming';
+                    const timeStr = formatTime(msg.createdAt);
+                    const dateStr = formatDateHeader(msg.createdAt);
+                    const seenHtml = isOut ? `<span class="msg-seen-check ${msg.isRead ? 'is-seen' : ''}" title="${msg.isRead ? 'Seen' : 'Sent'}">${msg.isRead ? '✓✓' : '✓'}</span>` : '';
+                %>
+                    <% if (dateStr && dateStr !== lastDate) { 
+                        lastDate = dateStr;
+                    %>
+                        <div class="msg-date-divider"><span><%= dateStr %></span></div>
+                    <% } %>
+
+                    <div class="msg-row <%= rowClass %>" data-msg-id="<%= msg.id %>">
+                        <div class="msg-bubble-wrap">
+                            <div class="msg-bubble">
+                                <% if (msg.video) { %>
+                                    <a href="/watch/<%= encodeURIComponent(msg.video.id) %>" class="msg-video-card">
+                                        <div class="msg-video-card-thumb-wrap">
+                                            <% if (msg.video.thumbnail) { %>
+                                                <img src="/thumbnails/<%= encodeURIComponent(msg.video.thumbnail) %>" class="msg-video-card-thumb-img" alt="" loading="lazy" />
+                                            <% } else { %>
+                                                <div class="thumb-fallback">🎬</div>
+                                            <% } %>
+                                            <div class="msg-video-card-play-overlay">
+                                                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><polygon points="6,4 20,12 6,20"/></svg>
+                                            </div>
+                                            <% if (msg.video.duration) { %>
+                                                <div class="msg-video-card-duration"><%= h(msg.video.duration) %></div>
+                                            <% } %>
+                                        </div>
+                                        <div class="msg-video-card-info">
+                                            <div class="msg-video-card-title"><%= h(msg.video.title) %></div>
+                                            <div class="msg-video-card-tag">
+                                                <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><polygon points="6,4 20,12 6,20"/></svg>
+                                                <span>Watch Shared Video</span>
+                                            </div>
+                                        </div>
+                                    </a>
+                                <% } %>
+
+                                <% if (msg.voiceUrl) { %>
+                                    <div class="msg-voice-player" data-audio-src="<%= h(msg.voiceUrl) %>">
+                                        <button type="button" class="msg-voice-play-btn" aria-label="Play voice message">
+                                            <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><polygon points="6,4 20,12 6,20"/></svg>
+                                            <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style="display:none;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                        </button>
+                                        <div class="msg-voice-waveform">
+                                            <span class="msg-wave-bar"></span>
+                                            <span class="msg-wave-bar"></span>
+                                            <span class="msg-wave-bar"></span>
+                                            <span class="msg-wave-bar"></span>
+                                            <span class="msg-wave-bar"></span>
+                                            <span class="msg-wave-bar"></span>
+                                            <span class="msg-wave-bar"></span>
+                                            <span class="msg-wave-bar"></span>
+                                        </div>
+                                        <span class="msg-voice-time">Voice Note</span>
+                                    </div>
+                                <% } %>
+
+                                <% if (msg.text) { %>
+                                    <div class="msg-text-content"><%- h(msg.text).replace(/\\n/g, '<br>') %></div>
+                                <% } %>
+                            </div>
+                            <div class="msg-meta-row">
+                                <span class="msg-time"><%= timeStr %></span>
+                                <%- seenHtml %>
+                            </div>
+                        </div>
+                    </div>
+                <% }); %>
+            </div>
+
+            <!-- Full-Page Composer -->
+            <div class="msg-footer msg-composer-wrap" style="position: relative;">
+                <!-- Attach Video Modal -->
+                <div class="msg-attach-video-modal">
+                    <div class="msg-attach-header">
+                        <span>Attach Video to Chat</span>
+                    </div>
+                    <div class="msg-attach-list">
+                        <% (videos || []).forEach(v => { %>
+                            <div class="msg-attach-item" data-video-id="<%= h(v.id) %>">
+                                <img src="<%= v.thumbnail ? '/thumbnails/' + encodeURIComponent(v.thumbnail) : '' %>" class="msg-attach-thumb" alt="" />
+                                <span class="msg-attach-title"><%= h(v.title) %></span>
+                            </div>
+                        <% }); %>
+                    </div>
+                </div>
+
+                <!-- Quick Emojis -->
+                <div class="msg-quick-emojis">
+                    <button type="button" class="msg-quick-emoji-btn" data-emoji="❤️">❤️</button>
+                    <button type="button" class="msg-quick-emoji-btn" data-emoji="🔥">🔥</button>
+                    <button type="button" class="msg-quick-emoji-btn" data-emoji="😂">😂</button>
+                    <button type="button" class="msg-quick-emoji-btn" data-emoji="🥺">🥺</button>
+                    <button type="button" class="msg-quick-emoji-btn" data-emoji="🍿">🍿</button>
+                    <button type="button" class="msg-quick-emoji-btn" data-emoji="🎬">🎬</button>
+                    <button type="button" class="msg-quick-emoji-btn" data-emoji="✨">✨</button>
+                    <button type="button" class="msg-quick-emoji-btn" data-emoji="😍">😍</button>
+                    <button type="button" class="msg-quick-emoji-btn" data-emoji="💖">💖</button>
+                    <button type="button" class="msg-quick-emoji-btn" data-emoji="💯">💯</button>
+                </div>
+
+                <!-- Recording Bar -->
+                <div class="msg-recording-bar">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="msg-rec-dot"></span>
+                        <span>Recording Voice Note... <span class="msg-rec-timer">0:00</span></span>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" class="btn btn-ghost btn-sm msg-rec-cancel-btn">Cancel</button>
+                        <button type="button" class="btn btn-primary btn-sm msg-rec-send-btn">Send Voice</button>
+                    </div>
+                </div>
+
+                <!-- Input Row -->
+                <div class="msg-input-row">
+                    <button type="button" class="msg-composer-btn msg-attach-btn" title="Share a Video">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                            <line x1="7" y1="2" x2="7" y2="22"/>
+                            <line x1="17" y1="2" x2="17" y2="22"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <line x1="2" y1="7" x2="7" y2="7"/>
+                            <line x1="2" y1="17" x2="7" y2="17"/>
+                            <line x1="17" y1="17" x2="22" y2="17"/>
+                            <line x1="17" y1="7" x2="22" y2="7"/>
+                        </svg>
+                    </button>
+
+                    <div class="msg-input-wrap">
+                        <textarea class="msg-textarea" placeholder="Type a message to ${h(partnerName)}..." rows="1"></textarea>
+                    </div>
+
+                    <button type="button" class="msg-composer-btn msg-mic-btn" title="Record Voice Message">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                            <line x1="12" y1="19" x2="12" y2="23"/>
+                            <line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                    </button>
+
+                    <button type="button" class="msg-send-btn" title="Send Message">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
+                            <line x1="22" y1="2" x2="11" y2="13"/>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+` }) %>
