@@ -7566,8 +7566,8 @@ kbd {
 }
 
 /* ========================================
-   MINIMAL ANDROID BOTTOM NAVIGATION BAR
-   Clean, Lightweight Material 3 & Native App Feel
+   VIBRANT & MINIMAL ANDROID BOTTOM NAVIGATION
+   Material 3 Pro, Radiant Color Accents & Fluid Touch
    ======================================== */
 .mobile-bottom-bar {
     display: none;
@@ -7575,18 +7575,31 @@ kbd {
     bottom: 0;
     left: 0;
     right: 0;
-    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    height: calc(58px + env(safe-area-inset-bottom, 0px));
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: rgba(8, 8, 14, 0.96);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(9, 9, 15, 0.95);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
     z-index: 1000;
     align-items: center;
     justify-content: space-around;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.45);
     user-select: none;
     -webkit-user-select: none;
+}
+
+/* Subtle colorful ambient top highlight sheen */
+.mobile-bottom-bar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 4%;
+    right: 4%;
+    height: 1.5px;
+    background: linear-gradient(90deg, transparent 0%, rgba(245, 175, 25, 0.45) 25%, rgba(236, 72, 153, 0.45) 50%, rgba(56, 189, 248, 0.45) 75%, transparent 100%);
+    pointer-events: none;
+    opacity: 0.85;
 }
 
 @media (max-width: 768px) {
@@ -7603,9 +7616,9 @@ kbd {
     justify-content: center;
     flex: 1;
     height: 100%;
-    gap: 2px;
+    gap: 3px;
     padding: 4px 0;
-    color: var(--text-muted, #8a8599);
+    color: var(--text-muted, #858099);
     text-decoration: none;
     background: transparent;
     border: none;
@@ -7616,7 +7629,7 @@ kbd {
 }
 
 .bottom-nav-item:active {
-    transform: scale(0.94);
+    transform: scale(0.92);
 }
 
 /* Icon Container with subtle active pill */
@@ -7626,9 +7639,9 @@ kbd {
     align-items: center;
     justify-content: center;
     width: 44px;
-    height: 26px;
-    border-radius: 13px;
-    transition: background 0.2s ease, color 0.2s ease;
+    height: 28px;
+    border-radius: 14px;
+    transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .bottom-nav-icon-wrap svg {
@@ -7645,7 +7658,7 @@ kbd {
     transition: color 0.2s ease, font-weight 0.2s ease;
 }
 
-/* Active State */
+/* Active States for Tabs */
 .bottom-nav-item.active {
     color: var(--accent-gold-bright, #f5cf7b);
 }
@@ -7658,6 +7671,52 @@ kbd {
 .bottom-nav-item.active .bottom-nav-label {
     font-weight: 700;
     color: var(--accent-gold-bright, #f5cf7b);
+}
+
+/* Specific Tab Color Accents */
+.bottom-nav-item.nav-msg-btn.active {
+    color: #38bdf8;
+}
+
+.bottom-nav-item.nav-msg-btn.active .bottom-nav-icon-wrap {
+    background: rgba(56, 189, 248, 0.14);
+    color: #38bdf8;
+}
+
+.bottom-nav-item.nav-msg-btn.active .bottom-nav-label {
+    color: #38bdf8;
+}
+
+/* ---- COLORFUL UPLOAD PILL BUTTON ---- */
+.bottom-nav-upload .upload-btn-pill {
+    width: 42px;
+    height: 26px;
+    border-radius: 13px;
+    background: linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #e11d48 100%);
+    color: #ffffff !important;
+    box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+
+.bottom-nav-upload .upload-btn-pill svg {
+    stroke: #ffffff !important;
+    stroke-width: 2.8;
+}
+
+.bottom-nav-upload:hover .upload-btn-pill,
+.bottom-nav-upload.active .upload-btn-pill {
+    transform: scale(1.08);
+    box-shadow: 0 3px 14px rgba(245, 158, 11, 0.6), 0 0 0 2px rgba(255, 255, 255, 0.4);
+}
+
+.bottom-nav-upload .bottom-nav-label {
+    font-weight: 600;
+    color: #fca5a5;
+}
+
+.bottom-nav-upload.active .bottom-nav-label {
+    color: #f59e0b;
+    font-weight: 700;
 }
 
 /* Form Wrapper for Logout */
@@ -7678,21 +7737,32 @@ kbd {
     height: 16px;
     padding: 0 4px;
     border-radius: 8px;
-    background: #ef4444;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
     color: #ffffff;
     font-size: 9px;
-    font-weight: 700;
+    font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 0 0 2px var(--bg-deep, #060609);
+    box-shadow: 0 0 0 2px var(--bg-deep, #060609), 0 2px 6px rgba(239, 68, 68, 0.5);
     z-index: 2;
+    animation: badge-pulse-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes badge-pulse-in {
+    0% { transform: scale(0); opacity: 0; }
+    70% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity: 1; }
 }
 
 /* Theme Integration: Hajera Mode */
 .hajera-mode .mobile-bottom-bar {
-    background: rgba(14, 8, 14, 0.96);
-    border-top-color: rgba(244, 63, 94, 0.18);
+    background: rgba(16, 8, 16, 0.96);
+    border-top-color: rgba(244, 63, 94, 0.2);
+}
+
+.hajera-mode .mobile-bottom-bar::before {
+    background: linear-gradient(90deg, transparent 0%, #fda4af 30%, #f43f5e 50%, #e11d48 70%, transparent 100%);
 }
 
 .hajera-mode .bottom-nav-item.active {
@@ -7700,7 +7770,7 @@ kbd {
 }
 
 .hajera-mode .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(244, 63, 94, 0.15);
+    background: rgba(244, 63, 94, 0.16);
     color: #ff6b8b;
 }
 
@@ -7708,10 +7778,27 @@ kbd {
     color: #ff6b8b;
 }
 
+.hajera-mode .bottom-nav-upload .upload-btn-pill {
+    background: linear-gradient(135deg, #fda4af 0%, #f43f5e 50%, #be123c 100%);
+    box-shadow: 0 2px 12px rgba(244, 63, 94, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+}
+
+.hajera-mode .bottom-nav-upload .bottom-nav-label {
+    color: #fda4af;
+}
+
+.hajera-mode .bottom-nav-upload.active .bottom-nav-label {
+    color: #ff6b8b;
+}
+
 /* Theme Integration: Cyberpunk */
 html[data-theme="cyberpunk"] .mobile-bottom-bar {
-    background: rgba(6, 6, 14, 0.96);
-    border-top-color: rgba(0, 240, 255, 0.2);
+    background: rgba(6, 6, 16, 0.96);
+    border-top-color: rgba(0, 240, 255, 0.25);
+}
+
+html[data-theme="cyberpunk"] .mobile-bottom-bar::before {
+    background: linear-gradient(90deg, transparent 0%, #00f0ff 30%, #ec4899 70%, transparent 100%);
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-item.active {
@@ -7719,7 +7806,7 @@ html[data-theme="cyberpunk"] .bottom-nav-item.active {
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(0, 240, 255, 0.14);
+    background: rgba(0, 240, 255, 0.16);
     color: #00f0ff;
 }
 
@@ -7727,10 +7814,28 @@ html[data-theme="cyberpunk"] .bottom-nav-item.active .bottom-nav-label {
     color: #00f0ff;
 }
 
+html[data-theme="cyberpunk"] .bottom-nav-upload .upload-btn-pill {
+    background: linear-gradient(135deg, #00f0ff 0%, #38bdf8 45%, #ec4899 100%);
+    color: #06060e !important;
+    box-shadow: 0 2px 14px rgba(0, 240, 255, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+}
+
+html[data-theme="cyberpunk"] .bottom-nav-upload .upload-btn-pill svg {
+    stroke: #06060e !important;
+}
+
+html[data-theme="cyberpunk"] .bottom-nav-upload .bottom-nav-label {
+    color: #38bdf8;
+}
+
 /* Theme Integration: Emerald */
 html[data-theme="emerald"] .mobile-bottom-bar {
     background: rgba(4, 12, 7, 0.96);
-    border-top-color: rgba(16, 185, 129, 0.2);
+    border-top-color: rgba(16, 185, 129, 0.25);
+}
+
+html[data-theme="emerald"] .mobile-bottom-bar::before {
+    background: linear-gradient(90deg, transparent 0%, #34d399 30%, #10b981 50%, #fbbf24 70%, transparent 100%);
 }
 
 html[data-theme="emerald"] .bottom-nav-item.active {
@@ -7738,12 +7843,26 @@ html[data-theme="emerald"] .bottom-nav-item.active {
 }
 
 html[data-theme="emerald"] .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(16, 185, 129, 0.14);
+    background: rgba(16, 185, 129, 0.16);
     color: #34d399;
 }
 
 html[data-theme="emerald"] .bottom-nav-item.active .bottom-nav-label {
     color: #34d399;
+}
+
+html[data-theme="emerald"] .bottom-nav-upload .upload-btn-pill {
+    background: linear-gradient(135deg, #6ee7b7 0%, #10b981 50%, #047857 100%);
+    color: #030a05 !important;
+    box-shadow: 0 2px 12px rgba(16, 185, 129, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+}
+
+html[data-theme="emerald"] .bottom-nav-upload .upload-btn-pill svg {
+    stroke: #030a05 !important;
+}
+
+html[data-theme="emerald"] .bottom-nav-upload .bottom-nav-label {
+    color: #6ee7b7;
 }
 
 /* Screen reader only */
