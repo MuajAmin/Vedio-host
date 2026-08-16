@@ -3086,6 +3086,106 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Start live polling every 4 seconds
         setInterval(pollHajeraLiveStatus, 4000);
+
+        // ========================================
+        // VPS Telemetry & Real-Time Resource Polling
+        // ========================================
+        function pollVpsMetrics() {
+            if (window.location.pathname !== '/admin') return;
+            const vpsCard = document.getElementById('vpsMonitorCard');
+            if (!vpsCard) return;
+
+            fetch('/admin/system/live-metrics', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(sys => {
+                    if (!sys) return;
+
+                    // CPU
+                    const cpuPctEl = document.getElementById('vpsCpuPct');
+                    const cpuBarEl = document.getElementById('vpsCpuBar');
+                    const cpuBoxEl = document.querySelector('.metric-cpu');
+                    const loadAvgEl = document.getElementById('vpsLoadAvg');
+                    if (cpuPctEl) cpuPctEl.textContent = `${sys.cpu.usagePercent}%`;
+                    if (cpuBarEl) cpuBarEl.style.width = `${sys.cpu.usagePercent}%`;
+                    if (loadAvgEl && sys.cpu.loadAvg) loadAvgEl.textContent = sys.cpu.loadAvg.join(' • ');
+
+                    if (cpuBoxEl) {
+                        cpuBoxEl.classList.remove('status-good', 'status-warn', 'status-critical');
+                        if (sys.cpu.usagePercent > 85) cpuBoxEl.classList.add('status-critical');
+                        else if (sys.cpu.usagePercent > 65) cpuBoxEl.classList.add('status-warn');
+                        else cpuBoxEl.classList.add('status-good');
+                    }
+
+                    // RAM
+                    const ramPctEl = document.getElementById('vpsRamPct');
+                    const ramBarEl = document.getElementById('vpsRamBar');
+                    const ramBoxEl = document.querySelector('.metric-ram');
+                    const ramUsedEl = document.getElementById('vpsRamUsed');
+                    const ramFreeEl = document.getElementById('vpsRamFree');
+                    const nodeRssEl = document.getElementById('vpsNodeRss');
+                    if (ramPctEl) ramPctEl.textContent = `${sys.ram.usagePercent}%`;
+                    if (ramBarEl) ramBarEl.style.width = `${sys.ram.usagePercent}%`;
+                    if (ramUsedEl) ramUsedEl.textContent = sys.ram.usedFormatted;
+                    if (ramFreeEl) ramFreeEl.textContent = `${sys.ram.freeFormatted} Free of ${sys.ram.totalFormatted}`;
+                    if (nodeRssEl && sys.process) nodeRssEl.textContent = `${sys.process.rssMb} MB`;
+
+                    if (ramBoxEl) {
+                        ramBoxEl.classList.remove('status-good', 'status-warn', 'status-critical');
+                        if (sys.ram.usagePercent > 85) ramBoxEl.classList.add('status-critical');
+                        else if (sys.ram.usagePercent > 70) ramBoxEl.classList.add('status-warn');
+                        else ramBoxEl.classList.add('status-good');
+                    }
+
+                    // Disk
+                    const diskPctEl = document.getElementById('vpsDiskPct');
+                    const diskBarEl = document.getElementById('vpsDiskBar');
+                    const diskBoxEl = document.querySelector('.metric-disk');
+                    const diskUsedEl = document.getElementById('vpsDiskUsed');
+                    const diskFreeEl = document.getElementById('vpsDiskFree');
+                    if (diskPctEl) diskPctEl.textContent = `${sys.disk.usagePercent}%`;
+                    if (diskBarEl) diskBarEl.style.width = `${sys.disk.usagePercent}%`;
+                    if (diskUsedEl) diskUsedEl.textContent = sys.disk.usedFormatted;
+                    if (diskFreeEl) diskFreeEl.textContent = `${sys.disk.freeFormatted} Free of ${sys.disk.totalFormatted}`;
+
+                    if (diskBoxEl) {
+                        diskBoxEl.classList.remove('status-good', 'status-warn', 'status-critical');
+                        if (sys.disk.usagePercent > 90) diskBoxEl.classList.add('status-critical');
+                        else if (sys.disk.usagePercent > 75) diskBoxEl.classList.add('status-warn');
+                        else diskBoxEl.classList.add('status-good');
+                    }
+
+                    // Runtime
+                    const srvUptimeEl = document.getElementById('vpsServerUptime');
+                    const appUptimeEl = document.getElementById('vpsAppUptime');
+                    const heapUsedEl = document.getElementById('vpsHeapUsed');
+                    const heapTotalEl = document.getElementById('vpsHeapTotal');
+                    if (srvUptimeEl && sys.os) srvUptimeEl.textContent = sys.os.uptimeFormatted;
+                    if (appUptimeEl && sys.process) appUptimeEl.textContent = `App Up: ${sys.process.uptimeFormatted}`;
+                    if (heapUsedEl && sys.process) heapUsedEl.textContent = `${sys.process.heapUsedMb} MB`;
+                    if (heapTotalEl && sys.process) heapTotalEl.textContent = `${sys.process.heapTotalMb} MB`;
+
+                    // Overall System Health Status
+                    const healthPill = document.getElementById('vpsHealthPill');
+                    const healthText = document.getElementById('vpsHealthText');
+                    if (healthPill && healthText) {
+                        healthPill.className = 'vps-status-pill';
+                        if (sys.cpu.usagePercent > 85 || sys.ram.usagePercent > 90 || sys.disk.usagePercent > 92) {
+                            healthPill.classList.add('pill-critical');
+                            healthText.textContent = 'High Load / Warning';
+                        } else if (sys.cpu.usagePercent > 65 || sys.ram.usagePercent > 75) {
+                            healthPill.classList.add('pill-warn');
+                            healthText.textContent = 'Elevated Load';
+                        } else {
+                            healthPill.classList.add('pill-optimal');
+                            healthText.textContent = 'System Healthy';
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+
+        // Start VPS live polling every 3.5 seconds on admin page
+        setInterval(pollVpsMetrics, 3500);
     }
 
 });

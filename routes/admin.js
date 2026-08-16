@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { isMuaj } = require('../middleware/auth');
 const db = require('../database');
 const importRoutes = require('./import');
@@ -42,6 +43,119 @@ function formatWatchTime(totalSec) {
     if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
     if (hrs > 0) return `${hrs}h`;
     return `${Math.max(1, mins)}m`;
+}
+
+function formatDuration(totalSeconds) {
+    const s = Math.floor(Number(totalSeconds) || 0);
+    if (s < 60) return `${s}s`;
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h ${m}m`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+}
+
+function getCpuSample() {
+    const cpus = os.cpus() || [];
+    let totalIdle = 0, totalTick = 0;
+    for (const cpu of cpus) {
+        for (const type in cpu.times) {
+            totalTick += cpu.times[type];
+        }
+        totalIdle += cpu.times.idle;
+    }
+    return { idle: totalIdle, total: totalTick, cpus };
+}
+
+let prevCpuSample = getCpuSample();
+
+function getLiveCpuPercent() {
+    const current = getCpuSample();
+    const idleDiff = current.idle - prevCpuSample.idle;
+    const totalDiff = current.total - prevCpuSample.total;
+    prevCpuSample = current;
+    if (totalDiff <= 0) return 0;
+    const usage = 100 - Math.round((idleDiff / totalDiff) * 100);
+    return Math.max(0, Math.min(100, usage));
+}
+
+function collectSystemMetrics() {
+    const cpus = os.cpus() || [];
+    const cpuCount = cpus.length;
+    const rawModel = cpus[0] ? cpus[0].model.replace(/\s+/g, ' ').trim() : 'Generic CPU';
+    const cpuSpeedMhz = cpus[0] ? cpus[0].speed : 0;
+    const cpuUsagePercent = getLiveCpuPercent();
+    const loadAvg = os.loadavg().map(v => Number(v.toFixed(2)));
+
+    // RAM
+    const totalMemBytes = os.totalmem();
+    const freeMemBytes = os.freemem();
+    const usedMemBytes = totalMemBytes - freeMemBytes;
+    const ramUsagePercent = Number(((usedMemBytes / totalMemBytes) * 100).toFixed(1));
+
+    // Disk
+    let diskTotalBytes = 0;
+    let diskFreeBytes = 0;
+    let diskUsedBytes = 0;
+    let diskUsagePercent = 0;
+
+    try {
+        const disk = fs.statfsSync(__dirname);
+        diskTotalBytes = disk.bsize * disk.blocks;
+        diskFreeBytes = disk.bsize * disk.bavail;
+        diskUsedBytes = diskTotalBytes - diskFreeBytes;
+        diskUsagePercent = Number(((diskUsedBytes / diskTotalBytes) * 100).toFixed(1));
+    } catch {}
+
+    // Process Memory
+    const procMem = process.memoryUsage();
+
+    return {
+        os: {
+            platform: os.platform(),
+            type: os.type(),
+            release: os.release(),
+            arch: os.arch(),
+            hostname: os.hostname(),
+            uptimeSec: os.uptime(),
+            uptimeFormatted: formatDuration(os.uptime())
+        },
+        cpu: {
+            count: cpuCount,
+            model: rawModel,
+            speedMhz: cpuSpeedMhz,
+            usagePercent: cpuUsagePercent,
+            loadAvg
+        },
+        ram: {
+            totalBytes: totalMemBytes,
+            freeBytes: freeMemBytes,
+            usedBytes: usedMemBytes,
+            usagePercent: ramUsagePercent,
+            totalFormatted: (totalMemBytes / (1024 ** 3)).toFixed(2) + ' GB',
+            freeFormatted: (freeMemBytes / (1024 ** 3)).toFixed(2) + ' GB',
+            usedFormatted: (usedMemBytes / (1024 ** 3)).toFixed(2) + ' GB'
+        },
+        disk: {
+            totalBytes: diskTotalBytes,
+            freeBytes: diskFreeBytes,
+            usedBytes: diskUsedBytes,
+            usagePercent: diskUsagePercent,
+            totalFormatted: (diskTotalBytes / (1024 ** 3)).toFixed(1) + ' GB',
+            freeFormatted: (diskFreeBytes / (1024 ** 3)).toFixed(1) + ' GB',
+            usedFormatted: (diskUsedBytes / (1024 ** 3)).toFixed(1) + ' GB'
+        },
+        process: {
+            uptimeSec: process.uptime(),
+            uptimeFormatted: formatDuration(process.uptime()),
+            nodeVersion: process.version,
+            rssMb: (procMem.rss / (1024 * 1024)).toFixed(1),
+            heapUsedMb: (procMem.heapUsed / (1024 * 1024)).toFixed(1),
+            heapTotalMb: (procMem.heapTotal / (1024 * 1024)).toFixed(1)
+        },
+        timestamp: Date.now()
+    };
 }
 
 function collectAdminStats() {
@@ -149,7 +263,8 @@ function collectAdminStats() {
         orphanThumbnails,
         storageBytes: sumBytes(videoFiles) + sumBytes(thumbnailFiles),
         videoBytes: sumBytes(videoFiles),
-        thumbnailBytes: sumBytes(thumbnailFiles)
+        thumbnailBytes: sumBytes(thumbnailFiles),
+        systemMetrics: collectSystemMetrics()
     };
 }
 
@@ -239,6 +354,11 @@ router.get('/admin/hajera/live-status', isMuaj, (req, res) => {
         isBlocked,
         timestamp: Date.now()
     });
+});
+
+// GET /admin/system/live-metrics — Real-time VPS & Server Health metrics
+router.get('/admin/system/live-metrics', isMuaj, (req, res) => {
+    res.json(collectSystemMetrics());
 });
 
 // POST /admin/hajera/clear-logs — Clear older activity logs
