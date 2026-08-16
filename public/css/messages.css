@@ -1776,3 +1776,24 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
         padding: 4px 7px !important;
     }
 }
+
+/* ---- Sunset Velvet / Hajera Romantic Messaging Enhancements ---- */
+html[data-theme="sunset"] .msg-bubble-out,
+body[data-user="hajera"] .msg-bubble-out {
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.28) 0%, rgba(251, 113, 133, 0.14) 100%);
+    border-color: rgba(244, 63, 94, 0.4);
+    box-shadow: 0 4px 18px rgba(244, 63, 94, 0.15);
+}
+
+html[data-theme="sunset"] .msg-quick-emoji-btn:hover,
+body[data-user="hajera"] .msg-quick-emoji-btn:hover {
+    background: rgba(244, 63, 94, 0.18);
+    transform: scale(1.22);
+}
+
+html[data-theme="sunset"] .msg-floating-launcher,
+body[data-user="hajera"] .msg-floating-launcher {
+    background: linear-gradient(135deg, #fed7aa 0%, #fb7185 30%, #f43f5e 70%, #be123c 100%);
+    box-shadow: 0 10px 32px rgba(244, 63, 94, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+

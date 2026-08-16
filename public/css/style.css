@@ -98,29 +98,44 @@ html[data-theme="emerald"] {
     --shadow-glow: 0 0 40px rgba(16, 185, 129, 0.2);
 }
 
-/* 4. Sunset Velvet Theme */
+/* 4. Sunset Velvet Theme (Luxe Rose Noir & Romantic Sunset Glow) */
 html[data-theme="sunset"] {
-    --bg-deep: #0c050a;
-    --bg-primary: #140811;
-    --bg-card: rgba(30, 14, 26, 0.82);
-    --bg-card-hover: rgba(46, 20, 38, 0.92);
-    --bg-elevated: #281022;
-    --bg-input: rgba(16, 8, 14, 0.9);
+    --bg-deep: #0c040a;
+    --bg-primary: #150713;
+    --bg-card: rgba(28, 11, 25, 0.84);
+    --bg-card-hover: rgba(44, 16, 38, 0.94);
+    --bg-elevated: #240c21;
+    --bg-input: rgba(18, 7, 16, 0.88);
 
     --accent-gold: #f43f5e;
     --accent-gold-bright: #fb7185;
-    --accent-gold-dim: #e11d48;
+    --accent-gold-dim: #be123c;
     --accent-gold-glow: rgba(244, 63, 94, 0.22);
     --accent-gold-glow-strong: rgba(244, 63, 94, 0.45);
-    --accent-warm: #f59e0b;
+    --accent-warm: #fb923c;
 
-    --text-primary: #fff1f2;
+    --text-primary: #fff1f3;
     --text-secondary: #fda4af;
-    --text-muted: #64748b;
+    --text-muted: #9f7d8e;
 
-    --border-subtle: rgba(244, 63, 94, 0.1);
-    --border-accent: rgba(244, 63, 94, 0.35);
-    --shadow-glow: 0 0 40px rgba(244, 63, 94, 0.2);
+    --border-subtle: rgba(244, 63, 94, 0.12);
+    --border-accent: rgba(244, 63, 94, 0.34);
+    --border-glass: rgba(255, 255, 255, 0.14);
+
+    --shadow-sm: 0 2px 10px rgba(12, 4, 10, 0.4);
+    --shadow-md: 0 8px 30px rgba(12, 4, 10, 0.6);
+    --shadow-lg: 0 18px 55px rgba(12, 4, 10, 0.85);
+    --shadow-glow: 0 0 45px rgba(244, 63, 94, 0.24);
+}
+
+/* Ambient velvet gradient aura for Sunset Velvet */
+html[data-theme="sunset"] body {
+    background:
+        radial-gradient(ellipse 65% 42% at 85% 0%, rgba(244, 63, 94, 0.08) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 35% at 10% 25%, rgba(251, 146, 60, 0.05) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 45% at 50% 100%, rgba(190, 18, 60, 0.06) 0%, transparent 70%),
+        var(--bg-deep);
+    background-attachment: fixed;
 }
 
 /* ---- Reset & Base (Android Mobile First) ---- */
@@ -834,13 +849,36 @@ input, textarea, select {
     font-size: 0.92rem;
     color: var(--text-primary);
     transition: all 0.3s var(--ease-out);
+    position: relative;
+    cursor: pointer;
 }
 
 .theme-card-option:hover {
     transform: translateY(-4px) scale(1.03);
     border-color: var(--accent-gold);
-    box-shadow: 0 6px 28px var(--accent-gold-glow), 0 0 40px var(--accent-gold-glow);
+    box-shadow: 0 8px 30px var(--accent-gold-glow), 0 0 30px var(--accent-gold-glow);
     background: var(--bg-card-hover);
+}
+
+.theme-card-option.is-active-theme {
+    border-color: var(--accent-gold);
+    background: var(--bg-card-hover);
+    box-shadow: 0 0 24px var(--accent-gold-glow), inset 0 0 0 1.5px var(--accent-gold);
+}
+
+.theme-card-option .active-theme-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-bright));
+    padding: 2px 8px;
+    border-radius: 100px;
+    box-shadow: 0 2px 8px var(--accent-gold-glow);
 }
 
 .theme-preview {
@@ -851,35 +889,41 @@ input, textarea, select {
     align-items: center;
     justify-content: space-around;
     padding: 6px;
+    transition: transform 0.3s var(--ease-out);
+}
+
+.theme-card-option:hover .theme-preview {
+    transform: scale(1.08);
 }
 
 .preview-cinematic {
     background: #060609;
     border: 1px solid rgba(229, 184, 90, 0.4);
 }
-.preview-cinematic .dot-1 { background: #e5b85a; width: 12px; height: 12px; border-radius: 50%; }
-.preview-cinematic .dot-2 { background: #c48b3b; width: 12px; height: 12px; border-radius: 50%; }
+.preview-cinematic .dot-1 { background: #e5b85a; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px rgba(229, 184, 90, 0.6); }
+.preview-cinematic .dot-2 { background: #c48b3b; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px rgba(196, 139, 59, 0.6); }
 
 .preview-cyberpunk {
     background: #05050d;
     border: 1px solid rgba(0, 240, 255, 0.4);
 }
-.preview-cyberpunk .dot-1 { background: #00f0ff; width: 12px; height: 12px; border-radius: 50%; }
-.preview-cyberpunk .dot-2 { background: #ff007f; width: 12px; height: 12px; border-radius: 50%; }
+.preview-cyberpunk .dot-1 { background: #00f0ff; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px rgba(0, 240, 255, 0.6); }
+.preview-cyberpunk .dot-2 { background: #ff007f; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px rgba(255, 0, 127, 0.6); }
 
 .preview-emerald {
     background: #030806;
     border: 1px solid rgba(16, 185, 129, 0.4);
 }
-.preview-emerald .dot-1 { background: #10b981; width: 12px; height: 12px; border-radius: 50%; }
-.preview-emerald .dot-2 { background: #fbbf24; width: 12px; height: 12px; border-radius: 50%; }
+.preview-emerald .dot-1 { background: #10b981; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px rgba(16, 185, 129, 0.6); }
+.preview-emerald .dot-2 { background: #fbbf24; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px rgba(251, 191, 36, 0.6); }
 
 .preview-sunset {
-    background: #0c050a;
-    border: 1px solid rgba(244, 63, 94, 0.4);
+    background: linear-gradient(135deg, #0c040a 0%, #1c0819 100%);
+    border: 1px solid rgba(244, 63, 94, 0.45);
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.2);
 }
-.preview-sunset .dot-1 { background: #f43f5e; width: 12px; height: 12px; border-radius: 50%; }
-.preview-sunset .dot-2 { background: #f59e0b; width: 12px; height: 12px; border-radius: 50%; }
+.preview-sunset .dot-1 { background: #f43f5e; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px rgba(244, 63, 94, 0.6); }
+.preview-sunset .dot-2 { background: #fb923c; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px rgba(251, 146, 60, 0.6); }
 
 /* ========================================
    NAVBAR & HEADER (PREMIUM FROSTED GLASS)
@@ -8268,80 +8312,104 @@ html[data-theme="sunset"] {
     --hajera-accent-soft: rgba(244, 63, 94, 0.08);
 }
 
+.hajera-mode .video-card {
+    border-color: rgba(244, 63, 94, 0.16);
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .hajera-mode .video-card:hover {
-    box-shadow: 0 12px 40px rgba(244, 63, 94, 0.15), var(--shadow-md);
-    border-color: rgba(244, 63, 94, 0.3);
+    transform: translateY(-5px) scale(1.015);
+    box-shadow: 0 16px 45px rgba(244, 63, 94, 0.22), 0 0 25px rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.45);
 }
 
 .hajera-mode .search-box:has(.search-input:focus) {
-    border-color: rgba(244, 63, 94, 0.5);
-    box-shadow: 0 0 20px rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.55);
+    box-shadow: 0 0 24px rgba(244, 63, 94, 0.2);
 }
 
 .hajera-mode .search-box:has(.search-input:focus) .search-icon {
-    color: #f43f5e;
+    color: #fb7185;
+}
+
+.hajera-mode .romantic-title {
+    background: linear-gradient(135deg, #ffffff 10%, #fda4af 40%, #fb7185 75%, #f43f5e 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 2px 14px rgba(244, 63, 94, 0.3));
+}
+
+.hajera-mode .romantic-subtitle {
+    color: #fda4af;
+    text-shadow: 0 0 14px rgba(244, 63, 94, 0.25);
 }
 
 .hajera-mode .header-pill {
-    background: rgba(244, 63, 94, 0.12);
-    border-color: rgba(244, 63, 94, 0.25);
+    background: rgba(244, 63, 94, 0.15);
+    border-color: rgba(244, 63, 94, 0.35);
     color: #fda4af;
+    box-shadow: 0 0 15px rgba(244, 63, 94, 0.15);
 }
 
 .hajera-mode .card-badge {
-    background: rgba(244, 63, 94, 0.85);
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.92), rgba(190, 18, 60, 0.95));
+    box-shadow: 0 2px 10px rgba(244, 63, 94, 0.35);
 }
 
 .hajera-mode .play-overlay {
-    background: rgba(244, 63, 94, 0.85);
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.88), rgba(190, 18, 60, 0.92));
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.5);
 }
 
 .hajera-mode .btn-primary {
-    background: linear-gradient(135deg, #f43f5e, #be123c);
-    box-shadow: 0 4px 20px rgba(244, 63, 94, 0.35);
+    background: linear-gradient(135deg, #fb7185 0%, #f43f5e 50%, #be123c 100%);
+    box-shadow: 0 4px 22px rgba(244, 63, 94, 0.4);
 }
 
 .hajera-mode .btn-primary:hover {
-    box-shadow: 0 6px 25px rgba(244, 63, 94, 0.5);
+    box-shadow: 0 6px 28px rgba(244, 63, 94, 0.55);
 }
 
 .hajera-mode .btn-ghost:hover {
-    background: rgba(244, 63, 94, 0.12);
-    color: #fecdd3;
-    border-color: rgba(244, 63, 94, 0.25);
+    background: rgba(244, 63, 94, 0.14);
+    color: #fff1f2;
+    border-color: rgba(244, 63, 94, 0.35);
 }
 
 .hajera-mode .upload-header-badge {
-    background: rgba(244, 63, 94, 0.12);
-    border-color: rgba(244, 63, 94, 0.3);
+    background: rgba(244, 63, 94, 0.14);
+    border-color: rgba(244, 63, 94, 0.35);
     color: #fda4af;
 }
 
 .hajera-mode .upload-badge-pulse {
     background: #f43f5e;
-    box-shadow: 0 0 10px rgba(244, 63, 94, 0.8);
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.9);
 }
 
 .hajera-mode .upload-container {
-    border-color: rgba(244, 63, 94, 0.25);
-    box-shadow: 0 12px 40px rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.28);
+    box-shadow: 0 16px 45px rgba(244, 63, 94, 0.16);
 }
 
 .hajera-mode .upload-header h1 {
-    background: linear-gradient(135deg, #fff 20%, #fda4af 60%, #f43f5e 100%);
+    background: linear-gradient(135deg, #ffffff 15%, #fda4af 55%, #f43f5e 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .hajera-mode .upload-tabs {
-    background: rgba(30, 10, 20, 0.6);
-    border-color: rgba(244, 63, 94, 0.25);
+    background: rgba(28, 10, 24, 0.7);
+    border-color: rgba(244, 63, 94, 0.28);
 }
 
 .hajera-mode .upload-tab.active {
-    background: rgba(244, 63, 94, 0.22);
-    color: #fecdd3;
-    border-color: rgba(244, 63, 94, 0.4);
+    background: rgba(244, 63, 94, 0.24);
+    color: #fff1f2;
+    border-color: rgba(244, 63, 94, 0.45);
+    box-shadow: 0 0 16px rgba(244, 63, 94, 0.2);
 }
 
 .hajera-mode .upload-tab.active svg {
@@ -8349,62 +8417,65 @@ html[data-theme="sunset"] {
 }
 
 .hajera-mode .dropzone-icon-bubble {
-    background: rgba(244, 63, 94, 0.16);
-    border-color: rgba(244, 63, 94, 0.35);
+    background: rgba(244, 63, 94, 0.18);
+    border-color: rgba(244, 63, 94, 0.38);
     color: #fb7185;
-    box-shadow: 0 4px 20px rgba(244, 63, 94, 0.25);
+    box-shadow: 0 4px 22px rgba(244, 63, 94, 0.28);
 }
 
 .hajera-mode .upload-dropzone:hover,
 .hajera-mode .upload-dropzone.dragover {
     border-color: #f43f5e;
-    background: rgba(244, 63, 94, 0.08);
-    box-shadow: 0 0 36px rgba(244, 63, 94, 0.22);
+    background: rgba(244, 63, 94, 0.1);
+    box-shadow: 0 0 40px rgba(244, 63, 94, 0.26);
 }
 
 .hajera-mode .upload-dropzone:hover .dropzone-browse-pill {
-    background: #f43f5e;
-    color: #fff;
+    background: linear-gradient(135deg, #f43f5e, #be123c);
+    color: #ffffff;
     border-color: #fb7185;
-    box-shadow: 0 2px 12px rgba(244, 63, 94, 0.4);
+    box-shadow: 0 2px 14px rgba(244, 63, 94, 0.5);
 }
 
 .hajera-mode .form-input:focus,
 .hajera-mode .url-input:focus,
 .hajera-mode .quality-select:focus,
 .hajera-mode .comment-form textarea:focus {
-    border-color: rgba(244, 63, 94, 0.5);
-    box-shadow: 0 0 18px rgba(244, 63, 94, 0.18);
+    border-color: rgba(244, 63, 94, 0.55);
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.22);
 }
 
 .hajera-mode .progress-fill,
 .hajera-mode .import-progress-fill {
-    background: linear-gradient(90deg, #f43f5e, #fb7185);
+    background: linear-gradient(90deg, #f43f5e, #fb7185, #fb923c);
+    box-shadow: 0 0 10px rgba(244, 63, 94, 0.5);
 }
 
 .hajera-mode .badge-viewer,
 .hajera-mode .avatar-viewer {
-    background: linear-gradient(135deg, rgba(244, 63, 94, 0.25), rgba(190, 18, 60, 0.35));
-    border-color: rgba(244, 63, 94, 0.4);
-    color: #fecdd3;
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.28), rgba(190, 18, 60, 0.38));
+    border-color: rgba(244, 63, 94, 0.45);
+    color: #fff1f2;
+    box-shadow: 0 2px 10px rgba(244, 63, 94, 0.25);
 }
 
 .hajera-mode .vp-progress-played {
-    background: linear-gradient(90deg, #f43f5e, #fb7185);
+    background: linear-gradient(90deg, #f43f5e 0%, #fb7185 50%, #fb923c 100%);
+    box-shadow: 0 0 10px rgba(244, 63, 94, 0.5);
 }
 
 .hajera-mode .vp-progress-handle {
-    background: #f43f5e;
-    box-shadow: 0 0 10px rgba(244, 63, 94, 0.8);
+    background: #fb7185;
+    box-shadow: 0 0 14px rgba(244, 63, 94, 0.95), 0 0 4px #ffffff;
 }
 
 .hajera-mode .upload-fab {
-    background: linear-gradient(135deg, #f43f5e, #be123c);
-    box-shadow: 0 4px 15px rgba(244, 63, 94, 0.4);
+    background: linear-gradient(135deg, #fed7aa 0%, #f43f5e 45%, #be123c 100%);
+    box-shadow: 0 4px 20px rgba(244, 63, 94, 0.45);
 }
 
 .hajera-mode .bottom-nav-item.active {
-    color: #f43f5e;
+    color: #fb7185;
 }
 
 /* ---- Double Tap Seek Ripple Indicator ---- */

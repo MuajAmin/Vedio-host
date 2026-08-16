@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="bn">
+<html lang="bn" data-user="<%= typeof user !== 'undefined' && user ? user : '' %>">
 
 <head>
     <meta charset="UTF-8">
@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
-    <script src="/js/theme-init.js?v=6.4"></script>
+    <script src="/js/theme-init.js?v=6.5"></script>
     <link rel="stylesheet" href="/css/style.css?v=6.5">
     <link rel="stylesheet" href="/css/messages.css?v=2.5">
 </head>
@@ -227,13 +227,53 @@
             </div>
             <% } %>
 
-                <script src="/js/app.js?v=6.1"></script>
-                <script src="/js/messages.js?v=2.5"></script>
-                <script>
-                    if ('serviceWorker' in navigator) {
-                        navigator.serviceWorker.register('/sw.js').catch(function() {});
-                    }
-                </script>
+            <!-- Global Theme Selector Modal / Drawer -->
+            <div class="theme-modal-backdrop" id="themeModalBackdrop">
+                <div class="theme-modal">
+                    <div class="theme-modal-header">
+                        <h3>🎨 Choose Palette Theme</h3>
+                        <button type="button" class="theme-close-btn" id="themeCloseBtn">&times;</button>
+                    </div>
+                    <div class="theme-options-grid">
+                        <button type="button" class="theme-card-option" data-set-theme="cinematic">
+                            <div class="theme-preview preview-cinematic">
+                                <div class="dot dot-1"></div>
+                                <div class="dot dot-2"></div>
+                            </div>
+                            <span>🎬 Obsidian Gold</span>
+                        </button>
+                        <button type="button" class="theme-card-option" data-set-theme="cyberpunk">
+                            <div class="theme-preview preview-cyberpunk">
+                                <div class="dot dot-1"></div>
+                                <div class="dot dot-2"></div>
+                            </div>
+                            <span>⚡ Cyberpunk Neon</span>
+                        </button>
+                        <button type="button" class="theme-card-option" data-set-theme="emerald">
+                            <div class="theme-preview preview-emerald">
+                                <div class="dot dot-1"></div>
+                                <div class="dot dot-2"></div>
+                            </div>
+                            <span>🌿 Emerald Luxury</span>
+                        </button>
+                        <button type="button" class="theme-card-option" data-set-theme="sunset">
+                            <div class="theme-preview preview-sunset">
+                                <div class="dot dot-1"></div>
+                                <div class="dot dot-2"></div>
+                            </div>
+                            <span>🌅 Sunset Velvet</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <script src="/js/app.js?v=6.5"></script>
+            <script src="/js/messages.js?v=2.5"></script>
+            <script>
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('/sw.js').catch(function() {});
+                }
+            </script>
 </body>
 
 </html>

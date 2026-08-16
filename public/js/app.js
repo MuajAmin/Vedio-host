@@ -1943,10 +1943,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const themeBottomBtn = document.getElementById('themeSwitcherBottomBtn');
     const themeModal = document.getElementById('themeModalBackdrop');
     const themeCloseBtn = document.getElementById('themeCloseBtn');
-    const themeOptions = document.querySelectorAll('[data-set-theme]');
+
+    function syncActiveThemeOption() {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'cinematic';
+        const options = document.querySelectorAll('[data-set-theme]');
+        options.forEach(btn => {
+            const isMatch = btn.getAttribute('data-set-theme') === currentTheme;
+            btn.classList.toggle('is-active-theme', isMatch);
+            let badge = btn.querySelector('.active-theme-badge');
+            if (isMatch) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'active-theme-badge';
+                    badge.textContent = 'Active';
+                    btn.appendChild(badge);
+                }
+            } else if (badge) {
+                badge.remove();
+            }
+        });
+    }
 
     function openThemeModal() {
-        if (themeModal) themeModal.classList.add('active');
+        if (!themeModal) return;
+        syncActiveThemeOption();
+        themeModal.classList.add('active');
     }
 
     function closeThemeModal() {
@@ -1964,12 +1985,28 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    themeOptions.forEach(btn => {
+    document.querySelectorAll('[data-set-theme]').forEach(btn => {
         btn.addEventListener('click', () => {
             const theme = btn.getAttribute('data-set-theme');
             if (theme) {
                 document.documentElement.setAttribute('data-theme', theme);
                 storage.setItem('videohosk_theme', theme);
+                const user = (document.body && document.body.getAttribute('data-user')) ||
+                             document.documentElement.getAttribute('data-user');
+                if (user) {
+                    storage.setItem('videohosk_theme_' + user, theme);
+                }
+                const themeMetaColors = {
+                    cinematic: '#060609',
+                    cyberpunk: '#05050d',
+                    emerald: '#030806',
+                    sunset: '#0c040a'
+                };
+                const metaTheme = document.querySelector('meta[name="theme-color"]');
+                if (metaTheme) {
+                    metaTheme.setAttribute('content', themeMetaColors[theme] || '#060609');
+                }
+                syncActiveThemeOption();
                 closeThemeModal();
             }
         });
