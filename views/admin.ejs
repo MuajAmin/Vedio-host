@@ -94,9 +94,15 @@ const presence = hajeraStats.presence || { status: 'offline', isOnline: false, i
 const watchStats = hajeraStats.watchStats || { totalFormatted: '0m', todayFormatted: '0m', totalSeconds: 0, todaySeconds: 0 };
 const activityTimeline = Array.isArray(hajeraStats.activityTimeline) ? hajeraStats.activityTimeline : [];
 
-const lastActiveItem = hajeraActivityList.find(item => item.hajera_watched_at || item.updated_at);
-const lastActiveTime = presence.lastSeen || (lastActiveItem ? (lastActiveItem.hajera_watched_at || lastActiveItem.updated_at) : null);
-const lastActiveText = lastActiveTime ? timeAgo(lastActiveTime) : 'No activity yet';
+const latestAct = activityTimeline.length > 0 ? activityTimeline[0] : null;
+const lastActiveItem = hajeraActivityList.find(item => item.hajera_watched_at);
+const lastActiveTime = presence.lastSeen || (latestAct ? latestAct.created_at : (lastActiveItem ? lastActiveItem.hajera_watched_at : null));
+let lastActiveText = 'No activity yet';
+if (presence.isWatching || presence.isOnline) {
+    lastActiveText = 'Active Now';
+} else if (lastActiveTime) {
+    lastActiveText = timeAgo(lastActiveTime);
+}
 
 let presenceBadge = '';
 let presenceDotClass = 'dot-offline';

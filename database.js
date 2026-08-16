@@ -292,15 +292,16 @@ function updateUserPresence(username, data = {}) {
         const deviceInfo = data.deviceInfo || null;
         const ipAddress = data.ipAddress || null;
         const sessionId = data.sessionId || null;
+        const nowIso = new Date().toISOString();
 
         db.prepare(`
             INSERT INTO user_presence (
                 username, status, last_seen, current_page, current_video_id,
                 video_title, is_playing, current_time, duration, device_info, ip_address, session_id, updated_at
-            ) VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(username) DO UPDATE SET
                 status = excluded.status,
-                last_seen = CURRENT_TIMESTAMP,
+                last_seen = excluded.last_seen,
                 current_page = COALESCE(excluded.current_page, user_presence.current_page),
                 current_video_id = excluded.current_video_id,
                 video_title = COALESCE(excluded.video_title, user_presence.video_title),
@@ -310,10 +311,10 @@ function updateUserPresence(username, data = {}) {
                 device_info = COALESCE(excluded.device_info, user_presence.device_info),
                 ip_address = COALESCE(excluded.ip_address, user_presence.ip_address),
                 session_id = COALESCE(excluded.session_id, user_presence.session_id),
-                updated_at = CURRENT_TIMESTAMP
+                updated_at = excluded.updated_at
         `).run(
-            username, status, page, data.videoId || null, videoTitle,
-            isPlaying, currentTime, duration, deviceInfo, ipAddress, sessionId
+            username, status, nowIso, page, data.videoId || null, videoTitle,
+            isPlaying, currentTime, duration, deviceInfo, ipAddress, sessionId, nowIso
         );
     } catch (err) {
         console.error('[db] Error updating user presence:', err.message);
@@ -323,10 +324,17 @@ function updateUserPresence(username, data = {}) {
 function parseSqliteDate(str) {
     if (!str) return 0;
     if (typeof str === 'number') return str;
-    const s = String(str);
+    const s = String(str).trim();
     const iso = s.includes('T') ? (s.endsWith('Z') ? s : s + 'Z') : s.replace(' ', 'T') + 'Z';
     const t = new Date(iso).getTime();
     return isNaN(t) ? new Date(str).getTime() : t;
+}
+
+function normalizeIsoDate(str) {
+    if (!str) return null;
+    const s = String(str).trim();
+    if (s.includes('T') && s.endsWith('Z')) return s;
+    return s.includes('T') ? s + 'Z' : s.replace(' ', 'T') + 'Z';
 }
 
 function getUserPresence(username) {
@@ -359,8 +367,8 @@ function getUserPresence(username) {
         const secondsAgo = Math.max(0, Math.floor((now - lastSeenTime) / 1000));
 
         let computedStatus = row.status || 'offline';
-        // Auto offline if heartbeat timed out (> 40s)
-        if (secondsAgo > 40) {
+        // Auto offline if heartbeat timed out (> 45s)
+        if (secondsAgo > 45) {
             computedStatus = 'offline';
         } else if (computedStatus === 'watching' && !row.is_playing) {
             computedStatus = 'online';
@@ -386,7 +394,7 @@ function getUserPresence(username) {
             isOnline,
             isWatching,
             isIdle,
-            lastSeen: row.last_seen,
+            lastSeen: normalizeIsoDate(row.last_seen || row.updated_at),
             lastSeenSecondsAgo: secondsAgo,
             currentPage: row.current_page,
             currentVideoId: row.current_video_id,
@@ -397,7 +405,7 @@ function getUserPresence(username) {
             duration: Number(row.duration || 0),
             deviceInfo: row.device_info,
             ipAddress: row.ip_address,
-            updatedAt: row.updated_at
+            updatedAt: normalizeIsoDate(row.updated_at)
         };
     } catch (err) {
         console.error('[db] Error getting user presence:', err.message);
@@ -408,6 +416,8 @@ function getUserPresence(username) {
 function logActivity(username, action, data = {}) {
     if (!username || !action) return;
     try {
+        const nowIso = new Date().toISOString();
+
         // Anti-spam debounce: check if identical action on same video happened in last 10s
         const recent = db.prepare(`
             SELECT id, action, video_id, created_at
@@ -417,16 +427,17 @@ function logActivity(username, action, data = {}) {
         `).get(username, action);
 
         if (recent) {
-            const diffSeconds = (Date.now() - new Date(recent.created_at).getTime()) / 1000;
+            const diffSeconds = (Date.now() - parseSqliteDate(recent.created_at)) / 1000;
             if (diffSeconds < 10 && String(recent.video_id || '') === String(data.videoId || '')) {
                 db.prepare(`
                     UPDATE activity_logs
-                    SET position_seconds = ?, duration_seconds = ?, details = ?, created_at = CURRENT_TIMESTAMP
+                    SET position_seconds = ?, duration_seconds = ?, details = ?, created_at = ?
                     WHERE id = ?
                 `).run(
                     Number(data.position || data.position_seconds || 0),
                     Number(data.duration || data.duration_seconds || 0),
                     data.details || null,
+                    nowIso,
                     recent.id
                 );
                 return;
@@ -442,7 +453,7 @@ function logActivity(username, action, data = {}) {
         db.prepare(`
             INSERT INTO activity_logs (
                 username, action, video_id, video_title, position_seconds, duration_seconds, details, device_info, ip_address, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             username,
             action,
@@ -452,7 +463,8 @@ function logActivity(username, action, data = {}) {
             Number(data.duration || data.duration_seconds || 0),
             data.details || null,
             data.deviceInfo || null,
-            data.ipAddress || null
+            data.ipAddress || null,
+            nowIso
         );
     } catch (err) {
         console.error('[db] Error logging activity:', err.message);
@@ -469,7 +481,10 @@ function getRecentActivities(username, limit = 25) {
             ORDER BY a.created_at DESC
             LIMIT ?
         `).all(username, limit);
-        return rows;
+        return rows.map(r => ({
+            ...r,
+            created_at: normalizeIsoDate(r.created_at)
+        }));
     } catch (err) {
         console.error('[db] Error getting recent activities:', err.message);
         return [];

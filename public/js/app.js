@@ -2642,6 +2642,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Real-Time Presence & Heartbeat Engine
     // ========================================
     function initPresenceTracker() {
+        if (window.location.pathname === '/login') return;
+
         let isIdle = false;
         let idleTimer = null;
         let lastPing = 0;
@@ -2688,7 +2690,7 @@ document.addEventListener('DOMContentLoaded', () => {
             idleTimer = setTimeout(() => {
                 isIdle = true;
                 sendPresencePing('went_idle');
-            }, 120000);
+            }, 90000);
         }
 
         ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
@@ -2705,16 +2707,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        window.addEventListener('pagehide', () => {
-            try {
-                navigator.sendBeacon('/api/presence/leave', JSON.stringify({ page: window.location.pathname }));
-            } catch {}
-        });
-
+        // Send initial ping immediately
         sendPresencePing();
 
+        // Periodic 10s heartbeat
         setInterval(() => {
-            if (Date.now() - lastPing >= 9500) {
+            if (Date.now() - lastPing >= 9000) {
                 sendPresencePing();
             }
         }, 10000);
@@ -2865,6 +2863,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // ========================================
         // Admin Live Status Polling (4s Interval)
         // ========================================
+        function parseSqliteDateHelper(str) {
+            if (!str) return 0;
+            if (typeof str === 'number') return str;
+            const s = String(str).trim();
+            const iso = s.includes('T') ? (s.endsWith('Z') ? s : s + 'Z') : s.replace(' ', 'T') + 'Z';
+            const t = new Date(iso).getTime();
+            return isNaN(t) ? new Date(str).getTime() : t;
+        }
+
         function formatSecondsHelper(sec) {
             const s = Number(sec || 0);
             if (!s || isNaN(s)) return '0:00';
@@ -2879,9 +2886,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function formatRelTimeHelper(dateStr) {
             if (!dateStr) return '-';
-            const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-            if (isNaN(seconds) || seconds < 0) return '-';
-            if (seconds < 60) return 'Just now';
+            const timestamp = parseSqliteDateHelper(dateStr);
+            const seconds = Math.floor((Date.now() - timestamp) / 1000);
+            if (isNaN(seconds) || seconds < 0) return 'Just now';
+            if (seconds < 45) return 'Just now';
             const minutes = Math.floor(seconds / 60);
             if (minutes < 60) return minutes + 'm ago';
             const hours = Math.floor(minutes / 60);
@@ -2925,8 +2933,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Update Last Active Text
                     const lastActive = document.getElementById('hajeraLastActiveText');
-                    if (lastActive && p.lastSeen) {
-                        lastActive.textContent = '⏱️ ' + formatRelTimeHelper(p.lastSeen);
+                    if (lastActive) {
+                        if (p.isWatching || p.isOnline) {
+                            lastActive.textContent = '⏱️ Active Now';
+                        } else if (p.lastSeen) {
+                            lastActive.textContent = '⏱️ ' + formatRelTimeHelper(p.lastSeen);
+                        }
+                    }
+
+                    // Update Hero Description
+                    const desc = document.getElementById('hajeraHeroDesc');
+                    if (desc && p.deviceInfo) {
+                        const baseText = desc.textContent.split('•')[0].trim();
+                        desc.textContent = baseText + ' • ' + p.deviceInfo;
                     }
 
                     // Update Live Playing Card
