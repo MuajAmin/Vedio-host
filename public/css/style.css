@@ -9382,23 +9382,236 @@ h3,
     }
 
     /* ========================================
-       ANDROID / MOBILE ADMIN CONTROL CENTER
+       ANDROID / MOBILE ADMIN CONTROL CENTER (POLISHED UI)
        ======================================== */
+    .admin-app-container {
+        overflow-x: hidden;
+    }
+
     .admin-main-content {
-        padding: 12px 10px calc(84px + env(safe-area-inset-bottom)) !important;
+        padding: 12px 12px calc(92px + env(safe-area-inset-bottom)) !important;
         width: 100%;
         max-width: 100% !important;
         overflow-x: hidden;
     }
 
+    /* 1. Android Top App Bar */
     .android-app-bar {
-        padding: 8px 12px;
+        padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px 14px;
+        gap: 8px;
+    }
+
+    .app-bar-left {
+        gap: 10px;
+    }
+
+    .app-bar-back-btn {
+        width: 38px;
+        height: 38px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .app-bar-back-btn:active {
+        transform: scale(0.92);
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .app-bar-badge {
+        font-size: 0.58rem;
+        letter-spacing: 0.1em;
     }
 
     .app-bar-title {
-        font-size: 1.02rem;
+        font-size: 1.05rem;
+        font-weight: 800;
     }
 
+    .app-bar-actions {
+        gap: 6px;
+    }
+
+    .app-bar-actions .nav-msg-btn {
+        width: 38px;
+        height: 38px;
+        padding: 0;
+        border-radius: 50%;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .app-bar-actions .nav-msg-btn .nav-btn-text {
+        display: none;
+    }
+
+    .app-bar-actions .btn-app-bar-action {
+        width: 38px;
+        height: 38px;
+    }
+
+    .app-bar-actions .btn-app-bar-action:active {
+        transform: scale(0.92);
+    }
+
+    .app-bar-actions .user-badge {
+        padding: 2px;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+    }
+
+    .app-bar-actions .user-badge .badge-info,
+    .app-bar-actions .user-badge .badge-chevron {
+        display: none;
+    }
+
+    .app-bar-actions .user-badge .badge-avatar-wrap {
+        width: 36px;
+        height: 36px;
+    }
+
+    .app-bar-actions .user-badge .badge-avatar {
+        width: 36px;
+        height: 36px;
+    }
+
+    .app-bar-actions .user-badge:active {
+        transform: scale(0.92);
+    }
+
+    /* 2. Status & Cleanup Toolbar Banner */
+    .admin-quick-toolbar {
+        padding: 10px 12px;
+        border-radius: 14px;
+        margin-bottom: 14px;
+        gap: 8px;
+        justify-content: space-between;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .quick-toolbar-info {
+        font-size: 0.76rem;
+        gap: 6px;
+    }
+
+    .btn-cleanup-compact {
+        padding: 6px 12px;
+        font-size: 0.74rem;
+        min-height: 32px;
+        border-radius: 8px;
+    }
+
+    /* 3. VPS Monitor Card on Mobile */
+    .vps-monitor-card {
+        padding: 14px 12px;
+        border-radius: 16px;
+        margin-bottom: 16px;
+    }
+
+    .vps-monitor-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+    }
+
+    .vps-header-left {
+        gap: 10px;
+    }
+
+    .vps-icon-wrap {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+    }
+
+    .vps-main-heading {
+        font-size: 1rem;
+    }
+
+    .vps-subtext {
+        font-size: 0.72rem;
+        white-space: normal;
+        line-height: 1.35;
+    }
+
+    .vps-header-right {
+        width: 100%;
+    }
+
+    .vps-status-pill {
+        width: 100%;
+        justify-content: center;
+        padding: 6px 12px;
+        font-size: 0.74rem;
+    }
+
+    .vps-metrics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .vps-metric-box {
+        padding: 10px 10px;
+        border-radius: 12px;
+        gap: 8px;
+    }
+
+    .vps-metric-box:active {
+        transform: scale(0.97);
+    }
+
+    .metric-badge-icon {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+    }
+
+    .metric-name {
+        font-size: 0.78rem;
+    }
+
+    .metric-sub {
+        font-size: 0.62rem;
+        max-width: 90px;
+    }
+
+    .metric-pct {
+        font-size: 1.15rem;
+    }
+
+    .metric-bottom-info {
+        font-size: 0.62rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+
+    .vps-metric-box.metric-node {
+        grid-column: span 2;
+    }
+
+    .metric-runtime-details {
+        gap: 4px;
+    }
+
+    .runtime-chip {
+        padding: 3px 4px;
+        border-radius: 6px;
+    }
+
+    .chip-k {
+        font-size: 0.52rem;
+    }
+
+    .chip-v {
+        font-size: 0.68rem;
+    }
+
+    /* 4. 6-Tile Key Stats Grid */
     .admin-stat-tiles-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
@@ -9406,10 +9619,14 @@ h3,
     }
 
     .stat-tile {
-        padding: 10px 12px;
-        min-height: 68px;
+        padding: 10px 10px;
+        min-height: 64px;
         border-radius: 14px;
-        gap: 10px;
+        gap: 8px;
+    }
+
+    .stat-tile:active {
+        transform: scale(0.96);
     }
 
     .stat-tile-icon {
@@ -9419,11 +9636,11 @@ h3,
     }
 
     .stat-tile-val {
-        font-size: 1.15rem;
+        font-size: 1.2rem;
     }
 
     .stat-tile-label {
-        font-size: 0.64rem;
+        font-size: 0.62rem;
     }
 
     .admin-section-card {
@@ -9432,9 +9649,20 @@ h3,
         margin-bottom: 16px;
     }
 
+    /* 5. Hajera Hero Widget & Live Playback */
+    .hajera-tracker-section {
+        padding: 12px 10px;
+    }
+
     .hajera-hero-widget {
         padding: 12px 10px;
         border-radius: 14px;
+        margin-bottom: 12px;
+    }
+
+    .hajera-hero-main {
+        gap: 10px;
+        margin-bottom: 10px;
     }
 
     .hajera-hero-avatar {
@@ -9442,11 +9670,68 @@ h3,
         height: 44px;
     }
 
-    .hajera-hero-title {
-        font-size: 0.95rem;
+    .hajera-hero-online-dot {
+        width: 12px;
+        height: 12px;
     }
 
-    .hero-mini-stats {
+    .hajera-hero-tag {
+        gap: 4px;
+        margin-bottom: 2px;
+    }
+
+    .hajera-hero-tag .tag-title {
+        font-size: 0.66rem;
+    }
+
+    .hero-live-badge {
+        font-size: 0.62rem;
+        padding: 1px 6px;
+    }
+
+    .hero-last-active {
+        font-size: 0.62rem;
+    }
+
+    .live-sync-indicator {
+        font-size: 0.58rem;
+        padding: 1px 4px;
+    }
+
+    .hajera-hero-title {
+        font-size: 0.95rem;
+        line-height: 1.25;
+    }
+
+    .hajera-hero-desc {
+        font-size: 0.72rem;
+    }
+
+    /* Live Playing Card */
+    .hajera-live-card {
+        padding: 8px 10px;
+        border-radius: 12px;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .live-card-thumb {
+        width: 40px;
+        height: 40px;
+        border-radius: 6px;
+    }
+
+    .live-card-title {
+        font-size: 0.78rem;
+    }
+
+    .btn-join-watch {
+        padding: 5px 10px;
+        font-size: 0.72rem;
+    }
+
+    .hero-mini-stats.hero-stats-6 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 4px;
     }
 
@@ -9460,43 +9745,314 @@ h3,
     }
 
     .hero-mini-stat .mini-label {
-        font-size: 0.58rem;
+        font-size: 0.56rem;
     }
 
-    .hajera-chip {
-        padding: 5px 10px;
+    /* 6. Active Sessions & Security on Mobile */
+    .access-control-card {
+        padding: 14px 10px;
+        border-radius: 14px;
+        margin-bottom: 14px;
+    }
+
+    .access-control-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding-bottom: 12px;
+        margin-bottom: 14px;
+    }
+
+    .access-control-heading {
+        font-size: 0.98rem;
+    }
+
+    .access-control-subtitle {
         font-size: 0.72rem;
     }
 
-    .hajera-android-card {
+    .access-status-badges {
+        width: 100%;
+        gap: 5px;
+    }
+
+    .session-count-badge,
+    .block-status-badge {
+        font-size: 0.7rem;
+        padding: 4px 9px;
+    }
+
+    .access-actions-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .access-box {
+        padding: 12px 10px;
+        border-radius: 12px;
+    }
+
+    .access-box-desc {
+        font-size: 0.74rem;
+        margin-bottom: 10px;
+    }
+
+    .access-box-btns {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        gap: 6px;
+    }
+
+    .access-box-btns form {
+        width: 100%;
+    }
+
+    .btn-access-action {
+        width: 100%;
+        justify-content: center;
+        padding: 8px 12px;
+        font-size: 0.78rem;
+        border-radius: 8px;
+    }
+
+    .block-form-inline {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        gap: 6px;
+    }
+
+    .block-reason-input {
+        width: 100%;
+        min-width: 0;
+        padding: 8px 10px;
+        font-size: 16px; /* Prevents auto zoom */
+    }
+
+    .detailed-sessions-container {
+        margin-top: 14px;
+        padding-top: 12px;
+    }
+
+    .detailed-sessions-heading {
+        font-size: 0.88rem;
+    }
+
+    .detailed-sessions-sub {
+        font-size: 0.7rem;
+    }
+
+    .sessions-desktop-table {
+        display: none !important;
+    }
+
+    .sessions-mobile-list {
+        display: flex;
+        gap: 8px;
+    }
+
+    .session-mobile-card {
+        padding: 10px;
+        border-radius: 12px;
+        gap: 6px;
+    }
+
+    .session-card-top {
+        gap: 6px;
+    }
+
+    .session-user-pill {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+    }
+
+    .session-current-badge,
+    .session-other-badge {
+        font-size: 0.65rem;
+        padding: 2px 6px;
+    }
+
+    .btn-terminate-session {
+        padding: 4px 8px;
+        font-size: 0.68rem;
+    }
+
+    .session-card-body {
+        font-size: 0.72rem;
+        gap: 3px;
+    }
+
+    /* 7. Filter Carousel & Search */
+    .hajera-filter-carousel {
+        margin-bottom: 10px;
+        padding: 2px 0;
+    }
+
+    .hajera-chips-track {
+        gap: 6px;
+    }
+
+    .hajera-chip {
+        padding: 6px 10px;
+        font-size: 0.74rem;
+        border-radius: 16px;
+    }
+
+    .hajera-search-bar {
+        margin-bottom: 12px;
+        gap: 8px;
+    }
+
+    .hajera-search-input {
+        padding: 9px 32px 9px 34px;
+        font-size: 16px; /* Prevents auto zoom */
+        border-radius: 10px;
+    }
+
+    .hajera-search-status {
+        font-size: 0.7rem;
+        width: 100%;
+        text-align: right;
+    }
+
+    /* 8. Video Cards & Timeline */
+    .hajera-desktop-table,
+    .admin-desktop-videos-table {
+        display: none !important;
+    }
+
+    .hajera-android-cards-list,
+    .admin-android-videos-list {
+        display: flex;
+        gap: 8px;
+    }
+
+    .hajera-android-card,
+    .admin-video-android-card {
         padding: 8px;
         border-radius: 12px;
         gap: 10px;
+        background: rgba(255, 255, 255, 0.025);
+        border: 1px solid rgba(255, 255, 255, 0.06);
     }
 
-    .hajera-card-thumb-box {
+    .hajera-android-card:active,
+    .admin-video-android-card:active {
+        transform: scale(0.975);
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .hajera-card-thumb-box,
+    .admin-video-thumb-wrap {
         width: 92px;
         min-width: 92px;
         border-radius: 8px;
     }
 
-    .hajera-card-title {
-        font-size: 0.82rem;
-    }
-
-    .admin-video-android-card {
-        padding: 8px;
-        border-radius: 12px;
-        gap: 10px;
-    }
-
-    .admin-video-thumb-wrap {
-        width: 88px;
-        min-width: 88px;
-    }
-
+    .hajera-card-title,
     .admin-video-title {
         font-size: 0.82rem;
+        line-height: 1.28;
+    }
+
+    .hajera-card-rel-time,
+    .admin-video-time-tag {
+        font-size: 0.64rem;
+    }
+
+    .hajera-card-time-info {
+        font-size: 0.66rem;
+    }
+
+    .activity-badge {
+        font-size: 0.64rem;
+        padding: 1px 6px;
+    }
+
+    .admin-video-tag {
+        font-size: 0.62rem;
+        padding: 1px 5px;
+    }
+
+    .admin-video-meta-tags .admin-user-cell span {
+        font-size: 0.72rem;
+    }
+
+    .hajera-timeline-feed {
+        padding: 12px 10px;
+        border-radius: 12px;
+        margin-bottom: 12px;
+    }
+
+    .timeline-feed-header h4 {
+        font-size: 0.86rem;
+    }
+
+    .timeline-feed-sub {
+        font-size: 0.68rem;
+    }
+
+    .timeline-list {
+        max-height: 380px;
+        gap: 6px;
+    }
+
+    .timeline-entry {
+        padding: 8px 10px;
+        border-radius: 8px;
+        gap: 8px;
+    }
+
+    .timeline-icon-wrap {
+        font-size: 0.95rem;
+    }
+
+    .timeline-action {
+        font-size: 0.74rem;
+    }
+
+    .timeline-time {
+        font-size: 0.64rem;
+    }
+
+    .timeline-video-link {
+        font-size: 0.74rem;
+    }
+
+    .timeline-details {
+        font-size: 0.68rem;
+    }
+
+    .timeline-device {
+        font-size: 0.6rem;
+    }
+
+    /* 9. Jobs Grid on Mobile */
+    .admin-jobs-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .admin-job-row {
+        padding: 8px 10px;
+        border-radius: 10px;
+        gap: 4px;
+    }
+
+    .admin-job-title-box strong {
+        font-size: 0.78rem;
+    }
+
+    .job-status-pill {
+        font-size: 0.6rem;
+        padding: 1px 5px;
+    }
+
+    .admin-job-err-msg {
+        font-size: 0.7rem;
     }
 
     .thumbnail-manager {
