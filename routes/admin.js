@@ -113,6 +113,14 @@ function collectAdminStats() {
         sessionCount,
         importJobs,
         hajeraStats,
+        hajeraSessionCount: db.countUserSessions('hajera'),
+        hajeraBlocked: db.isUserBlocked('hajera'),
+        hajeraBlockReason: (() => {
+            try {
+                const row = db.prepare('SELECT reason FROM blocked_users WHERE username = ?').get('hajera');
+                return row ? row.reason : null;
+            } catch { return null; }
+        })(),
         videoFiles,
         thumbnailFiles,
         orphanVideos,
@@ -127,7 +135,8 @@ router.get('/admin', isMuaj, (req, res) => {
     res.render('admin', {
         user: req.session.user,
         stats: collectAdminStats(),
-        cleanupResult: null
+        cleanupResult: null,
+        accessMessage: null
     });
 });
 
@@ -148,7 +157,42 @@ router.post('/admin/cleanup', isMuaj, async (req, res) => {
     res.render('admin', {
         user: req.session.user,
         stats: collectAdminStats(),
-        cleanupResult: { deleted, bytesFreed }
+        cleanupResult: { deleted, bytesFreed },
+        accessMessage: null
+    });
+});
+
+// Force logout all Hajera sessions
+router.post('/admin/hajera/logout-sessions', isMuaj, (req, res) => {
+    const destroyed = db.destroyUserSessions('hajera');
+    res.render('admin', {
+        user: req.session.user,
+        stats: collectAdminStats(),
+        cleanupResult: null,
+        accessMessage: { type: 'success', text: `Hajera-র ${destroyed}টা session logout করা হয়েছে।` }
+    });
+});
+
+// Block Hajera's access
+router.post('/admin/hajera/block', isMuaj, (req, res) => {
+    const reason = (req.body.reason || '').trim() || 'Admin দ্বারা block করা হয়েছে';
+    db.blockUser('hajera', reason);
+    res.render('admin', {
+        user: req.session.user,
+        stats: collectAdminStats(),
+        cleanupResult: null,
+        accessMessage: { type: 'warning', text: `Hajera-কে block করা হয়েছে। কারণ: ${reason}` }
+    });
+});
+
+// Unblock Hajera's access
+router.post('/admin/hajera/unblock', isMuaj, (req, res) => {
+    db.unblockUser('hajera');
+    res.render('admin', {
+        user: req.session.user,
+        stats: collectAdminStats(),
+        cleanupResult: null,
+        accessMessage: { type: 'success', text: 'Hajera-কে unblock করা হয়েছে। এখন login করতে পারবে।' }
     });
 });
 

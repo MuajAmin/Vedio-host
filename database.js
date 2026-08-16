@@ -73,6 +73,12 @@ db.exec(`
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS blocked_users (
+        username TEXT PRIMARY KEY,
+        reason TEXT,
+        blocked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_at ON videos(uploaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
@@ -144,9 +150,79 @@ function deleteUserAvatar(username) {
     db.prepare('DELETE FROM user_profiles WHERE username = ?').run(username);
 }
 
+function isUserBlocked(username) {
+    if (!username) return false;
+    try {
+        const row = db.prepare('SELECT username FROM blocked_users WHERE username = ?').get(username);
+        return !!row;
+    } catch {
+        return false;
+    }
+}
+
+function blockUser(username, reason = 'Blocked by admin') {
+    if (!username) return;
+    try {
+        db.prepare(`
+            INSERT INTO blocked_users (username, reason, blocked_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(username) DO UPDATE SET reason = excluded.reason, blocked_at = CURRENT_TIMESTAMP
+        `).run(username, reason);
+        destroyUserSessions(username);
+    } catch (err) {
+        console.error('[db] Error blocking user:', err.message);
+    }
+}
+
+function unblockUser(username) {
+    if (!username) return;
+    try {
+        db.prepare('DELETE FROM blocked_users WHERE username = ?').run(username);
+    } catch (err) {
+        console.error('[db] Error unblocking user:', err.message);
+    }
+}
+
+function getBlockedUsers() {
+    try {
+        return db.prepare('SELECT username, reason, blocked_at FROM blocked_users').all();
+    } catch {
+        return [];
+    }
+}
+
+function destroyUserSessions(username) {
+    if (!username) return 0;
+    try {
+        const pattern = `%"user":"${username}"%`;
+        const result = db.prepare('DELETE FROM sessions WHERE sess LIKE ?').run(pattern);
+        return result.changes || 0;
+    } catch (err) {
+        console.error('[db] Error destroying user sessions:', err.message);
+        return 0;
+    }
+}
+
+function countUserSessions(username) {
+    if (!username) return 0;
+    try {
+        const pattern = `%"user":"${username}"%`;
+        const row = db.prepare('SELECT COUNT(*) AS count FROM sessions WHERE sess LIKE ? AND expires_at > ?').get(pattern, Date.now());
+        return row ? row.count : 0;
+    } catch {
+        return 0;
+    }
+}
+
 db.getUserAvatar = getUserAvatar;
 db.getAllUserAvatars = getAllUserAvatars;
 db.setUserAvatar = setUserAvatar;
 db.deleteUserAvatar = deleteUserAvatar;
+db.isUserBlocked = isUserBlocked;
+db.blockUser = blockUser;
+db.unblockUser = unblockUser;
+db.getBlockedUsers = getBlockedUsers;
+db.destroyUserSessions = destroyUserSessions;
+db.countUserSessions = countUserSessions;
 
 module.exports = db;
