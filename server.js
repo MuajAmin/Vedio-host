@@ -52,6 +52,8 @@ app.use(compression({
     filter: (req, res) => {
         // SSE progress events are tiny streaming writes; gzip can buffer them until the job ends.
         if (req.path.startsWith('/import-progress/')) return false;
+        // Watch Together SSE stream — don't buffer
+        if (req.path.startsWith('/watch-together/stream/')) return false;
         // Don't compress video streams — they're already binary and chunked
         if (req.path.startsWith('/stream/')) return false;
         return compression.filter(req, res);
@@ -146,6 +148,10 @@ app.use((req, res, next) => {
     if (req.path === '/profile/avatar' && req.method === 'POST') {
         return next();
     }
+    // Watch Together chat/sync — CSRF handled via session auth
+    if (req.path.startsWith('/watch-together/') && (req.method === 'POST' || req.method === 'GET')) {
+        return next();
+    }
     return requireCsrf(req, res, next);
 });
 
@@ -156,6 +162,7 @@ const commentRoutes = require('./routes/comments');
 const importRoutes = require('./routes/import');
 const adminRoutes = require('./routes/admin');
 const profileRoutes = require('./routes/profile');
+const watchTogetherRoutes = require('./routes/watchTogether');
 
 app.use('/', authRoutes);
 app.use('/', videoRoutes);
@@ -163,6 +170,7 @@ app.use('/', commentRoutes);
 app.use('/', importRoutes);
 app.use('/', adminRoutes);
 app.use('/', profileRoutes);
+app.use('/', watchTogetherRoutes);
 
 
 

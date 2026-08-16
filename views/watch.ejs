@@ -244,7 +244,34 @@ const commentsHtml = comments.length === 0
         <div class="watch-layout-grid">
             <!-- Left / Main Column: Player, Video Info, Admin Panel, Comments -->
             <div class="watch-main-col">
+                <!-- Watch Together Invite Banner (shows when other user invites) -->
+                <div class="wt-invite-banner" id="wtInviteBanner">
+                    <div class="wt-invite-content">
+                        <div class="wt-invite-avatar">🍿</div>
+                        <div class="wt-invite-text">
+                            <h4>Watch Together Invitation!</h4>
+                            <p>Muaj has started a synchronized Watch Together session on <strong class="wt-invite-video-title">${h(video.title)}</strong></p>
+                        </div>
+                    </div>
+                    <div class="wt-invite-actions">
+                        <button type="button" class="btn btn-primary btn-sm wt-btn-join" id="wtJoinBtn">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            <span>Join Stream</span>
+                        </button>
+                        <button type="button" class="btn btn-ghost btn-sm wt-btn-dismiss" id="wtDismissBtn">Dismiss</button>
+                    </div>
+                </div>
+
                 <div class="vp-cinema vp-muted" id="playerContainer">
+                    <!-- Watch Together Sync Overlay (pulsing indicator when seeking/syncing) -->
+                    <div class="wt-sync-overlay" id="wtSyncOverlay">
+                        <div class="wt-sync-badge">
+                            <span class="wt-sync-pulse-dot"></span>
+                            <span>Synced with Host</span>
+                        </div>
+                    </div>
 
                     <!-- Center Play/Pause & Video Navigation Overlay (YouTube Mobile Style) -->
                     <div class="vp-center-overlay" id="vpCenterOverlay">
@@ -432,6 +459,23 @@ const commentsHtml = comments.length === 0
                     </div>
                 </div>
 
+                <!-- Watch Together Real-time Live Status Bar -->
+                <div class="wt-status-bar" id="wtStatusBar">
+                    <div class="wt-status-left">
+                        <span class="wt-status-live-dot"></span>
+                        <span class="wt-status-text" id="wtStatusText">Watch Together Active</span>
+                    </div>
+                    <div class="wt-status-right">
+                        <button type="button" class="wt-status-chat-btn wt-chat-toggle-btn" id="wtChatToggle" title="Toggle Live Chat">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <span>Live Chat</span>
+                            <span class="wt-unread-badge" id="wtUnreadBadge" style="display:none;">0</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="video-info-section">
                     <div class="video-title-wrap" id="videoTitleWrap" data-rename-url="/rename/${videoId}" data-csrf="${h(csrfToken)}">
                         <h1 class="video-title" id="videoTitleText">${h(video.title)}</h1>
@@ -472,6 +516,34 @@ const commentsHtml = comments.length === 0
                         </div>
 
                         <div class="video-action-buttons">
+                            <!-- Watch Together Control Group -->
+                            <div class="wt-action-group" id="wtPanel">
+                                ${isAdmin ? `
+                                <button type="button" class="btn btn-wt-start btn-sm" id="wtStartBtn" title="Start real-time Watch Together session with Hajera">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                        <circle cx="9" cy="7" r="4"/>
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                                    </svg>
+                                    <span>Watch Together</span>
+                                </button>
+                                <button type="button" class="btn btn-wt-stop btn-sm" id="wtStopBtn" style="display:none;" title="End Watch Together session">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                        <rect x="6" y="6" width="12" height="12" rx="2"/>
+                                    </svg>
+                                    <span>End Session</span>
+                                </button>
+                                ` : `
+                                <button type="button" class="btn btn-wt-chat btn-sm wt-chat-toggle-btn" id="wtChatToggleGuest" title="Open Live Chat">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                    </svg>
+                                    <span>Live Chat</span>
+                                </button>
+                                `}
+                            </div>
+
                             <button type="button" class="btn btn-ghost btn-sm" id="btnDownload" title="Download Video">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -724,4 +796,54 @@ const commentsHtml = comments.length === 0
         </div>
     </div>
 </div>
+
+<!-- Watch Together Slide-in Live Chat Drawer -->
+<aside class="wt-chat-drawer" id="wtChatPanel" aria-label="Watch Together Live Chat">
+    <div class="wt-chat-header">
+        <div class="wt-chat-title-group">
+            <div class="wt-chat-avatar-duo">
+                <span class="wt-mini-av av-muaj" title="Muaj">M</span>
+                <span class="wt-mini-av av-hajera" title="Hajera">H</span>
+            </div>
+            <div>
+                <h3 class="wt-chat-heading">Live Cinema Chat</h3>
+                <span class="wt-chat-sub">Muaj &amp; Hajera • Real-time Sync</span>
+            </div>
+        </div>
+        <button type="button" class="wt-chat-close-btn" id="wtChatClose" title="Close chat">&times;</button>
+    </div>
+
+    <div class="wt-chat-messages" id="wtChatMessages">
+        <div class="wt-chat-welcome">
+            <div class="wt-welcome-icon">🍿</div>
+            <h4>Watch Together Chat</h4>
+            <p>Messages and video timeline are synchronized between both of you in real-time.</p>
+        </div>
+    </div>
+
+    <!-- Quick Emojis Bar -->
+    <div class="wt-emoji-bar" id="wtEmojiBar">
+        <button type="button" class="wt-emoji-btn" title="Heart">💖</button>
+        <button type="button" class="wt-emoji-btn" title="Laugh">😂</button>
+        <button type="button" class="wt-emoji-btn" title="Love">😍</button>
+        <button type="button" class="wt-emoji-btn" title="Popcorn">🍿</button>
+        <button type="button" class="wt-emoji-btn" title="Shock">😮</button>
+        <button type="button" class="wt-emoji-btn" title="Fire">🔥</button>
+        <button type="button" class="wt-emoji-btn" title="Clap">👏</button>
+    </div>
+
+    <div class="wt-chat-footer">
+        <div class="wt-input-wrap">
+            <input type="text" id="wtChatInput" class="wt-chat-input" placeholder="Type a message..." maxlength="500" autocomplete="off">
+            <button type="button" id="wtChatSendBtn" class="wt-chat-send-btn" title="Send message">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
+                    <line x1="22" y1="2" x2="11" y2="13"/>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+</aside>
+
+<script src="/js/watchTogether.js?v=1.1"></script>
 ` }) %>
