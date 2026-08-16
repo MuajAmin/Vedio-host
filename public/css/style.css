@@ -5251,10 +5251,10 @@ kbd {
     animation: livePulse 1.2s infinite;
 }
 
-/* 4-Grid Resource Gauges */
+/* 5-Grid Resource Gauges */
 .vps-metrics-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 12px;
 }
 
@@ -5303,6 +5303,7 @@ kbd {
 .badge-cpu { background: rgba(56, 189, 248, 0.18); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
 .badge-ram { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
 .badge-disk { background: rgba(168, 85, 247, 0.18); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); }
+.badge-network { background: rgba(6, 182, 212, 0.18); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.35); }
 .badge-node { background: rgba(52, 211, 153, 0.18); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.35); }
 
 .metric-name {
@@ -5339,6 +5340,7 @@ kbd {
 .metric-cpu .metric-pct { color: #7dd3fc; }
 .metric-ram .metric-pct { color: #fde047; }
 .metric-disk .metric-pct { color: #d8b4fe; }
+.metric-network .metric-pct { color: #67e8f9; }
 
 .metric-badge-pill {
     font-size: 0.68rem;
@@ -5379,6 +5381,11 @@ kbd {
 .fill-disk {
     background: linear-gradient(90deg, #9333ea, #c084fc);
     box-shadow: 0 0 10px rgba(168, 85, 247, 0.6);
+}
+
+.fill-network {
+    background: linear-gradient(90deg, #0891b2, #22d3ee);
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
 }
 
 .vps-metric-box.status-warn .metric-bar-fill {
@@ -7569,37 +7576,70 @@ kbd {
    VIBRANT & MINIMAL ANDROID BOTTOM NAVIGATION
    Material 3 Pro, Radiant Color Accents & Fluid Touch
    ======================================== */
+/* ============================================================
+   ANDROID MATERIAL YOU — BOTTOM NAVIGATION BAR
+   Premium redesign with floating pill indicator + ripple
+   ============================================================ */
+
 .mobile-bottom-bar {
     display: none;
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    height: calc(58px + env(safe-area-inset-bottom, 0px));
+    /* Taller bar for comfortable Android touch targets */
+    height: calc(68px + env(safe-area-inset-bottom, 0px));
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: rgba(9, 9, 15, 0.95);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(8, 8, 14, 0.97);
+    backdrop-filter: blur(32px) saturate(200%) brightness(0.85);
+    -webkit-backdrop-filter: blur(32px) saturate(200%) brightness(0.85);
+    /* Fine hairline border with noise-like depth */
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
     z-index: 1000;
-    align-items: center;
+    align-items: stretch;
     justify-content: space-around;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.45);
+    /* Layered shadow for elevation */
+    box-shadow:
+        0 -1px 0 rgba(255, 255, 255, 0.05),
+        0 -8px 32px rgba(0, 0, 0, 0.55),
+        0 -24px 60px rgba(0, 0, 0, 0.2);
     user-select: none;
     -webkit-user-select: none;
+    /* Subtle surface tint for Material You depth */
+    isolation: isolate;
 }
 
-/* Subtle colorful ambient top highlight sheen */
+/* Top ambient glow sheen — narrower and more refined */
 .mobile-bottom-bar::before {
     content: '';
     position: absolute;
     top: 0;
-    left: 4%;
-    right: 4%;
-    height: 1.5px;
-    background: linear-gradient(90deg, transparent 0%, rgba(245, 175, 25, 0.45) 25%, rgba(236, 72, 153, 0.45) 50%, rgba(56, 189, 248, 0.45) 75%, transparent 100%);
+    left: 12%;
+    right: 12%;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(245, 175, 25, 0.5) 20%,
+        rgba(236, 72, 153, 0.5) 50%,
+        rgba(56, 189, 248, 0.5) 80%,
+        transparent 100%
+    );
     pointer-events: none;
-    opacity: 0.85;
+    opacity: 0.7;
+    border-radius: 0 0 50% 50%;
+    filter: blur(0.5px);
+}
+
+/* Surface noise texture for Material depth */
+.mobile-bottom-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    opacity: 0.018;
+    pointer-events: none;
+    mix-blend-mode: overlay;
 }
 
 @media (max-width: 768px) {
@@ -7608,110 +7648,203 @@ kbd {
     }
 }
 
-/* Nav Item Base */
+/* ---- Nav Item Base — Android touch target sizing ---- */
 .bottom-nav-item {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     flex: 1;
     height: 100%;
-    gap: 3px;
-    padding: 4px 0;
-    color: var(--text-muted, #858099);
+    gap: 4px;
+    padding: 8px 4px 6px;
+    color: rgba(160, 155, 185, 0.75);
     text-decoration: none;
     background: transparent;
     border: none;
     cursor: pointer;
-    transition: color 0.2s ease, transform 0.15s ease;
+    /* Spring physics — feels native Android */
+    transition:
+        color 0.25s cubic-bezier(0.2, 0, 0, 1),
+        transform 0.18s cubic-bezier(0.2, 0, 0, 1);
     -webkit-tap-highlight-color: transparent;
     outline: none;
+    /* Overflow for ripple */
+    overflow: hidden;
+}
+
+/* Android ripple effect on tap */
+.bottom-nav-item::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.12) 0%, transparent 70%);
+    opacity: 0;
+    transform: scale(0);
+    border-radius: inherit;
+    transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease;
+    pointer-events: none;
+}
+
+.bottom-nav-item:active::before {
+    opacity: 1;
+    transform: scale(2.5);
+    transition: transform 0s, opacity 0s;
+}
+
+.bottom-nav-item:not(:active)::before {
+    opacity: 0;
+    transform: scale(0);
+    transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease;
+}
+
+/* Active spring: icon bounces up slightly */
+.bottom-nav-item.active {
+    color: var(--accent-gold-bright, #f5c842);
 }
 
 .bottom-nav-item:active {
-    transform: scale(0.92);
+    transform: scale(0.9);
 }
 
-/* Icon Container with subtle active pill */
+/* ---- Icon Pill Container — Material You floating pill ---- */
 .bottom-nav-icon-wrap {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 28px;
-    border-radius: 14px;
-    transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+    width: 52px;
+    height: 32px;
+    border-radius: 16px;
+    overflow: hidden;
+    transition:
+        background 0.3s cubic-bezier(0.2, 0, 0, 1),
+        width 0.35s cubic-bezier(0.2, 0, 0, 1),
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Glowing surface behind active icon */
+.bottom-nav-icon-wrap::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: transparent;
+    transition: background 0.3s cubic-bezier(0.2, 0, 0, 1);
+    z-index: 0;
 }
 
 .bottom-nav-icon-wrap svg {
-    transition: transform 0.2s ease;
+    position: relative;
+    z-index: 1;
+    transition:
+        transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+        stroke-width 0.2s ease;
 }
 
-/* Nav Micro-Label */
-.bottom-nav-label {
-    font-size: 0.65rem;
-    font-weight: 500;
-    line-height: 1.1;
-    letter-spacing: 0.01em;
-    color: inherit;
-    transition: color 0.2s ease, font-weight 0.2s ease;
-}
-
-/* Active States for Tabs */
-.bottom-nav-item.active {
-    color: var(--accent-gold-bright, #f5cf7b);
-}
-
+/* Active icon: scale up with spring bounce */
 .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: var(--accent-gold-glow, rgba(229, 184, 90, 0.14));
-    color: var(--accent-gold-bright, #f5cf7b);
+    background: var(--accent-gold-glow, rgba(245, 200, 66, 0.16));
+    /* Slightly widen pill on active — Material You pattern */
+    width: 58px;
 }
 
+.bottom-nav-item.active .bottom-nav-icon-wrap svg {
+    transform: translateY(-1px) scale(1.1);
+    stroke-width: 2.5;
+}
+
+/* ---- Nav Micro-Label ---- */
+.bottom-nav-label {
+    font-size: 0.62rem;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0.025em;
+    color: inherit;
+    transition:
+        color 0.25s cubic-bezier(0.2, 0, 0, 1),
+        font-weight 0.2s ease,
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Active label: slightly bolder + nudged up */
 .bottom-nav-item.active .bottom-nav-label {
     font-weight: 700;
-    color: var(--accent-gold-bright, #f5cf7b);
+    letter-spacing: 0.03em;
+    color: var(--accent-gold-bright, #f5c842);
+    transform: translateY(-0.5px);
 }
 
-/* Specific Tab Color Accents */
+/* ---- Message / Chat Tab Active ---- */
 .bottom-nav-item.nav-msg-btn.active {
     color: #38bdf8;
 }
 
 .bottom-nav-item.nav-msg-btn.active .bottom-nav-icon-wrap {
-    background: rgba(56, 189, 248, 0.14);
-    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.15);
+    width: 58px;
 }
 
 .bottom-nav-item.nav-msg-btn.active .bottom-nav-label {
     color: #38bdf8;
 }
 
-/* ---- COLORFUL UPLOAD PILL BUTTON ---- */
+/* ---- UPLOAD FAB — Floating Action Button style ---- */
+/* Slightly elevated, always visible as the primary action */
+.bottom-nav-upload {
+    flex: 0 0 auto;
+    width: 68px;
+    position: relative;
+}
+
 .bottom-nav-upload .upload-btn-pill {
-    width: 42px;
-    height: 26px;
-    border-radius: 13px;
-    background: linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #e11d48 100%);
+    /* FAB: circular / squircle shape, more prominent */
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    background: linear-gradient(145deg, #fbbf24 0%, #f59e0b 40%, #ea580c 75%, #e11d48 100%);
     color: #ffffff !important;
-    box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+    box-shadow:
+        0 4px 16px rgba(245, 158, 11, 0.45),
+        0 1px 4px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transition:
+        transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.25s ease;
+    /* Float above the nav bar slightly */
+    margin-top: -10px;
 }
 
 .bottom-nav-upload .upload-btn-pill svg {
     stroke: #ffffff !important;
-    stroke-width: 2.8;
+    stroke-width: 2.6;
 }
 
-.bottom-nav-upload:hover .upload-btn-pill,
-.bottom-nav-upload.active .upload-btn-pill {
-    transform: scale(1.08);
-    box-shadow: 0 3px 14px rgba(245, 158, 11, 0.6), 0 0 0 2px rgba(255, 255, 255, 0.4);
+.bottom-nav-upload:active .upload-btn-pill {
+    transform: scale(0.9);
+    box-shadow:
+        0 2px 8px rgba(245, 158, 11, 0.35),
+        0 1px 2px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.bottom-nav-upload:not(:active) .upload-btn-pill {
+    transform: scale(1);
 }
 
 .bottom-nav-upload .bottom-nav-label {
+    font-size: 0.6rem;
     font-weight: 600;
-    color: #fca5a5;
+    color: rgba(251, 191, 36, 0.7);
+    margin-top: 2px;
+}
+
+.bottom-nav-upload.active .upload-btn-pill {
+    box-shadow:
+        0 6px 22px rgba(245, 158, 11, 0.6),
+        0 2px 6px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .bottom-nav-upload.active .bottom-nav-label {
@@ -7719,7 +7852,7 @@ kbd {
     font-weight: 700;
 }
 
-/* Form Wrapper for Logout */
+/* ---- Form Wrapper for Logout ---- */
 .bottom-nav-form {
     margin: 0;
     padding: 0;
@@ -7728,77 +7861,125 @@ kbd {
     height: 100%;
 }
 
-/* Chat Badge on Bottom Nav */
+/* ---- Chat Unread Badge ---- */
 .bottom-nav-badge {
     position: absolute;
-    top: -2px;
-    right: 4px;
-    min-width: 16px;
-    height: 16px;
+    top: 0px;
+    right: 3px;
+    min-width: 17px;
+    height: 17px;
     padding: 0 4px;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border-radius: 9px;
+    background: linear-gradient(135deg, #f87171, #ef4444);
     color: #ffffff;
     font-size: 9px;
     font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 0 0 2px var(--bg-deep, #060609), 0 2px 6px rgba(239, 68, 68, 0.5);
-    z-index: 2;
-    animation: badge-pulse-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    /* Crisp ring to separate from icon */
+    box-shadow:
+        0 0 0 2.5px var(--bg-deep, #08080e),
+        0 2px 8px rgba(239, 68, 68, 0.55);
+    z-index: 3;
+    animation: badge-spring-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    letter-spacing: -0.01em;
 }
 
-@keyframes badge-pulse-in {
-    0% { transform: scale(0); opacity: 0; }
-    70% { transform: scale(1.2); }
-    100% { transform: scale(1); opacity: 1; }
+@keyframes badge-spring-in {
+    0% { transform: scale(0) rotate(-15deg); opacity: 0; }
+    60% { transform: scale(1.25) rotate(5deg); }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
-/* Theme Integration: Hajera Mode */
+/* ---- Active sliding indicator line (Material style) ---- */
+/* A subtle indicator dot below the active icon */
+.bottom-nav-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%) scaleX(1);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.6;
+    animation: nav-dot-appear 0.3s cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.bottom-nav-upload::after {
+    display: none; /* no dot for FAB */
+}
+
+@keyframes nav-dot-appear {
+    0% { transform: translateX(-50%) scale(0); opacity: 0; }
+    100% { transform: translateX(-50%) scale(1); opacity: 0.6; }
+}
+
+/* ============================================================
+   THEME INTEGRATION — bottom bar tint per theme
+   ============================================================ */
+
+/* Theme: Hajera Mode (Rose / Pink) */
 .hajera-mode .mobile-bottom-bar {
-    background: rgba(16, 8, 16, 0.96);
-    border-top-color: rgba(244, 63, 94, 0.2);
+    background: rgba(14, 6, 12, 0.97);
+    border-top-color: rgba(244, 63, 94, 0.12);
 }
 
 .hajera-mode .mobile-bottom-bar::before {
-    background: linear-gradient(90deg, transparent 0%, #fda4af 30%, #f43f5e 50%, #e11d48 70%, transparent 100%);
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(253, 164, 175, 0.55) 25%,
+        rgba(244, 63, 94, 0.55) 50%,
+        rgba(225, 29, 72, 0.55) 75%,
+        transparent 100%
+    );
 }
 
 .hajera-mode .bottom-nav-item.active {
-    color: #ff6b8b;
+    color: #fb7185;
 }
 
 .hajera-mode .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(244, 63, 94, 0.16);
-    color: #ff6b8b;
+    background: rgba(244, 63, 94, 0.18);
 }
 
 .hajera-mode .bottom-nav-item.active .bottom-nav-label {
-    color: #ff6b8b;
+    color: #fb7185;
 }
 
 .hajera-mode .bottom-nav-upload .upload-btn-pill {
-    background: linear-gradient(135deg, #fda4af 0%, #f43f5e 50%, #be123c 100%);
-    box-shadow: 0 2px 12px rgba(244, 63, 94, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+    background: linear-gradient(145deg, #fda4af 0%, #f43f5e 45%, #be123c 100%);
+    box-shadow:
+        0 4px 16px rgba(244, 63, 94, 0.5),
+        0 1px 4px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .hajera-mode .bottom-nav-upload .bottom-nav-label {
-    color: #fda4af;
+    color: rgba(253, 164, 175, 0.7);
 }
 
 .hajera-mode .bottom-nav-upload.active .bottom-nav-label {
-    color: #ff6b8b;
+    color: #fb7185;
 }
 
-/* Theme Integration: Cyberpunk */
+/* Theme: Cyberpunk (Cyan / Magenta) */
 html[data-theme="cyberpunk"] .mobile-bottom-bar {
-    background: rgba(6, 6, 16, 0.96);
-    border-top-color: rgba(0, 240, 255, 0.25);
+    background: rgba(4, 4, 14, 0.97);
+    border-top-color: rgba(0, 240, 255, 0.12);
 }
 
 html[data-theme="cyberpunk"] .mobile-bottom-bar::before {
-    background: linear-gradient(90deg, transparent 0%, #00f0ff 30%, #ec4899 70%, transparent 100%);
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(0, 240, 255, 0.6) 30%,
+        rgba(236, 72, 153, 0.6) 70%,
+        transparent 100%
+    );
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-item.active {
@@ -7806,8 +7987,7 @@ html[data-theme="cyberpunk"] .bottom-nav-item.active {
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(0, 240, 255, 0.16);
-    color: #00f0ff;
+    background: rgba(0, 240, 255, 0.14);
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-item.active .bottom-nav-label {
@@ -7815,27 +7995,37 @@ html[data-theme="cyberpunk"] .bottom-nav-item.active .bottom-nav-label {
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-upload .upload-btn-pill {
-    background: linear-gradient(135deg, #00f0ff 0%, #38bdf8 45%, #ec4899 100%);
-    color: #06060e !important;
-    box-shadow: 0 2px 14px rgba(0, 240, 255, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+    background: linear-gradient(145deg, #67e8f9 0%, #00f0ff 35%, #38bdf8 65%, #ec4899 100%);
+    color: #04040e !important;
+    box-shadow:
+        0 4px 18px rgba(0, 240, 255, 0.55),
+        0 1px 4px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-upload .upload-btn-pill svg {
-    stroke: #06060e !important;
+    stroke: #04040e !important;
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-upload .bottom-nav-label {
-    color: #38bdf8;
+    color: rgba(56, 189, 248, 0.7);
 }
 
-/* Theme Integration: Emerald */
+/* Theme: Emerald (Green / Teal) */
 html[data-theme="emerald"] .mobile-bottom-bar {
-    background: rgba(4, 12, 7, 0.96);
-    border-top-color: rgba(16, 185, 129, 0.25);
+    background: rgba(3, 10, 6, 0.97);
+    border-top-color: rgba(16, 185, 129, 0.12);
 }
 
 html[data-theme="emerald"] .mobile-bottom-bar::before {
-    background: linear-gradient(90deg, transparent 0%, #34d399 30%, #10b981 50%, #fbbf24 70%, transparent 100%);
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(52, 211, 153, 0.55) 25%,
+        rgba(16, 185, 129, 0.55) 50%,
+        rgba(251, 191, 36, 0.45) 75%,
+        transparent 100%
+    );
 }
 
 html[data-theme="emerald"] .bottom-nav-item.active {
@@ -7844,7 +8034,6 @@ html[data-theme="emerald"] .bottom-nav-item.active {
 
 html[data-theme="emerald"] .bottom-nav-item.active .bottom-nav-icon-wrap {
     background: rgba(16, 185, 129, 0.16);
-    color: #34d399;
 }
 
 html[data-theme="emerald"] .bottom-nav-item.active .bottom-nav-label {
@@ -7852,17 +8041,20 @@ html[data-theme="emerald"] .bottom-nav-item.active .bottom-nav-label {
 }
 
 html[data-theme="emerald"] .bottom-nav-upload .upload-btn-pill {
-    background: linear-gradient(135deg, #6ee7b7 0%, #10b981 50%, #047857 100%);
-    color: #030a05 !important;
-    box-shadow: 0 2px 12px rgba(16, 185, 129, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+    background: linear-gradient(145deg, #6ee7b7 0%, #10b981 45%, #059669 80%, #047857 100%);
+    color: #021a0a !important;
+    box-shadow:
+        0 4px 16px rgba(16, 185, 129, 0.5),
+        0 1px 4px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 html[data-theme="emerald"] .bottom-nav-upload .upload-btn-pill svg {
-    stroke: #030a05 !important;
+    stroke: #021a0a !important;
 }
 
 html[data-theme="emerald"] .bottom-nav-upload .bottom-nav-label {
-    color: #6ee7b7;
+    color: rgba(110, 231, 183, 0.7);
 }
 
 /* Screen reader only */

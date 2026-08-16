@@ -80,6 +80,88 @@ function getLiveCpuPercent() {
     return Math.max(0, Math.min(100, usage));
 }
 
+function formatDataSize(bytes) {
+    const b = Number(bytes || 0);
+    if (b >= 1024 ** 4) return (b / (1024 ** 4)).toFixed(2) + ' TB';
+    if (b >= 1024 ** 3) return (b / (1024 ** 3)).toFixed(2) + ' GB';
+    if (b >= 1024 ** 2) return (b / (1024 ** 2)).toFixed(1) + ' MB';
+    if (b >= 1024) return (b / 1024).toFixed(1) + ' KB';
+    return `${b} B`;
+}
+
+function formatSpeed(bytesPerSec) {
+    const b = Number(bytesPerSec || 0);
+    if (b >= 1024 * 1024) return (b / (1024 * 1024)).toFixed(1) + ' MB/s';
+    if (b >= 1024) return (b / 1024).toFixed(1) + ' KB/s';
+    return `${Math.round(b)} B/s`;
+}
+
+function getNetworkTraffic() {
+    try {
+        if (fs.existsSync('/proc/net/dev')) {
+            const data = fs.readFileSync('/proc/net/dev', 'utf8');
+            const lines = data.trim().split('\n');
+            let totalRx = 0;
+            let totalTx = 0;
+            for (let i = 2; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                const parts = line.split(':');
+                const iface = parts[0].trim();
+                if (iface === 'lo') continue;
+                const metrics = parts[1].trim().split(/\s+/);
+                const rx = parseInt(metrics[0], 10) || 0;
+                const tx = parseInt(metrics[8], 10) || 0;
+                totalRx += rx;
+                totalTx += tx;
+            }
+            return { rxBytes: totalRx, txBytes: totalTx, totalBytes: totalRx + totalTx };
+        }
+    } catch {}
+
+    try {
+        const cp = require('child_process');
+        const out = cp.execSync('netstat -e', { timeout: 800, stdio: ['pipe', 'pipe', 'ignore'] }).toString();
+        const match = out.match(/Bytes\s+(\d+)\s+(\d+)/i);
+        if (match) {
+            const rx = parseInt(match[1], 10) || 0;
+            const tx = parseInt(match[2], 10) || 0;
+            return { rxBytes: rx, txBytes: tx, totalBytes: rx + tx };
+        }
+    } catch {}
+
+    return { rxBytes: 0, txBytes: 0, totalBytes: 0 };
+}
+
+let prevNetSample = { ...getNetworkTraffic(), time: Date.now() };
+
+function getNetworkMetrics() {
+    const current = getNetworkTraffic();
+    const now = Date.now();
+    const timeDiffSec = Math.max(0.5, (now - prevNetSample.time) / 1000);
+
+    const rxSpeedBps = Math.max(0, (current.rxBytes - prevNetSample.rxBytes) / timeDiffSec);
+    const txSpeedBps = Math.max(0, (current.txBytes - prevNetSample.txBytes) / timeDiffSec);
+
+    prevNetSample = { ...current, time: now };
+
+    const monthlyQuotaBytes = 1000 * (1024 ** 3); // 1000 GB (1 TB) Alibaba Cloud Free Tier Monthly Quota
+    const usedPercent = Number(((current.totalBytes / monthlyQuotaBytes) * 100).toFixed(2));
+
+    return {
+        rxBytes: current.rxBytes,
+        txBytes: current.txBytes,
+        totalBytes: current.totalBytes,
+        rxFormatted: formatDataSize(current.rxBytes),
+        txFormatted: formatDataSize(current.txBytes),
+        totalFormatted: formatDataSize(current.totalBytes),
+        rxSpeedFormatted: formatSpeed(rxSpeedBps),
+        txSpeedFormatted: formatSpeed(txSpeedBps),
+        monthlyQuotaFormatted: '1,000 GB (1 TB)',
+        usagePercent: Math.min(100, usedPercent)
+    };
+}
+
 function collectSystemMetrics() {
     const cpus = os.cpus() || [];
     const cpuCount = cpus.length;
@@ -110,6 +192,9 @@ function collectSystemMetrics() {
 
     // Process Memory
     const procMem = process.memoryUsage();
+
+    // Network Telemetry
+    const network = getNetworkMetrics();
 
     return {
         os: {
@@ -146,6 +231,7 @@ function collectSystemMetrics() {
             freeFormatted: (diskFreeBytes / (1024 ** 3)).toFixed(1) + ' GB',
             usedFormatted: (diskUsedBytes / (1024 ** 3)).toFixed(1) + ' GB'
         },
+        network,
         process: {
             uptimeSec: process.uptime(),
             uptimeFormatted: formatDuration(process.uptime()),

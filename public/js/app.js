@@ -3154,6 +3154,27 @@ document.addEventListener('DOMContentLoaded', () => {
                         else diskBoxEl.classList.add('status-good');
                     }
 
+                    // Network Bandwidth / Internet Traffic
+                    if (sys.network) {
+                        const netTotalEl = document.getElementById('vpsNetTotal');
+                        const netBarEl = document.getElementById('vpsNetBar');
+                        const netTxEl = document.getElementById('vpsNetTx');
+                        const netRxEl = document.getElementById('vpsNetRx');
+                        const netBoxEl = document.querySelector('.metric-network');
+
+                        if (netTotalEl) netTotalEl.textContent = sys.network.totalFormatted;
+                        if (netBarEl) netBarEl.style.width = `${Math.max(2, sys.network.usagePercent)}%`;
+                        if (netTxEl) netTxEl.textContent = sys.network.txFormatted;
+                        if (netRxEl) netRxEl.textContent = sys.network.rxFormatted;
+
+                        if (netBoxEl) {
+                            netBoxEl.classList.remove('status-good', 'status-warn', 'status-critical');
+                            if (sys.network.usagePercent > 90) netBoxEl.classList.add('status-critical');
+                            else if (sys.network.usagePercent > 75) netBoxEl.classList.add('status-warn');
+                            else netBoxEl.classList.add('status-good');
+                        }
+                    }
+
                     // Runtime
                     const srvUptimeEl = document.getElementById('vpsServerUptime');
                     const appUptimeEl = document.getElementById('vpsAppUptime');

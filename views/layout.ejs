@@ -227,8 +227,12 @@
             <% } %>
 
                 <script src="/js/app.js?v=5.7"></script>
-                <script src="/js/watchTogether.js?v=2.2"></script>
                 <script src="/js/messages.js?v=2.1"></script>
+                <script>
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.register('/sw.js').catch(function() {});
+                    }
+                </script>
 </body>
 
 </html>
