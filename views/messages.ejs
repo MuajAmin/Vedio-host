@@ -1,13 +1,17 @@
 <%
-const h = escapeHtml;
-const partnerName = partner === 'muaj' ? 'Muaj' : 'Hajera';
-const partnerRole = partner === 'muaj' ? 'Admin' : 'Viewer';
-const partnerRoleClass = partner === 'muaj' ? 'tag-admin' : 'tag-viewer';
-const presence = partnerPresence || { status: 'offline', isOnline: false, isWatching: false, isIdle: false };
+const h = typeof escapeHtml === 'function' ? escapeHtml : (str => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
+const currentPartner = typeof partner !== 'undefined' && partner ? partner : 'hajera';
+const partnerName = currentPartner === 'muaj' ? 'Muaj' : 'Hajera';
+const partnerRole = currentPartner === 'muaj' ? 'Admin' : 'Viewer';
+const partnerRoleClass = currentPartner === 'muaj' ? 'tag-admin' : 'tag-viewer';
+const presence = (typeof partnerPresence !== 'undefined' && partnerPresence) ? partnerPresence : { status: 'offline', isOnline: false, isWatching: false, isIdle: false };
 const isOnline = presence.isOnline || presence.isWatching;
 const isWatching = presence.isWatching;
 const isIdle = presence.isIdle;
 const statusClass = isWatching ? 'dot-watching' : (isOnline ? 'dot-online' : (isIdle ? 'dot-idle' : 'dot-offline'));
+const msgStats = (typeof stats !== 'undefined' && stats) ? stats : {};
+const msgList = (typeof initialMessages !== 'undefined' && Array.isArray(initialMessages)) ? initialMessages : [];
+const videoList = (typeof videos !== 'undefined' && Array.isArray(videos)) ? videos : [];
 
 let presenceText = '⚫ Offline';
 if (isWatching && presence.videoTitle) {
@@ -35,9 +39,11 @@ function formatDateHeader(isoStr) {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+const currentUser = typeof user !== 'undefined' && user ? user : 'user';
+
 let lastDate = '';
-const messagesListHtml = initialMessages.map(msg => {
-    const isOut = msg.sender === user;
+const messagesListHtml = msgList.map(msg => {
+    const isOut = msg.sender === currentUser;
     const rowClass = isOut ? 'msg-row-outgoing' : 'msg-row-incoming';
     const timeStr = formatTime(msg.createdAt);
     const dateStr = formatDateHeader(msg.createdAt);
@@ -120,7 +126,7 @@ const messagesListHtml = initialMessages.map(msg => {
     `;
 }).join('');
 
-const videoOptionsHtml = (videos || []).map(v => `
+const videoOptionsHtml = videoList.map(v => `
     <div class="msg-attach-item" data-video-id="${h(v.id)}">
         <img src="${v.thumbnail ? '/thumbnails/' + encodeURIComponent(v.thumbnail) : ''}" class="msg-attach-thumb" alt="" />
         <span class="msg-attach-title">${h(v.title)}</span>
@@ -162,9 +168,9 @@ const videoOptionsHtml = (videos || []).map(v => `
                     <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
                 </svg>
             </button>
-            <div class="user-badge ${user === 'muaj' ? 'badge-admin' : 'badge-viewer'} user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture">
-                <div class="badge-avatar">${renderAvatar(user, 'nav-avatar')}</div>
-                <span>${user === 'muaj' ? 'Muaj' : 'Hajera'}</span>
+            <div class="user-badge ${currentUser === 'muaj' ? 'badge-admin' : 'badge-viewer'} user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture">
+                <div class="badge-avatar">${typeof renderAvatar === 'function' ? renderAvatar(currentUser, 'nav-avatar') : ''}</div>
+                <span>${currentUser === 'muaj' ? 'Muaj' : 'Hajera'}</span>
             </div>
         </div>
     </nav>
@@ -175,7 +181,7 @@ const videoOptionsHtml = (videos || []).map(v => `
         <aside class="msg-fullpage-sidebar">
             <div class="msg-sidebar-profile">
                 <div class="msg-sidebar-avatar-wrap">
-                    ${renderAvatar(partner, 'msg-sidebar-avatar')}
+                    ${typeof renderAvatar === 'function' ? renderAvatar(currentPartner, 'msg-sidebar-avatar') : ''}
                     <span class="msg-status-dot msg-partner-status-dot ${statusClass}"></span>
                 </div>
                 <h3 class="msg-header-name" style="font-size: 18px; margin-bottom: 4px;">${h(partnerName)}</h3>
@@ -187,19 +193,19 @@ const videoOptionsHtml = (videos || []).map(v => `
 
             <div class="msg-sidebar-stats-grid">
                 <div class="msg-stat-card">
-                    <div class="msg-stat-value">${h(stats.totalMessages || 0)}</div>
+                    <div class="msg-stat-value">${h(msgStats.totalMessages || 0)}</div>
                     <div class="msg-stat-label">Total Messages</div>
                 </div>
                 <div class="msg-stat-card">
-                    <div class="msg-stat-value">${h(stats.sharedVideos || 0)}</div>
+                    <div class="msg-stat-value">${h(msgStats.sharedVideos || 0)}</div>
                     <div class="msg-stat-label">Shared Videos</div>
                 </div>
                 <div class="msg-stat-card">
-                    <div class="msg-stat-value">${h(stats.voiceMessages || 0)}</div>
+                    <div class="msg-stat-value">${h(msgStats.voiceMessages || 0)}</div>
                     <div class="msg-stat-label">Voice Notes</div>
                 </div>
                 <div class="msg-stat-card">
-                    <div class="msg-stat-value">${h(user === 'muaj' ? 'VIP' : 'Queen')}</div>
+                    <div class="msg-stat-value">${h(currentUser === 'muaj' ? 'VIP' : 'Queen')}</div>
                     <div class="msg-stat-label">Status</div>
                 </div>
             </div>
