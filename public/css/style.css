@@ -7573,81 +7573,81 @@ kbd {
 }
 
 /* ================================================================
-   ANDROID MATERIAL YOU 3 — PREMIUM FLOATING BOTTOM NAVIGATION
-   Floating rounded bar · Filled active icons · Elevated FAB
-   Touch ripple · Spring physics · Surface tint
+   ANDROID MATERIAL YOU 3.5 — REFINED BOTTOM NAVIGATION
+   Edge-aware floating bar · Active indicator line · Refined FAB
+   Spring transitions · Layered glass · Haptic-feel interactions
    ================================================================ */
 
 .mobile-bottom-bar {
     display: none;
     position: fixed;
-    /* Float above the bottom edge — Android 14 floating style */
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-    left: 10px;
-    right: 10px;
-    height: 72px;
-    /* Full rounded corners — a floating island */
-    border-radius: 28px;
-    background: rgba(18, 18, 26, 0.92);
-    backdrop-filter: blur(40px) saturate(220%);
-    -webkit-backdrop-filter: blur(40px) saturate(220%);
-    /* Soft border for depth against dark BG */
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    height: 68px;
+    border-radius: 24px;
+    background: rgba(16, 16, 24, 0.82);
+    backdrop-filter: blur(48px) saturate(200%);
+    -webkit-backdrop-filter: blur(48px) saturate(200%);
+    border: 0.5px solid rgba(255, 255, 255, 0.06);
     z-index: 1000;
     align-items: center;
-    justify-content: space-evenly;
-    /* Heavy elevation — floating above content */
+    justify-content: space-around;
     box-shadow:
-        0 8px 40px rgba(0, 0, 0, 0.55),
-        0 2px 12px rgba(0, 0, 0, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        0 -1px 0 rgba(255, 255, 255, 0.03) inset,
+        0 16px 56px -8px rgba(0, 0, 0, 0.65),
+        0 4px 16px rgba(0, 0, 0, 0.3);
     user-select: none;
     -webkit-user-select: none;
-    /* Entrance animation */
-    animation: bottombar-float-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    animation: bnav-entrance 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
     isolation: isolate;
+    padding: 0 4px;
 }
 
-@keyframes bottombar-float-in {
+@keyframes bnav-entrance {
     0% {
         opacity: 0;
-        transform: translateY(30px) scale(0.96);
+        transform: translateY(24px) scale(0.98);
+        filter: blur(4px);
     }
     100% {
         opacity: 1;
         transform: translateY(0) scale(1);
+        filter: blur(0);
     }
 }
 
-/* Subtle ambient glow on top edge */
+/* Top edge shimmer — prismatic reflection */
 .mobile-bottom-bar::before {
     content: '';
     position: absolute;
-    top: -1px;
-    left: 20%;
-    right: 20%;
+    top: 0;
+    left: 15%;
+    right: 15%;
     height: 1px;
     background: linear-gradient(
         90deg,
         transparent 0%,
-        rgba(245, 200, 66, 0.35) 25%,
-        rgba(244, 114, 182, 0.3) 50%,
-        rgba(56, 189, 248, 0.35) 75%,
+        rgba(255, 220, 120, 0.25) 20%,
+        rgba(255, 180, 100, 0.35) 40%,
+        rgba(255, 255, 255, 0.15) 50%,
+        rgba(180, 200, 255, 0.3) 65%,
+        rgba(255, 200, 150, 0.2) 80%,
         transparent 100%
     );
     border-radius: 1px;
     pointer-events: none;
-    opacity: 0.6;
+    opacity: 0.7;
 }
 
-/* Micro noise texture for surface depth */
+/* Surface grain texture */
 .mobile-bottom-bar::after {
     content: '';
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    opacity: 0.02;
     pointer-events: none;
     mix-blend-mode: overlay;
 }
@@ -7659,12 +7659,11 @@ kbd {
 }
 
 /* ---- ICON OUTLINE / FILLED SWITCHING ---- */
-/* Material You: outline when inactive, filled when active */
 .nav-icon-outline,
 .nav-icon-filled {
     position: absolute;
-    transition: opacity 0.25s cubic-bezier(0.2, 0, 0, 1),
-                transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: opacity 0.3s cubic-bezier(0.2, 0, 0, 1),
+                transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .nav-icon-outline {
@@ -7674,18 +7673,17 @@ kbd {
 
 .nav-icon-filled {
     opacity: 0;
-    transform: scale(0.7);
+    transform: scale(0.6) rotate(-8deg);
 }
 
-/* When active: swap icons */
 .bottom-nav-item.active .nav-icon-outline {
     opacity: 0;
-    transform: scale(0.7);
+    transform: scale(0.6) rotate(8deg);
 }
 
 .bottom-nav-item.active .nav-icon-filled {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) rotate(0deg);
 }
 
 /* ---- Nav Item Base ---- */
@@ -7697,60 +7695,84 @@ kbd {
     justify-content: center;
     flex: 1;
     height: 100%;
-    gap: 4px;
-    padding: 6px 2px;
-    color: rgba(180, 175, 200, 0.6);
+    gap: 3px;
+    padding: 0 2px;
+    color: rgba(185, 182, 200, 0.5);
     text-decoration: none;
     background: transparent;
     border: none;
     cursor: pointer;
     transition:
-        color 0.25s cubic-bezier(0.2, 0, 0, 1),
-        transform 0.15s cubic-bezier(0.2, 0, 0, 1);
+        color 0.3s cubic-bezier(0.2, 0, 0, 1),
+        transform 0.2s cubic-bezier(0.2, 0, 0, 1);
     -webkit-tap-highlight-color: transparent;
     outline: none;
-    overflow: hidden;
-    border-radius: 20px;
+    overflow: visible;
+    border-radius: 16px;
 }
 
-/* Touch ripple — radiates from center on press */
+/* Active top indicator line */
+.bottom-nav-item::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    width: 0;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--accent-gold-bright, #f5c842);
+    transform: translateX(-50%);
+    transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 0.3s ease,
+                box-shadow 0.3s ease;
+    opacity: 0;
+    box-shadow: none;
+}
+
+.bottom-nav-item.active::after {
+    width: 20px;
+    opacity: 1;
+    box-shadow: 0 2px 12px rgba(245, 200, 66, 0.35);
+}
+
+/* Touch ripple */
 .bottom-nav-item::before {
     content: '';
     position: absolute;
-    width: 100%;
-    height: 100%;
+    width: 48px;
+    height: 48px;
     background: radial-gradient(
         circle at center,
-        rgba(255, 255, 255, 0.1) 0%,
-        transparent 65%
+        rgba(255, 255, 255, 0.08) 0%,
+        transparent 70%
     );
     opacity: 0;
     transform: scale(0);
-    border-radius: inherit;
+    border-radius: 50%;
     pointer-events: none;
-    transition: transform 0.45s cubic-bezier(0.2, 0, 0, 1),
-                opacity 0.35s ease;
+    transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1),
+                opacity 0.4s ease;
 }
 
 .bottom-nav-item:active::before {
     opacity: 1;
-    transform: scale(2.5);
+    transform: scale(2.2);
     transition: transform 0s, opacity 0s;
 }
 
 .bottom-nav-item:not(:active)::before {
     opacity: 0;
     transform: scale(0);
-    transition: transform 0.55s cubic-bezier(0.2, 0, 0, 1),
-                opacity 0.4s ease;
+    transition: transform 0.6s cubic-bezier(0.2, 0, 0, 1),
+                opacity 0.45s ease;
 }
 
 /* Press scale */
 .bottom-nav-item:active {
-    transform: scale(0.92);
+    transform: scale(0.9);
 }
 
-/* Active state colors */
+/* Active state */
 .bottom-nav-item.active {
     color: var(--accent-gold-bright, #f5c842);
 }
@@ -7763,60 +7785,73 @@ kbd {
     justify-content: center;
     width: 36px;
     height: 32px;
-    border-radius: 16px;
+    border-radius: 14px;
     transition:
         background 0.35s cubic-bezier(0.2, 0, 0, 1),
-        width 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow 0.3s ease;
+        width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.35s ease,
+        transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Active pill expands wide — signature Material You effect */
+/* Active pill — expands and lifts */
 .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: var(--accent-gold-glow, rgba(245, 200, 66, 0.18));
-    width: 64px;
-    box-shadow: 0 0 16px rgba(245, 200, 66, 0.08);
+    background: var(--accent-gold-glow, rgba(245, 200, 66, 0.14));
+    width: 58px;
+    box-shadow: 0 0 20px rgba(245, 200, 66, 0.06);
+    transform: translateY(-1px);
 }
 
 .bottom-nav-icon-wrap svg {
     position: relative;
     z-index: 1;
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    width: 22px;
+    height: 22px;
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .bottom-nav-item.active .bottom-nav-icon-wrap svg.nav-icon-filled {
-    transform: scale(1.05);
+    transform: scale(1.08);
 }
 
-/* ---- Nav Micro-Label ---- */
+/* ---- Nav Label ---- */
 .bottom-nav-label {
-    font-size: 0.68rem;
+    font-size: 0.64rem;
     font-weight: 500;
     line-height: 1;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
     color: inherit;
     white-space: nowrap;
     transition:
-        color 0.25s cubic-bezier(0.2, 0, 0, 1),
-        font-weight 0.2s ease,
-        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
-        opacity 0.2s ease;
+        color 0.3s cubic-bezier(0.2, 0, 0, 1),
+        font-weight 0.25s ease,
+        transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        opacity 0.25s ease;
+    transform: translateY(0);
+    opacity: 0.85;
 }
 
 .bottom-nav-item.active .bottom-nav-label {
     font-weight: 700;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
     color: var(--accent-gold-bright, #f5c842);
+    transform: translateY(-1px);
+    opacity: 1;
 }
 
-/* ---- Chat Tab Colors ---- */
+/* ---- Chat Tab Accent ---- */
 .bottom-nav-item.nav-msg-btn.active {
     color: #38bdf8;
 }
 
+.bottom-nav-item.nav-msg-btn.active::after {
+    background: #38bdf8;
+    box-shadow: 0 2px 12px rgba(56, 189, 248, 0.35);
+}
+
 .bottom-nav-item.nav-msg-btn.active .bottom-nav-icon-wrap {
-    background: rgba(56, 189, 248, 0.16);
-    width: 64px;
-    box-shadow: 0 0 16px rgba(56, 189, 248, 0.08);
+    background: rgba(56, 189, 248, 0.12);
+    width: 58px;
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.06);
 }
 
 .bottom-nav-item.nav-msg-btn.active .bottom-nav-label {
@@ -7824,15 +7859,13 @@ kbd {
 }
 
 /* ============================================================
-   UPLOAD FAB — True Floating Action Button
-   Extends ABOVE the bar, circular, hero gradient, glow ring
+   UPLOAD FAB — Refined Floating Action Button
+   Elevated circle · Clean gradient · Ambient glow ring
    ============================================================ */
 
 .bottom-nav-upload {
-    /* Don't stretch like siblings — fixed size */
     flex: 0 0 auto;
-    width: 72px;
-    /* Override parent overflow so FAB can extend above */
+    width: 68px;
     overflow: visible;
     border-radius: 0;
     padding: 0;
@@ -7840,50 +7873,63 @@ kbd {
 }
 
 .bottom-nav-upload::before {
-    display: none; /* no ripple on FAB wrapper */
+    display: none;
 }
 
-/* The outer glow ring around the FAB */
+.bottom-nav-upload::after {
+    display: none;
+}
+
+/* FAB outer ring — now uses ::before for ambient glow */
 .bottom-nav-fab-ring {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 56px;
-    height: 56px;
+    width: 54px;
+    height: 54px;
     border-radius: 18px;
-    /* Shift FAB above the bar */
-    margin-top: -26px;
-    /* Subtle outer glow ring */
-    background: radial-gradient(
-        circle,
-        rgba(245, 158, 11, 0.12) 0%,
-        transparent 70%
-    );
+    margin-top: -22px;
+    background: transparent;
     transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* The actual FAB button surface */
+.bottom-nav-fab-ring::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 22px;
+    background: radial-gradient(
+        circle,
+        rgba(245, 158, 11, 0.15) 0%,
+        rgba(245, 158, 11, 0.05) 50%,
+        transparent 70%
+    );
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+/* FAB button surface */
 .bottom-nav-upload .upload-btn-pill {
-    width: 52px;
-    height: 52px;
+    width: 50px;
+    height: 50px;
     border-radius: 16px;
     background: linear-gradient(145deg,
-        #fbbf24 0%,
-        #f59e0b 30%,
-        #ea580c 65%,
+        #fcd34d 0%,
+        #f59e0b 35%,
+        #ea580c 70%,
         #dc2626 100%
     );
     color: #ffffff !important;
     box-shadow:
-        0 6px 24px rgba(245, 158, 11, 0.5),
-        0 2px 8px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.35),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.15);
+        0 8px 28px rgba(245, 158, 11, 0.45),
+        0 2px 8px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.1);
     transition:
         transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow 0.25s ease;
-    /* Center within ring */
+        box-shadow 0.3s ease,
+        border-radius 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -7892,7 +7938,10 @@ kbd {
 
 .bottom-nav-upload .upload-btn-pill svg {
     stroke: #ffffff !important;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+    width: 22px;
+    height: 22px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Press state */
@@ -7902,24 +7951,29 @@ kbd {
 
 .bottom-nav-upload:active .upload-btn-pill {
     box-shadow:
-        0 2px 10px rgba(245, 158, 11, 0.4),
-        0 1px 3px rgba(0, 0, 0, 0.5),
+        0 4px 16px rgba(245, 158, 11, 0.35),
+        0 1px 4px rgba(0, 0, 0, 0.4),
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    border-radius: 14px;
 }
 
-/* Active state glow */
+.bottom-nav-upload:active .upload-btn-pill svg {
+    transform: rotate(90deg);
+}
+
+/* Active glow */
 .bottom-nav-upload.active .upload-btn-pill {
     box-shadow:
-        0 8px 32px rgba(245, 158, 11, 0.65),
-        0 3px 10px rgba(0, 0, 0, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+        0 10px 36px rgba(245, 158, 11, 0.55),
+        0 3px 12px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .bottom-nav-upload .bottom-nav-label {
     font-size: 0.58rem;
     font-weight: 600;
-    color: rgba(251, 191, 36, 0.65);
-    margin-top: 1px;
+    color: rgba(251, 191, 36, 0.55);
+    margin-top: 2px;
 }
 
 .bottom-nav-upload.active .bottom-nav-label {
@@ -7927,18 +7981,18 @@ kbd {
     font-weight: 700;
 }
 
-/* Subtle floating animation for the FAB */
-@keyframes fab-gentle-float {
+/* Gentle breathing animation */
+@keyframes fab-breathe {
     0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-2px); }
+    50% { transform: translateY(-1.5px); }
 }
 
 .bottom-nav-upload .bottom-nav-fab-ring {
-    animation: fab-gentle-float 3s ease-in-out infinite;
-    animation-delay: 1s;
+    animation: fab-breathe 4s ease-in-out infinite;
+    animation-delay: 1.5s;
 }
 
-/* ---- Form Wrapper for Logout ---- */
+/* ---- Form Wrapper ---- */
 .bottom-nav-form {
     margin: 0;
     padding: 0;
@@ -7950,30 +8004,31 @@ kbd {
 /* ---- Chat Unread Badge ---- */
 .bottom-nav-badge {
     position: absolute;
-    top: -1px;
-    right: -2px;
-    min-width: 18px;
-    height: 18px;
+    top: -2px;
+    right: -3px;
+    min-width: 17px;
+    height: 17px;
     padding: 0 5px;
     border-radius: 9px;
-    background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+    background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
     color: #ffffff;
-    font-size: 9.5px;
+    font-size: 9px;
     font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
     box-shadow:
-        0 0 0 2.5px rgba(18, 18, 26, 0.95),
-        0 2px 8px rgba(239, 68, 68, 0.55);
+        0 0 0 2.5px rgba(16, 16, 24, 0.9),
+        0 2px 10px rgba(239, 68, 68, 0.5);
     z-index: 3;
-    animation: badge-spring-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    animation: badge-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
     letter-spacing: -0.02em;
 }
 
-@keyframes badge-spring-in {
-    0% { transform: scale(0) rotate(-15deg); opacity: 0; }
-    60% { transform: scale(1.25) rotate(5deg); }
+@keyframes badge-pop {
+    0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+    50% { transform: scale(1.3) rotate(5deg); }
+    80% { transform: scale(0.95) rotate(-2deg); }
     100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
@@ -7983,17 +8038,17 @@ kbd {
 
 /* ---- Hajera Mode (Rose / Romantic) ---- */
 .hajera-mode .mobile-bottom-bar {
-    background: rgba(22, 10, 18, 0.92);
-    border-color: rgba(244, 63, 94, 0.1);
+    background: rgba(22, 10, 18, 0.85);
+    border-color: rgba(244, 63, 94, 0.08);
 }
 
 .hajera-mode .mobile-bottom-bar::before {
     background: linear-gradient(
         90deg,
         transparent 0%,
-        rgba(253, 164, 175, 0.4) 30%,
-        rgba(244, 63, 94, 0.4) 50%,
-        rgba(225, 29, 72, 0.35) 70%,
+        rgba(253, 164, 175, 0.3) 25%,
+        rgba(244, 63, 94, 0.35) 50%,
+        rgba(225, 29, 72, 0.25) 75%,
         transparent 100%
     );
 }
@@ -8002,9 +8057,14 @@ kbd {
     color: #fb7185;
 }
 
+.hajera-mode .bottom-nav-item.active::after {
+    background: #fb7185;
+    box-shadow: 0 2px 12px rgba(244, 63, 94, 0.35);
+}
+
 .hajera-mode .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(244, 63, 94, 0.2);
-    box-shadow: 0 0 16px rgba(244, 63, 94, 0.08);
+    background: rgba(244, 63, 94, 0.15);
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.06);
 }
 
 .hajera-mode .bottom-nav-item.active .bottom-nav-label {
@@ -8014,17 +8074,17 @@ kbd {
 .hajera-mode .bottom-nav-upload .upload-btn-pill {
     background: linear-gradient(145deg, #fda4af 0%, #f43f5e 45%, #be123c 100%);
     box-shadow:
-        0 6px 24px rgba(244, 63, 94, 0.5),
-        0 2px 8px rgba(0, 0, 0, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        0 8px 28px rgba(244, 63, 94, 0.45),
+        0 2px 8px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
-.hajera-mode .bottom-nav-fab-ring {
-    background: radial-gradient(circle, rgba(244, 63, 94, 0.12) 0%, transparent 70%);
+.hajera-mode .bottom-nav-fab-ring::before {
+    background: radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, transparent 70%);
 }
 
 .hajera-mode .bottom-nav-upload .bottom-nav-label {
-    color: rgba(253, 164, 175, 0.65);
+    color: rgba(253, 164, 175, 0.55);
 }
 
 .hajera-mode .bottom-nav-upload.active .bottom-nav-label {
@@ -8033,16 +8093,16 @@ kbd {
 
 /* ---- Cyberpunk (Cyan / Magenta) ---- */
 html[data-theme="cyberpunk"] .mobile-bottom-bar {
-    background: rgba(6, 6, 18, 0.93);
-    border-color: rgba(0, 240, 255, 0.1);
+    background: rgba(6, 6, 18, 0.88);
+    border-color: rgba(0, 240, 255, 0.08);
 }
 
 html[data-theme="cyberpunk"] .mobile-bottom-bar::before {
     background: linear-gradient(
         90deg,
         transparent 0%,
-        rgba(0, 240, 255, 0.5) 30%,
-        rgba(236, 72, 153, 0.45) 70%,
+        rgba(0, 240, 255, 0.4) 30%,
+        rgba(236, 72, 153, 0.35) 70%,
         transparent 100%
     );
 }
@@ -8051,9 +8111,14 @@ html[data-theme="cyberpunk"] .bottom-nav-item.active {
     color: #00f0ff;
 }
 
+html[data-theme="cyberpunk"] .bottom-nav-item.active::after {
+    background: #00f0ff;
+    box-shadow: 0 2px 14px rgba(0, 240, 255, 0.4);
+}
+
 html[data-theme="cyberpunk"] .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(0, 240, 255, 0.16);
-    box-shadow: 0 0 20px rgba(0, 240, 255, 0.1);
+    background: rgba(0, 240, 255, 0.12);
+    box-shadow: 0 0 24px rgba(0, 240, 255, 0.08);
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-item.active .bottom-nav-label {
@@ -8064,36 +8129,36 @@ html[data-theme="cyberpunk"] .bottom-nav-upload .upload-btn-pill {
     background: linear-gradient(145deg, #67e8f9 0%, #00f0ff 35%, #38bdf8 65%, #ec4899 100%);
     color: #04040e !important;
     box-shadow:
-        0 6px 28px rgba(0, 240, 255, 0.55),
-        0 2px 8px rgba(0, 0, 0, 0.45),
-        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+        0 8px 32px rgba(0, 240, 255, 0.5),
+        0 2px 8px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-upload .upload-btn-pill svg {
     stroke: #04040e !important;
 }
 
-html[data-theme="cyberpunk"] .bottom-nav-fab-ring {
-    background: radial-gradient(circle, rgba(0, 240, 255, 0.1) 0%, transparent 70%);
+html[data-theme="cyberpunk"] .bottom-nav-fab-ring::before {
+    background: radial-gradient(circle, rgba(0, 240, 255, 0.12) 0%, transparent 70%);
 }
 
 html[data-theme="cyberpunk"] .bottom-nav-upload .bottom-nav-label {
-    color: rgba(56, 189, 248, 0.65);
+    color: rgba(56, 189, 248, 0.55);
 }
 
 /* ---- Emerald (Green / Nature) ---- */
 html[data-theme="emerald"] .mobile-bottom-bar {
-    background: rgba(6, 14, 10, 0.93);
-    border-color: rgba(16, 185, 129, 0.1);
+    background: rgba(6, 14, 10, 0.88);
+    border-color: rgba(16, 185, 129, 0.08);
 }
 
 html[data-theme="emerald"] .mobile-bottom-bar::before {
     background: linear-gradient(
         90deg,
         transparent 0%,
-        rgba(52, 211, 153, 0.4) 25%,
-        rgba(16, 185, 129, 0.4) 50%,
-        rgba(251, 191, 36, 0.3) 75%,
+        rgba(52, 211, 153, 0.3) 25%,
+        rgba(16, 185, 129, 0.35) 50%,
+        rgba(251, 191, 36, 0.2) 75%,
         transparent 100%
     );
 }
@@ -8102,9 +8167,14 @@ html[data-theme="emerald"] .bottom-nav-item.active {
     color: #34d399;
 }
 
+html[data-theme="emerald"] .bottom-nav-item.active::after {
+    background: #34d399;
+    box-shadow: 0 2px 12px rgba(16, 185, 129, 0.35);
+}
+
 html[data-theme="emerald"] .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(16, 185, 129, 0.18);
-    box-shadow: 0 0 16px rgba(16, 185, 129, 0.08);
+    background: rgba(16, 185, 129, 0.14);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.06);
 }
 
 html[data-theme="emerald"] .bottom-nav-item.active .bottom-nav-label {
@@ -8115,22 +8185,23 @@ html[data-theme="emerald"] .bottom-nav-upload .upload-btn-pill {
     background: linear-gradient(145deg, #6ee7b7 0%, #10b981 45%, #059669 80%, #047857 100%);
     color: #021a0a !important;
     box-shadow:
-        0 6px 24px rgba(16, 185, 129, 0.5),
-        0 2px 8px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+        0 8px 28px rgba(16, 185, 129, 0.45),
+        0 2px 8px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 html[data-theme="emerald"] .bottom-nav-upload .upload-btn-pill svg {
     stroke: #021a0a !important;
 }
 
-html[data-theme="emerald"] .bottom-nav-fab-ring {
-    background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+html[data-theme="emerald"] .bottom-nav-fab-ring::before {
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.12) 0%, transparent 70%);
 }
 
 html[data-theme="emerald"] .bottom-nav-upload .bottom-nav-label {
-    color: rgba(110, 231, 183, 0.65);
+    color: rgba(110, 231, 183, 0.55);
 }
+
 
 /* Screen reader only */
 .sr-only {

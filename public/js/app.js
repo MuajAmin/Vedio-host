@@ -2660,7 +2660,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Real-Time Presence & Heartbeat Engine
     // ========================================
     function initPresenceTracker() {
-        if (window.location.pathname === '/login') return;
+        const currentUser = document.body.getAttribute('data-user') || '';
+        if (!currentUser || window.location.pathname === '/' || window.location.pathname === '/login') return;
 
         let isIdle = false;
         let idleTimer = null;
@@ -2697,14 +2698,18 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(res => {
                 if (res.status === 401 || (res.redirected && (res.url.endsWith('/') || res.url.includes('/login')))) {
-                    window.location.href = '/';
+                    if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+                        window.location.href = '/';
+                    }
                     return null;
                 }
                 return res.json();
             })
             .then(data => {
                 if (data && data.loggedOut) {
-                    window.location.href = '/';
+                    if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+                        window.location.href = '/';
+                    }
                 }
             })
             .catch(() => {});
@@ -2931,6 +2936,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function pollHajeraLiveStatus() {
+            if (window.location.pathname !== '/admin') return;
             fetch('/admin/hajera/live-status')
                 .then(res => res.json())
                 .then(data => {

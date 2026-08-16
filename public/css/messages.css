@@ -686,16 +686,25 @@
 }
 
 .msg-react-emoji-btn {
-    font-size: 14px;
-    padding: 2px;
+    font-size: 15px;
+    padding: 3px 4px;
     cursor: pointer;
     background: none;
     border: none;
-    transition: transform 0.15s var(--msg-spring);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                filter 0.2s ease;
+    border-radius: 8px;
+    line-height: 1;
 }
 
 .msg-react-emoji-btn:hover {
-    transform: scale(1.4);
+    transform: scale(1.45) translateY(-3px);
+    filter: drop-shadow(0 2px 6px rgba(255, 200, 60, 0.3));
+}
+
+.msg-react-emoji-btn:active {
+    transform: scale(1.1);
+    transition-duration: 0.08s;
 }
 
 /* Message Bubble */
@@ -737,29 +746,37 @@
 .msg-reaction-badge {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     font-size: 12px;
     font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 14px;
+    padding: 3px 10px;
+    border-radius: 20px;
     background: rgba(18, 20, 32, 0.85);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
     border: 1px solid var(--msg-border-subtle);
     color: #fff;
     cursor: pointer;
-    transition: all 0.2s var(--msg-spring);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .msg-reaction-badge:hover {
-    transform: scale(1.12);
+    transform: scale(1.15) translateY(-2px);
     border-color: var(--msg-primary);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4),
+                0 0 12px var(--msg-primary-glow);
+}
+
+.msg-reaction-badge:active {
+    transform: scale(0.95);
 }
 
 .msg-reaction-badge.is-user-reacted {
-    background: rgba(229, 184, 90, 0.22);
+    background: rgba(229, 184, 90, 0.18);
     border-color: var(--msg-primary);
     color: var(--msg-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3),
+                0 0 8px rgba(229, 184, 90, 0.15);
 }
 
 /* Meta Row (Time & Read Status) */
@@ -1093,9 +1110,13 @@
 .msg-quick-emojis {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     overflow-x: auto;
-    padding-bottom: 2px;
+    padding: 6px 4px;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(90deg, transparent 0%, black 4%, black 96%, transparent 100%);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 4%, black 96%, transparent 100%);
 }
 
 .msg-quick-emojis::-webkit-scrollbar {
@@ -1103,19 +1124,31 @@
 }
 
 .msg-quick-emoji-btn {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-    font-size: 16px;
-    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    font-size: 18px;
+    padding: 6px 10px;
     cursor: pointer;
-    transition: transform 0.15s var(--msg-spring), background 0.15s ease;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background 0.2s ease,
+                border-color 0.2s ease,
+                box-shadow 0.2s ease;
     flex-shrink: 0;
+    line-height: 1;
+    position: relative;
 }
 
 .msg-quick-emoji-btn:hover {
-    transform: scale(1.25) translateY(-2px);
+    transform: scale(1.3) translateY(-4px);
     background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.msg-quick-emoji-btn:active {
+    transform: scale(1.05);
+    transition-duration: 0.08s;
 }
 
 /* Input Row */
@@ -1162,31 +1195,56 @@
 }
 
 .msg-composer-btn {
-    width: 38px;
-    height: 38px;
-    border-radius: 12px;
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     color: var(--msg-text-muted);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.msg-composer-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at center, rgba(255,255,255,0.08) 0%, transparent 70%);
+    opacity: 0;
+    transform: scale(0);
+    transition: transform 0.4s cubic-bezier(0.2,0,0,1), opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.msg-composer-btn:active::after {
+    opacity: 1;
+    transform: scale(2);
+    transition: transform 0s, opacity 0s;
 }
 
 .msg-composer-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     color: #fff;
-    border-color: rgba(255, 255, 255, 0.14);
-    transform: translateY(-1px);
+    border-color: rgba(255, 255, 255, 0.16);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.msg-composer-btn:active {
+    transform: scale(0.9);
 }
 
 .msg-send-btn {
-    width: 42px;
-    height: 42px;
-    border-radius: 14px;
+    width: 44px;
+    height: 44px;
+    border-radius: 16px;
     background: var(--msg-primary-gradient);
     color: #08090f;
     border: none;
@@ -1195,17 +1253,43 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    box-shadow: 0 6px 18px var(--msg-primary-glow);
-    transition: transform 0.25s var(--msg-spring), box-shadow 0.2s ease;
+    box-shadow:
+        0 6px 20px var(--msg-primary-glow),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.msg-send-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, transparent 50%);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
 }
 
 .msg-send-btn:hover {
-    transform: scale(1.08) translateY(-1px);
-    box-shadow: 0 8px 24px var(--msg-primary-glow);
+    transform: scale(1.1) translateY(-2px);
+    box-shadow:
+        0 8px 28px var(--msg-primary-glow),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.msg-send-btn:hover::before {
+    opacity: 1;
 }
 
 .msg-send-btn:active {
-    transform: scale(0.92);
+    transform: scale(0.88);
+    transition-duration: 0.1s;
+    box-shadow:
+        0 2px 8px var(--msg-primary-glow),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 /* Voice Recording Capsule HUD */
