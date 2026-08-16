@@ -274,6 +274,33 @@ router.post('/api/messages/read', isAuthenticated, (req, res) => {
     res.json({ success: true, readCount: changes });
 });
 
+// POST /api/messages/react — Toggle emoji reaction on message
+router.post('/api/messages/react', isAuthenticated, (req, res) => {
+    const user = req.session.user;
+    const partner = getPartner(user);
+    const messageId = parseInt(req.body.messageId, 10);
+    const reaction = req.body.reaction ? String(req.body.reaction).trim() : '';
+
+    if (!messageId || !reaction) {
+        return res.status(400).json({ error: 'Message ID and reaction are required.' });
+    }
+
+    const result = db.toggleMessageReaction(messageId, user, reaction);
+    if (!result) {
+        return res.status(500).json({ error: 'Failed to update reaction.' });
+    }
+
+    broadcastToBoth(user, partner, 'message-reaction', {
+        messageId,
+        user,
+        reaction,
+        action: result.action,
+        reactions: result.reactions
+    });
+
+    res.json({ success: true, ...result });
+});
+
 // POST /api/messages/typing — Broadcast typing indicator
 router.post('/api/messages/typing', isAuthenticated, (req, res) => {
     const user = req.session.user;

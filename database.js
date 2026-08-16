@@ -132,6 +132,15 @@ db.exec(`
         FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS message_reactions (
+        message_id INTEGER NOT NULL,
+        user TEXT NOT NULL,
+        reaction TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (message_id, user),
+        FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_at ON videos(uploaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
@@ -141,6 +150,7 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_recipient_unread ON messages(recipient, is_read);
     CREATE INDEX IF NOT EXISTS idx_messages_pair_created ON messages(sender, recipient, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_reactions_message_id ON message_reactions(message_id);
 `);
 
 // Migrations for older SQLite files.
@@ -573,8 +583,75 @@ function clearOldActivityLogs(username) {
     }
 }
 
-function formatMessageRow(r) {
+function getReactionsForMessage(messageId) {
+    if (!messageId) return [];
+    try {
+        const rows = db.prepare(`
+            SELECT reaction, user, created_at
+            FROM message_reactions
+            WHERE message_id = ?
+            ORDER BY created_at ASC
+        `).all(messageId);
+        return rows;
+    } catch {
+        return [];
+    }
+}
+
+function getReactionsForMessages(messageIds) {
+    if (!messageIds || messageIds.length === 0) return {};
+    try {
+        const placeholders = messageIds.map(() => '?').join(',');
+        const rows = db.prepare(`
+            SELECT message_id, reaction, user, created_at
+            FROM message_reactions
+            WHERE message_id IN (${placeholders})
+            ORDER BY created_at ASC
+        `).all(...messageIds);
+
+        const map = {};
+        rows.forEach(r => {
+            if (!map[r.message_id]) map[r.message_id] = [];
+            map[r.message_id].push({ reaction: r.reaction, user: r.user });
+        });
+        return map;
+    } catch {
+        return {};
+    }
+}
+
+function toggleMessageReaction(messageId, user, reaction) {
+    if (!messageId || !user || !reaction) return null;
+    try {
+        const existing = db.prepare(`
+            SELECT reaction FROM message_reactions
+            WHERE message_id = ? AND user = ?
+        `).get(messageId, user);
+
+        let action = 'added';
+        if (existing && existing.reaction === reaction) {
+            db.prepare(`DELETE FROM message_reactions WHERE message_id = ? AND user = ?`).run(messageId, user);
+            action = 'removed';
+        } else {
+            db.prepare(`
+                INSERT INTO message_reactions (message_id, user, reaction, created_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(message_id, user) DO UPDATE SET reaction = excluded.reaction, created_at = excluded.created_at
+            `).run(messageId, user, reaction, new Date().toISOString());
+            action = 'added';
+        }
+
+        const currentReactions = getReactionsForMessage(messageId);
+        return { action, messageId, user, reaction, reactions: currentReactions };
+    } catch (err) {
+        console.error('[db] Error toggling message reaction:', err.message);
+        return null;
+    }
+}
+
+function formatMessageRow(r, reactions = null) {
     if (!r) return null;
+    const msgReactions = reactions !== null ? reactions : getReactionsForMessage(r.id);
     return {
         id: r.id,
         sender: r.sender,
@@ -586,6 +663,7 @@ function formatMessageRow(r) {
         readAt: r.read_at ? normalizeIsoDate(r.read_at) : null,
         createdAt: normalizeIsoDate(r.created_at),
         senderAvatar: r.sender_avatar || null,
+        reactions: msgReactions || [],
         video: r.video_id ? {
             id: r.video_id,
             title: r.video_title || 'Video',
@@ -663,7 +741,10 @@ function getConversationMessages(user1, user2, limit = 80, beforeId = null) {
         params.push(Math.min(limit, 200));
 
         const rows = db.prepare(query).all(...params);
-        return rows.map(formatMessageRow).reverse();
+        const msgIds = rows.map(r => r.id);
+        const reactionsMap = getReactionsForMessages(msgIds);
+
+        return rows.map(r => formatMessageRow(r, reactionsMap[r.id] || [])).reverse();
     } catch (err) {
         console.error('[db] Error getting conversation messages:', err.message);
         return [];
@@ -762,6 +843,8 @@ db.markMessagesAsRead = markMessagesAsRead;
 db.getUnreadMessageCount = getUnreadMessageCount;
 db.deleteMessage = deleteMessage;
 db.getMessageStats = getMessageStats;
+db.toggleMessageReaction = toggleMessageReaction;
+db.getReactionsForMessage = getReactionsForMessage;
 
 module.exports = db;
 

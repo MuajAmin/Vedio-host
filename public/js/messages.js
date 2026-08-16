@@ -1,6 +1,7 @@
 // ============================================================
-//  MESSAGES SYSTEM — CLIENT-SIDE REAL-TIME CONTROLLER
-//  Handles SSE stream, audio chime, typing, voice notes & UI
+//  MESSAGES SYSTEM — ULTRA-LUXE REAL-TIME CLIENT CONTROLLER
+//  Handles SSE stream, audio chime, interactive waveform player,
+//  reactions, speed controls, in-chat search & particle effects
 // ============================================================
 
 (function () {
@@ -51,9 +52,7 @@
             gain2.connect(audioCtx.destination);
             osc2.start(now + 0.12);
             osc2.stop(now + 0.55);
-        } catch (e) {
-            // Audio not allowed or failed
-        }
+        } catch (e) {}
     }
 
     // ------------------------------------------------------------
@@ -125,16 +124,13 @@
                 const msg = data.message;
                 if (!msg) return;
 
-                // Append to all active containers
                 getActiveContainers().forEach(container => {
                     appendMessageToDOM(container, msg);
                 });
 
-                // Play sound if incoming from partner
                 if (msg.sender === partnerUser) {
                     playNotificationChime();
 
-                    // If drawer is currently open or full page is active, mark read
                     const isDrawerOpen = drawer && drawer.classList.contains('is-open');
                     const isFullPage = !!fullPageMessagesList;
 
@@ -151,9 +147,8 @@
             }
         });
 
-        sseSource.addEventListener('messages-read', (e) => {
+        sseSource.addEventListener('messages-read', () => {
             try {
-                // Update all outgoing unread messages to seen
                 document.querySelectorAll('.msg-seen-check').forEach(el => {
                     el.classList.add('is-seen');
                     el.innerHTML = '✓✓';
@@ -174,18 +169,23 @@
         sseSource.addEventListener('message-deleted', (e) => {
             try {
                 const data = JSON.parse(e.data);
-                const row = document.querySelector(`[data-msg-id="${data.messageId}"]`);
-                if (row) {
+                const rows = document.querySelectorAll(`[data-msg-id="${data.messageId}"]`);
+                rows.forEach(row => {
                     row.style.opacity = '0';
                     row.style.transform = 'scale(0.9)';
                     setTimeout(() => row.remove(), 250);
-                }
+                });
             } catch {}
         });
 
-        sseSource.onerror = () => {
-            // EventSource automatically attempts reconnection
-        };
+        sseSource.addEventListener('message-reaction', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                updateMessageReactionsDOM(data.messageId, data.reactions);
+            } catch {}
+        });
+
+        sseSource.onerror = () => {};
     }
 
     // ------------------------------------------------------------
@@ -212,6 +212,22 @@
                 el.textContent = '⚫ Offline';
             }
         });
+
+        // Update live watching banner in sidebar if exists
+        const watchingBanner = document.getElementById('msgSidebarWatchingBanner');
+        if (watchingBanner) {
+            if (isWatching && presence.videoTitle) {
+                watchingBanner.style.display = 'flex';
+                const titleEl = watchingBanner.querySelector('.msg-sidebar-watching-title');
+                if (titleEl) titleEl.textContent = presence.videoTitle;
+                const joinBtn = watchingBanner.querySelector('.msg-sidebar-watching-join');
+                if (joinBtn && presence.currentVideoId) {
+                    joinBtn.href = `/watch/${encodeURIComponent(presence.currentVideoId)}`;
+                }
+            } else {
+                watchingBanner.style.display = 'none';
+            }
+        }
     }
 
     function showTypingIndicator(show) {
@@ -255,6 +271,28 @@
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
+    function renderReactionsHtml(reactions, currentU) {
+        if (!reactions || !Array.isArray(reactions) || reactions.length === 0) return '';
+        const grouped = {};
+        reactions.forEach(r => {
+            if (!grouped[r.reaction]) grouped[r.reaction] = [];
+            grouped[r.reaction].push(r.user);
+        });
+
+        const badges = Object.keys(grouped).map(emoji => {
+            const users = grouped[emoji];
+            const isMine = users.includes(currentU);
+            return `
+                <button type="button" class="msg-reaction-badge ${isMine ? 'is-user-reacted' : ''}" data-emoji="${escapeHtml(emoji)}" title="${escapeHtml(users.join(', '))}">
+                    <span>${escapeHtml(emoji)}</span>
+                    <span>${users.length}</span>
+                </button>
+            `;
+        }).join('');
+
+        return `<div class="msg-reactions-row">${badges}</div>`;
+    }
+
     function renderMessageHTML(msg) {
         const isOut = msg.sender === currentUser;
         const rowClass = isOut ? 'msg-row-outgoing' : 'msg-row-incoming';
@@ -269,44 +307,56 @@
         if (msg.video) {
             const thumbUrl = msg.video.thumbnail ? `/thumbnails/${encodeURIComponent(msg.video.thumbnail)}` : '';
             contentHtml += `
-                <a href="/watch/${encodeURIComponent(msg.video.id)}" class="msg-video-card">
+                <div class="msg-video-card" data-video-id="${escapeHtml(msg.video.id)}">
                     <div class="msg-video-card-thumb-wrap">
                         ${thumbUrl ? `<img src="${thumbUrl}" class="msg-video-card-thumb-img" alt="" loading="lazy" />` : '<div class="thumb-fallback">🎬</div>'}
-                        <div class="msg-video-card-play-overlay">
-                            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><polygon points="6,4 20,12 6,20"/></svg>
-                        </div>
+                        <a href="/watch/${encodeURIComponent(msg.video.id)}" class="msg-video-card-play-overlay" title="Play Video">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><polygon points="6,4 20,12 6,20"/></svg>
+                        </a>
                         ${msg.video.duration ? `<div class="msg-video-card-duration">${escapeHtml(msg.video.duration)}</div>` : ''}
                     </div>
                     <div class="msg-video-card-info">
                         <div class="msg-video-card-title">${escapeHtml(msg.video.title)}</div>
-                        <div class="msg-video-card-tag">
-                            <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><polygon points="6,4 20,12 6,20"/></svg>
-                            <span>Watch Shared Video</span>
+                        <div class="msg-video-card-actions">
+                            <a href="/watch/${encodeURIComponent(msg.video.id)}" class="msg-video-action-btn btn-watch-now">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><polygon points="6,4 20,12 6,20"/></svg>
+                                <span>Watch</span>
+                            </a>
+                            <a href="/watch/${encodeURIComponent(msg.video.id)}?wt_invite=1" class="msg-video-action-btn btn-wt-together">
+                                <span>🍿 Watch Together</span>
+                            </a>
                         </div>
                     </div>
-                </a>
+                </div>
             `;
         }
 
-        // 2. Voice Audio Note
+        // 2. Interactive Voice Audio Note
         if (msg.voiceUrl) {
             contentHtml += `
                 <div class="msg-voice-player" data-audio-src="${escapeHtml(msg.voiceUrl)}">
-                    <button type="button" class="msg-voice-play-btn" aria-label="Play voice message">
-                        <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><polygon points="6,4 20,12 6,20"/></svg>
-                        <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style="display:none;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    <button type="button" class="msg-voice-play-btn" aria-label="Play voice note">
+                        <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><polygon points="6,4 20,12 6,20"/></svg>
+                        <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="display:none;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
                     </button>
-                    <div class="msg-voice-waveform">
-                        <span class="msg-wave-bar"></span>
-                        <span class="msg-wave-bar"></span>
-                        <span class="msg-wave-bar"></span>
-                        <span class="msg-wave-bar"></span>
-                        <span class="msg-wave-bar"></span>
-                        <span class="msg-wave-bar"></span>
-                        <span class="msg-wave-bar"></span>
-                        <span class="msg-wave-bar"></span>
+                    <div class="msg-voice-waveform-wrap">
+                        <div class="msg-voice-waveform">
+                            <span class="msg-wave-bar"></span>
+                            <span class="msg-wave-bar"></span>
+                            <span class="msg-wave-bar"></span>
+                            <span class="msg-wave-bar"></span>
+                            <span class="msg-wave-bar"></span>
+                            <span class="msg-wave-bar"></span>
+                            <span class="msg-wave-bar"></span>
+                            <span class="msg-wave-bar"></span>
+                            <span class="msg-wave-bar"></span>
+                            <span class="msg-wave-bar"></span>
+                        </div>
+                        <div class="msg-voice-meta">
+                            <span class="msg-voice-time">Voice Note</span>
+                            <button type="button" class="msg-voice-speed-btn" data-speed="1">1x</button>
+                        </div>
                     </div>
-                    <span class="msg-voice-time">Voice Note</span>
                 </div>
             `;
         }
@@ -316,10 +366,30 @@
             contentHtml += `<div class="msg-text-content">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
         }
 
+        const reactionsHtml = renderReactionsHtml(msg.reactions, currentUser);
+        const canDelete = isOut || currentUser === 'muaj';
+
         return `
             <div class="msg-row ${rowClass}" data-msg-id="${msg.id}">
+                <div class="msg-action-toolbar">
+                    <div class="msg-quick-react-pill">
+                        <button type="button" class="msg-react-emoji-btn" data-emoji="❤️">❤️</button>
+                        <button type="button" class="msg-react-emoji-btn" data-emoji="🔥">🔥</button>
+                        <button type="button" class="msg-react-emoji-btn" data-emoji="😂">😂</button>
+                        <button type="button" class="msg-react-emoji-btn" data-emoji="🍿">🍿</button>
+                    </div>
+                    ${msg.text ? `<button type="button" class="msg-action-btn btn-copy" title="Copy Text">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>` : ''}
+                    ${canDelete ? `<button type="button" class="msg-action-btn btn-delete" title="Delete Message">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>` : ''}
+                </div>
                 <div class="msg-bubble-wrap">
-                    <div class="msg-bubble">${contentHtml}</div>
+                    <div class="msg-bubble">
+                        ${contentHtml}
+                    </div>
+                    ${reactionsHtml}
                     <div class="msg-meta-row">
                         <span class="msg-time">${timeStr}</span>
                         ${seenHtml}
@@ -331,8 +401,11 @@
 
     function appendMessageToDOM(container, msg) {
         if (!container) return;
-        // Don't duplicate if already rendered
         if (container.querySelector(`[data-msg-id="${msg.id}"]`)) return;
+
+        // Remove empty state if present
+        const emptyState = container.querySelector('.msg-empty-state');
+        if (emptyState) emptyState.remove();
 
         // Remove typing indicator if present
         const typingRow = container.querySelector('.msg-typing-row');
@@ -340,6 +413,29 @@
 
         container.insertAdjacentHTML('beforeend', renderMessageHTML(msg));
         scrollToBottom(container);
+    }
+
+    function updateMessageReactionsDOM(messageId, reactions) {
+        document.querySelectorAll(`[data-msg-id="${messageId}"]`).forEach(row => {
+            const bubbleWrap = row.querySelector('.msg-bubble-wrap');
+            if (!bubbleWrap) return;
+            let reactionsRow = bubbleWrap.querySelector('.msg-reactions-row');
+            const newHtml = renderReactionsHtml(reactions, currentUser);
+            if (reactionsRow) {
+                if (newHtml) {
+                    reactionsRow.outerHTML = newHtml;
+                } else {
+                    reactionsRow.remove();
+                }
+            } else if (newHtml) {
+                const metaRow = bubbleWrap.querySelector('.msg-meta-row');
+                if (metaRow) {
+                    metaRow.insertAdjacentHTML('beforebegin', newHtml);
+                } else {
+                    bubbleWrap.insertAdjacentHTML('beforeend', newHtml);
+                }
+            }
+        });
     }
 
     function scrollToBottom(container) {
@@ -351,7 +447,22 @@
     }
 
     // ------------------------------------------------------------
-    //  6. SENDING MESSAGES & ACTIONS
+    //  6. FLOATING EMOJI BURST PARTICLE EFFECT
+    // ------------------------------------------------------------
+    function spawnEmojiParticle(x, y, emoji) {
+        const p = document.createElement('div');
+        p.className = 'msg-emoji-burst-particle';
+        p.textContent = emoji;
+        p.style.left = `${x}px`;
+        p.style.top = `${y}px`;
+        p.style.setProperty('--dx', `${(Math.random() - 0.5) * 60}px`);
+        p.style.setProperty('--rot', `${(Math.random() - 0.5) * 45}deg`);
+        document.body.appendChild(p);
+        setTimeout(() => p.remove(), 1200);
+    }
+
+    // ------------------------------------------------------------
+    //  7. SENDING MESSAGES & ACTIONS
     // ------------------------------------------------------------
     function sendMessage(text, videoId = null) {
         const cleanText = (text || '').trim();
@@ -397,8 +508,26 @@
         }).catch(() => {});
     }
 
+    function toggleReaction(messageId, reaction, clientX = 0, clientY = 0) {
+        if (!messageId || !reaction) return;
+        if (clientX && clientY) spawnEmojiParticle(clientX, clientY, reaction);
+
+        fetch('/api/messages/react', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messageId, reaction })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.reactions) {
+                updateMessageReactionsDOM(messageId, data.reactions);
+            }
+        })
+        .catch(() => {});
+    }
+
     // ------------------------------------------------------------
-    //  7. VOICE RECORDING (MediaRecorder API)
+    //  8. VOICE RECORDING (MediaRecorder API)
     // ------------------------------------------------------------
     function setupVoiceRecording(recordBtn, recordingBar, cancelBtn, sendVoiceBtn) {
         if (!recordBtn || !recordingBar) return;
@@ -430,7 +559,7 @@
                     if (timerEl) timerEl.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
                 }, 1000);
             } catch (err) {
-                alert('Microphone access was denied or is not supported.');
+                alert('Microphone access was denied or is not supported in this browser.');
             }
         });
 
@@ -454,7 +583,7 @@
                     recordingBar.classList.remove('is-recording');
 
                     const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                    if (blob.size < 1000) return; // Too short
+                    if (blob.size < 800) return; // Too short
 
                     const formData = new FormData();
                     formData.append('audio', blob, 'voice.webm');
@@ -478,54 +607,215 @@
     }
 
     // ------------------------------------------------------------
-    //  8. VOICE AUDIO PLAYER EVENT DELEGATION
+    //  9. INTERACTIVE AUDIO PLAYER WITH SCRUBBER & SPEED
     // ------------------------------------------------------------
-    let currentPlayingAudio = null;
-    let currentPlayingBtn = null;
+    let activeAudio = null;
+    let activePlayer = null;
+    let activeInterval = null;
+
+    function formatAudioTime(sec) {
+        if (isNaN(sec) || sec < 0) return '0:00';
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
 
     document.addEventListener('click', (e) => {
-        const btn = e.target.closest('.msg-voice-play-btn');
-        if (!btn) return;
+        // Speed Button Click
+        const speedBtn = e.target.closest('.msg-voice-speed-btn');
+        if (speedBtn) {
+            e.stopPropagation();
+            const currentSpeed = parseFloat(speedBtn.getAttribute('data-speed') || '1');
+            let nextSpeed = 1;
+            if (currentSpeed === 1) nextSpeed = 1.5;
+            else if (currentSpeed === 1.5) nextSpeed = 2;
+            else nextSpeed = 1;
 
-        const player = btn.closest('.msg-voice-player');
-        const audioSrc = player.getAttribute('data-audio-src');
-        if (!audioSrc) return;
+            speedBtn.setAttribute('data-speed', nextSpeed);
+            speedBtn.textContent = `${nextSpeed}x`;
 
-        if (currentPlayingAudio && !currentPlayingAudio.paused) {
-            currentPlayingAudio.pause();
-            if (currentPlayingBtn) {
-                currentPlayingBtn.querySelector('.icon-play').style.display = '';
-                currentPlayingBtn.querySelector('.icon-pause').style.display = 'none';
-                currentPlayingBtn.closest('.msg-voice-player').classList.remove('is-playing');
+            const player = speedBtn.closest('.msg-voice-player');
+            if (player === activePlayer && activeAudio) {
+                activeAudio.playbackRate = nextSpeed;
             }
-            if (currentPlayingBtn === btn) {
-                currentPlayingAudio = null;
-                currentPlayingBtn = null;
-                return;
+            return;
+        }
+
+        // Waveform Scrubber Click
+        const waveformWrap = e.target.closest('.msg-voice-waveform-wrap');
+        if (waveformWrap) {
+            const player = waveformWrap.closest('.msg-voice-player');
+            if (player === activePlayer && activeAudio && activeAudio.duration) {
+                const rect = waveformWrap.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const pct = Math.max(0, Math.min(1, clickX / rect.width));
+                activeAudio.currentTime = pct * activeAudio.duration;
             }
         }
 
-        const audio = new Audio(audioSrc);
-        currentPlayingAudio = audio;
-        currentPlayingBtn = btn;
+        // Play/Pause Button Click
+        const playBtn = e.target.closest('.msg-voice-play-btn');
+        if (playBtn) {
+            const player = playBtn.closest('.msg-voice-player');
+            const audioSrc = player.getAttribute('data-audio-src');
+            if (!audioSrc) return;
 
-        btn.querySelector('.icon-play').style.display = 'none';
-        btn.querySelector('.icon-pause').style.display = '';
-        player.classList.add('is-playing');
+            if (activeAudio && activePlayer === player) {
+                if (activeAudio.paused) {
+                    activeAudio.play();
+                    player.classList.add('is-playing');
+                    playBtn.querySelector('.icon-play').style.display = 'none';
+                    playBtn.querySelector('.icon-pause').style.display = '';
+                } else {
+                    activeAudio.pause();
+                    player.classList.remove('is-playing');
+                    playBtn.querySelector('.icon-play').style.display = '';
+                    playBtn.querySelector('.icon-pause').style.display = 'none';
+                }
+                return;
+            }
 
-        audio.play().catch(() => {});
+            // Stop previous audio
+            if (activeAudio) {
+                activeAudio.pause();
+                clearInterval(activeInterval);
+                if (activePlayer) {
+                    activePlayer.classList.remove('is-playing');
+                    const btn = activePlayer.querySelector('.msg-voice-play-btn');
+                    if (btn) {
+                        btn.querySelector('.icon-play').style.display = '';
+                        btn.querySelector('.icon-pause').style.display = 'none';
+                    }
+                }
+            }
 
-        audio.onended = () => {
-            btn.querySelector('.icon-play').style.display = '';
-            btn.querySelector('.icon-pause').style.display = 'none';
-            player.classList.remove('is-playing');
-            currentPlayingAudio = null;
-            currentPlayingBtn = null;
-        };
+            // Start new audio
+            const audio = new Audio(audioSrc);
+            const speedEl = player.querySelector('.msg-voice-speed-btn');
+            const speed = speedEl ? parseFloat(speedEl.getAttribute('data-speed') || '1') : 1;
+            audio.playbackRate = speed;
+
+            activeAudio = audio;
+            activePlayer = player;
+
+            playBtn.querySelector('.icon-play').style.display = 'none';
+            playBtn.querySelector('.icon-pause').style.display = '';
+            player.classList.add('is-playing');
+
+            const timeEl = player.querySelector('.msg-voice-time');
+            const bars = player.querySelectorAll('.msg-wave-bar');
+
+            audio.addEventListener('loadedmetadata', () => {
+                if (timeEl) timeEl.textContent = `0:00 / ${formatAudioTime(audio.duration)}`;
+            });
+
+            audio.play().catch(() => {});
+
+            activeInterval = setInterval(() => {
+                if (!audio || isNaN(audio.duration)) return;
+                const current = audio.currentTime;
+                const total = audio.duration;
+                if (timeEl) timeEl.textContent = `${formatAudioTime(current)} / ${formatAudioTime(total)}`;
+
+                const progress = current / total;
+                const barCount = bars.length;
+                const passedIdx = Math.floor(progress * barCount);
+                bars.forEach((bar, idx) => {
+                    bar.classList.toggle('is-passed', idx <= passedIdx);
+                });
+            }, 100);
+
+            audio.onended = () => {
+                clearInterval(activeInterval);
+                player.classList.remove('is-playing');
+                playBtn.querySelector('.icon-play').style.display = '';
+                playBtn.querySelector('.icon-pause').style.display = 'none';
+                bars.forEach(b => b.classList.remove('is-passed'));
+                if (timeEl) timeEl.textContent = 'Voice Note';
+                activeAudio = null;
+                activePlayer = null;
+            };
+        }
     });
 
     // ------------------------------------------------------------
-    //  9. COMPOSER SETUP (Drawer & Full Page)
+    //  10. MESSAGE ACTIONS: REACTIONS, COPY, DELETE
+    // ------------------------------------------------------------
+    document.addEventListener('click', (e) => {
+        // 1. Emoji Reaction Click from Toolbar or Badge
+        const reactBtn = e.target.closest('.msg-react-emoji-btn') || e.target.closest('.msg-reaction-badge');
+        if (reactBtn) {
+            const row = reactBtn.closest('.msg-row');
+            if (!row) return;
+            const messageId = parseInt(row.getAttribute('data-msg-id'), 10);
+            const emoji = reactBtn.getAttribute('data-emoji') || reactBtn.textContent.trim().split(/\s+/)[0];
+            if (messageId && emoji) {
+                toggleReaction(messageId, emoji, e.clientX, e.clientY);
+            }
+            return;
+        }
+
+        // 2. Copy Message Text
+        const copyBtn = e.target.closest('.btn-copy');
+        if (copyBtn) {
+            const row = copyBtn.closest('.msg-row');
+            const textEl = row ? row.querySelector('.msg-text-content') : null;
+            if (textEl) {
+                navigator.clipboard.writeText(textEl.innerText.trim()).then(() => {
+                    const originalHtml = copyBtn.innerHTML;
+                    copyBtn.innerHTML = `✓`;
+                    copyBtn.style.color = '#34d399';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = originalHtml;
+                        copyBtn.style.color = '';
+                    }, 1500);
+                });
+            }
+            return;
+        }
+
+        // 3. Delete Message
+        const deleteBtn = e.target.closest('.btn-delete');
+        if (deleteBtn) {
+            const row = deleteBtn.closest('.msg-row');
+            if (!row) return;
+            const messageId = parseInt(row.getAttribute('data-msg-id'), 10);
+            if (confirm('Delete this message permanently?')) {
+                fetch(`/api/messages/delete/${messageId}`, { method: 'POST' })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            row.style.opacity = '0';
+                            row.style.transform = 'scale(0.85)';
+                            setTimeout(() => row.remove(), 250);
+                        }
+                    });
+            }
+            return;
+        }
+
+        // 4. Empty State Conversation Starter
+        const starterChip = e.target.closest('.msg-empty-starter-chip');
+        if (starterChip) {
+            const action = starterChip.getAttribute('data-starter');
+            const container = starterChip.closest('.msg-fullpage-main') || starterChip.closest('.msg-drawer-widget');
+            const textarea = container ? container.querySelector('.msg-textarea') : null;
+            if (action === 'hello') {
+                sendMessage('Hey there! 👋 How are you doing?');
+            } else if (action === 'movie') {
+                sendMessage('Hey! Want to watch a movie together tonight? 🍿🎬');
+            } else if (action === 'voice') {
+                const micBtn = container ? container.querySelector('.msg-mic-btn') : null;
+                if (micBtn) micBtn.click();
+            } else if (textarea) {
+                textarea.value = starterChip.textContent.trim();
+                textarea.focus();
+            }
+        }
+    });
+
+    // ------------------------------------------------------------
+    //  11. COMPOSER SETUP (Drawer & Full Page)
     // ------------------------------------------------------------
     function setupComposer(formOrWrap) {
         if (!formOrWrap) return;
@@ -539,9 +829,8 @@
         if (textarea) {
             textarea.addEventListener('input', () => {
                 textarea.style.height = 'auto';
-                textarea.style.height = Math.min(textarea.scrollHeight, 100) + 'px';
+                textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
 
-                // Typing indicator throttle
                 sendTypingState(true);
                 clearTimeout(typingTimeout);
                 typingTimeout = setTimeout(() => {
@@ -570,10 +859,11 @@
             });
         }
 
-        // Quick Emojis
+        // Quick Emojis Bar
         emojiBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', (e) => {
                 const emoji = btn.getAttribute('data-emoji') || btn.textContent.trim();
+                spawnEmojiParticle(e.clientX, e.clientY, emoji);
                 if (textarea) {
                     textarea.value += emoji;
                     textarea.focus();
@@ -582,11 +872,17 @@
             });
         });
 
-        // Attach Video Modal Toggle
+        // Attach Video Modal
         if (attachBtn && attachModal) {
             attachBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 attachModal.classList.toggle('is-open');
+                const searchInput = attachModal.querySelector('.msg-attach-search-input');
+                if (searchInput) {
+                    searchInput.value = '';
+                    searchInput.focus();
+                    filterAttachList(attachModal, '');
+                }
             });
 
             document.addEventListener('click', (e) => {
@@ -594,6 +890,13 @@
                     attachModal.classList.remove('is-open');
                 }
             });
+
+            const searchInput = attachModal.querySelector('.msg-attach-search-input');
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    filterAttachList(attachModal, searchInput.value.toLowerCase().trim());
+                });
+            }
 
             attachModal.querySelectorAll('.msg-attach-item').forEach(item => {
                 item.addEventListener('click', () => {
@@ -606,7 +909,7 @@
             });
         }
 
-        // Voice Recording Setup for this composer
+        // Voice Recording Setup
         const recordBtn = formOrWrap.querySelector('.msg-mic-btn');
         const recordingBar = formOrWrap.querySelector('.msg-recording-bar');
         const cancelVoiceBtn = formOrWrap.querySelector('.msg-rec-cancel-btn');
@@ -614,8 +917,15 @@
         setupVoiceRecording(recordBtn, recordingBar, cancelVoiceBtn, sendVoiceBtn);
     }
 
+    function filterAttachList(modal, query) {
+        modal.querySelectorAll('.msg-attach-item').forEach(item => {
+            const title = (item.querySelector('.msg-attach-title')?.textContent || '').toLowerCase();
+            item.style.display = title.includes(query) ? 'flex' : 'none';
+        });
+    }
+
     // ------------------------------------------------------------
-    //  10. FLOATING LAUNCHER & DRAWER INTERACTION
+    //  12. FLOATING LAUNCHER & DRAWER INTERACTION
     // ------------------------------------------------------------
     if (launcher && drawer) {
         launcher.addEventListener('click', () => {
@@ -639,6 +949,78 @@
         }
     }
 
+    // ------------------------------------------------------------
+    //  13. IN-CHAT SEARCH & SHARED MEDIA TABS (/messages)
+    // ------------------------------------------------------------
+    const searchToggleBtn = document.getElementById('msgSearchToggleBtn');
+    const inChatSearchBar = document.getElementById('msgInChatSearchBar');
+    const inChatSearchInput = document.getElementById('msgInChatSearchInput');
+    const inChatSearchClose = document.getElementById('msgInChatSearchClose');
+
+    if (searchToggleBtn && inChatSearchBar && inChatSearchInput) {
+        searchToggleBtn.addEventListener('click', () => {
+            const isOpen = inChatSearchBar.classList.toggle('is-open');
+            if (isOpen) {
+                inChatSearchInput.value = '';
+                inChatSearchInput.focus();
+            } else {
+                filterMessagesByKeyword('');
+            }
+        });
+
+        if (inChatSearchClose) {
+            inChatSearchClose.addEventListener('click', () => {
+                inChatSearchBar.classList.remove('is-open');
+                inChatSearchInput.value = '';
+                filterMessagesByKeyword('');
+            });
+        }
+
+        inChatSearchInput.addEventListener('input', () => {
+            filterMessagesByKeyword(inChatSearchInput.value.toLowerCase().trim());
+        });
+    }
+
+    function filterMessagesByKeyword(keyword) {
+        const container = fullPageMessagesList || drawerMessagesList;
+        if (!container) return;
+
+        container.querySelectorAll('.msg-row').forEach(row => {
+            if (!keyword) {
+                row.style.display = 'flex';
+                return;
+            }
+            const text = (row.querySelector('.msg-text-content')?.textContent || '').toLowerCase();
+            const videoTitle = (row.querySelector('.msg-video-card-title')?.textContent || '').toLowerCase();
+            if (text.includes(keyword) || videoTitle.includes(keyword)) {
+                row.style.display = 'flex';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
+    // Shared Media Explorer Tabs in Sidebar
+    document.querySelectorAll('.msg-media-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.msg-media-tab-btn').forEach(b => b.classList.remove('is-active'));
+            btn.classList.add('is-active');
+            const tab = btn.getAttribute('data-tab');
+            const container = fullPageMessagesList;
+            if (!container) return;
+
+            container.querySelectorAll('.msg-row').forEach(row => {
+                if (tab === 'all') {
+                    row.style.display = 'flex';
+                } else if (tab === 'videos') {
+                    row.style.display = row.querySelector('.msg-video-card') ? 'flex' : 'none';
+                } else if (tab === 'voice') {
+                    row.style.display = row.querySelector('.msg-voice-player') ? 'flex' : 'none';
+                }
+            });
+        });
+    });
+
     // Initialize Composers
     document.querySelectorAll('.msg-composer-wrap').forEach(setupComposer);
 
@@ -649,7 +1031,7 @@
     initSSE();
 
     // ------------------------------------------------------------
-    //  11. GLOBAL VIDEO SHARE BUTTON ("Share to Chat" on /watch/:id)
+    //  14. GLOBAL VIDEO SHARE BUTTON ("Share to Chat" on /watch/:id)
     // ------------------------------------------------------------
     const shareToChatBtn = document.getElementById('btnShareToChat');
     if (shareToChatBtn) {
@@ -659,20 +1041,18 @@
 
             sendMessage('', videoId);
 
-            // Open floating drawer if present
             if (drawer && launcher) {
                 drawer.classList.add('is-open');
                 launcher.classList.add('is-open');
                 if (drawerMessagesList) scrollToBottom(drawerMessagesList);
             }
 
-            // Visual feedback
             const originalHtml = shareToChatBtn.innerHTML;
             shareToChatBtn.innerHTML = `
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
                     <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                <span>Shared!</span>
+                <span>Shared to Chat!</span>
             `;
             setTimeout(() => {
                 shareToChatBtn.innerHTML = originalHtml;
