@@ -115,6 +115,7 @@
     width: 100%;
     height: 100%;
     transition: transform 0.35s var(--msg-spring), opacity 0.25s ease;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.28));
 }
 
 .msg-launcher-close-icon {
@@ -452,6 +453,8 @@
     gap: 12px;
     scroll-behavior: smooth;
     position: relative;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Custom Scrollbar */
@@ -1145,7 +1148,7 @@
     background: transparent;
     border: none;
     color: #fff;
-    font-size: 14px;
+    font-size: 16px;
     font-family: inherit;
     resize: none;
     max-height: 120px;
@@ -1525,14 +1528,16 @@
 
     .msg-fullpage-main {
         height: calc(100vh - 84px);
+        height: calc(100dvh - 84px);
         border-radius: var(--msg-radius-lg);
     }
 
     .msg-floating-launcher {
-        bottom: 84px;
-        right: 18px;
+        bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+        right: 16px;
         width: 54px;
         height: 54px;
+        z-index: 995;
     }
 
     .msg-drawer-widget {
@@ -1542,9 +1547,12 @@
         width: 100vw;
         max-width: 100vw;
         height: 88vh;
+        height: 88dvh;
         max-height: 88vh;
+        max-height: 88dvh;
         border-radius: 24px 24px 0 0;
         transform: translateY(100%);
+        overscroll-behavior-y: contain;
     }
 
     .msg-drawer-widget.is-open {
