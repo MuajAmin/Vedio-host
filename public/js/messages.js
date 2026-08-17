@@ -73,6 +73,17 @@
     let toastDismissTimeout = null;
     let isDrawerLoaded = false;
     let isDrawerLoading = false;
+    let currentUnreadCount = 0;
+
+    // Initialize currentUnreadCount from DOM if present
+    if (unreadPill && unreadPill.textContent) {
+        currentUnreadCount = Math.max(0, parseInt(unreadPill.textContent, 10) || 0);
+    } else {
+        const initialNavBadge = document.querySelector('.nav-msg-badge');
+        if (initialNavBadge && initialNavBadge.textContent) {
+            currentUnreadCount = Math.max(0, parseInt(initialNavBadge.textContent, 10) || 0);
+        }
+    }
 
     function getActiveContainers() {
         const list = [];
@@ -85,40 +96,49 @@
     //  2. UNREAD BADGE & TOAST SYNCHRONIZER
     // ------------------------------------------------------------
     function updateUnreadBadges(count) {
-        const num = Math.max(0, parseInt(count, 10) || 0);
-        const text = num > 99 ? '99+' : String(num);
+        currentUnreadCount = Math.max(0, parseInt(count, 10) || 0);
+        const text = currentUnreadCount > 99 ? '99+' : String(currentUnreadCount);
 
-        if (unreadPill) {
-            if (num > 0) {
-                unreadPill.textContent = text;
-                unreadPill.style.display = 'flex';
+        const currentLauncher = document.getElementById('msgFloatingLauncher') || launcher;
+        const currentPill = document.getElementById('msgLauncherUnreadBadge') || unreadPill;
+        const currentDrawer = document.getElementById('msgDrawerWidget') || drawer;
+        const allNavBadges = document.querySelectorAll('.nav-msg-badge');
+
+        if (currentPill) {
+            currentPill.textContent = text;
+            if (currentUnreadCount > 0) {
+                currentPill.style.display = 'flex';
             } else {
-                unreadPill.style.display = 'none';
+                currentPill.style.display = 'none';
             }
         }
 
-        // Show launcher when there is a new/unread message or the drawer is open
-        if (launcher) {
-            const isDrawerOpen = drawer && drawer.classList.contains('is-open');
-            if (num > 0 || isDrawerOpen) {
-                launcher.classList.add('has-unread');
-                launcher.style.display = 'flex';
+        // Show launcher when there is an unread message or the drawer is open
+        if (currentLauncher) {
+            const isDrawerOpen = currentDrawer && currentDrawer.classList.contains('is-open');
+            if (currentUnreadCount > 0) {
+                currentLauncher.classList.add('has-unread');
+                currentLauncher.style.display = 'flex';
             } else {
-                launcher.classList.remove('has-unread');
-                launcher.style.display = 'none';
+                currentLauncher.classList.remove('has-unread');
+                if (isDrawerOpen) {
+                    currentLauncher.style.display = 'flex';
+                } else {
+                    currentLauncher.style.display = 'none';
+                }
             }
         }
 
-        navMsgBadges.forEach(badge => {
-            if (num > 0) {
-                badge.textContent = text;
+        allNavBadges.forEach(badge => {
+            badge.textContent = text;
+            if (currentUnreadCount > 0) {
                 badge.style.display = 'flex';
             } else {
                 badge.style.display = 'none';
             }
         });
 
-        if (num === 0) {
+        if (currentUnreadCount === 0) {
             hideFloatingMessageToast();
         }
     }
@@ -604,10 +624,11 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                updateUnreadBadges(0);
+                const remaining = typeof data.unreadCount === 'number' ? data.unreadCount : 0;
+                updateUnreadBadges(remaining);
             }
         })
-        .catch(() => {});
+        .catch(err => console.error('[messages] Error marking messages as read:', err));
     }
 
     function sendTypingState(isTyping) {
@@ -1070,10 +1091,12 @@
         if (!drawer || !launcher) return;
         drawer.classList.remove('is-open');
         launcher.classList.remove('is-open');
-        const badgeCount = parseInt(unreadPill ? unreadPill.textContent : '0', 10) || 0;
-        if (badgeCount <= 0) {
+        if (currentUnreadCount <= 0) {
             launcher.classList.remove('has-unread');
             launcher.style.display = 'none';
+        } else {
+            launcher.classList.add('has-unread');
+            launcher.style.display = 'flex';
         }
     }
 
@@ -1183,6 +1206,28 @@
 
     // Initial Auto-scroll
     getActiveContainers().forEach(scrollToBottom);
+
+    // If on full-page messages view, mark messages as read on load
+    if (fullPageMessagesList) {
+        markMessagesAsRead();
+    }
+
+    // Auto mark as read when window gains focus or becomes visible while viewing chat
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            const isDrawerOpen = drawer && drawer.classList.contains('is-open');
+            if (isDrawerOpen || fullPageMessagesList) {
+                markMessagesAsRead();
+            }
+        }
+    });
+
+    window.addEventListener('focus', () => {
+        const isDrawerOpen = drawer && drawer.classList.contains('is-open');
+        if (isDrawerOpen || fullPageMessagesList) {
+            markMessagesAsRead();
+        }
+    });
 
     // Cleanup SSE on page unload to prevent connection overlap during navigation
     window.addEventListener('beforeunload', () => {

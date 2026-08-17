@@ -14,7 +14,7 @@
     <link rel="manifest" href="/manifest.json">
     <script src="/js/theme-init.js?v=6.7"></script>
     <link rel="stylesheet" href="/css/style.css?v=6.7">
-    <link rel="stylesheet" href="/css/messages.css?v=2.7">
+    <link rel="stylesheet" href="/css/messages.css?v=2.8">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -290,7 +290,7 @@
             </div>
 
             <script src="/js/app.js?v=6.6"></script>
-            <script src="/js/messages.js?v=2.7"></script>
+            <script src="/js/messages.js?v=2.8"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').catch(function() {});

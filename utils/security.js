@@ -67,12 +67,17 @@ function renderAvatar(username, extraClass = '', userAvatars = {}) {
 // synchronous SQLite query. Cache it for 5 seconds to avoid redundant
 // DB I/O. The SSE stream already pushes real-time badge updates.
 let _unreadCache = {};
-let _unreadCacheAt = 0;
+let _unreadCacheTimes = {};
 const UNREAD_CACHE_TTL = 5 * 1000;
 
-function invalidateUnreadCache() {
-    _unreadCache = {};
-    _unreadCacheAt = 0;
+function invalidateUnreadCache(username) {
+    if (username) {
+        delete _unreadCache[username];
+        delete _unreadCacheTimes[username];
+    } else {
+        _unreadCache = {};
+        _unreadCacheTimes = {};
+    }
 }
 
 function attachLocals(req, res, next) {
@@ -82,14 +87,15 @@ function attachLocals(req, res, next) {
     if (user) {
         try {
             const now = Date.now();
-            if (_unreadCache[user] !== undefined && (now - _unreadCacheAt) < UNREAD_CACHE_TTL) {
+            const cachedTime = _unreadCacheTimes[user] || 0;
+            if (_unreadCache[user] !== undefined && (now - cachedTime) < UNREAD_CACHE_TTL) {
                 unreadCount = _unreadCache[user];
             } else {
                 const db = require('../database');
                 if (db && typeof db.getUnreadMessageCount === 'function') {
                     unreadCount = db.getUnreadMessageCount(user);
                     _unreadCache[user] = unreadCount;
-                    _unreadCacheAt = now;
+                    _unreadCacheTimes[user] = now;
                 }
             }
         } catch {}

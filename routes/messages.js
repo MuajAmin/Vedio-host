@@ -105,10 +105,14 @@ router.get('/messages', isAuthenticated, (req, res) => {
             readAt: new Date().toISOString(),
             count: readCount
         });
-        broadcastToUser(user, 'unread-count', {
-            unreadCount: 0
-        });
     }
+
+    const currentUnread = db.getUnreadMessageCount(user);
+    invalidateUnreadCache(user);
+    broadcastToUser(user, 'unread-count', {
+        unreadCount: currentUnread
+    });
+    res.locals.unreadCount = currentUnread;
 
     // Get list of recent videos for quick "Attach Video" modal/drawer
     const videos = db.prepare(`
@@ -125,6 +129,7 @@ router.get('/messages', isAuthenticated, (req, res) => {
         stats,
         initialMessages,
         videos,
+        unreadCount: currentUnread,
         pageTitle: 'Messages — ' + (partner === 'muaj' ? 'Muaj' : 'Hajera')
     });
 });
@@ -296,12 +301,15 @@ router.post('/api/messages/read', isAuthenticated, (req, res) => {
         });
     }
 
-    // Always ensure reader's active tabs receive unread-count: 0
+    const remainingUnread = db.getUnreadMessageCount(user);
+    invalidateUnreadCache(user);
+
+    // Always ensure reader's active tabs receive accurate remaining unread count
     broadcastToUser(user, 'unread-count', {
-        unreadCount: 0
+        unreadCount: remainingUnread
     });
 
-    res.json({ success: true, readCount: changes });
+    res.json({ success: true, readCount: changes, unreadCount: remainingUnread });
 });
 
 // POST /api/messages/react — Toggle emoji reaction on message
@@ -356,9 +364,19 @@ router.post('/api/messages/delete/:id', isAuthenticated, (req, res) => {
         return res.status(404).json({ error: 'Message not found.' });
     }
 
+    const wasUnread = msg.is_read === 0;
+
     const deleted = db.deleteMessage(messageId, user);
     if (!deleted) {
         return res.status(403).json({ error: 'Not allowed to delete this message.' });
+    }
+
+    if (wasUnread) {
+        invalidateUnreadCache();
+        const partnerRemaining = db.getUnreadMessageCount(partner);
+        const senderRemaining = db.getUnreadMessageCount(user);
+        broadcastToUser(partner, 'unread-count', { unreadCount: partnerRemaining });
+        broadcastToUser(user, 'unread-count', { unreadCount: senderRemaining });
     }
 
     // Delete voice file if it was a voice message
