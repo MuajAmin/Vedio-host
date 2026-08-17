@@ -5361,10 +5361,10 @@ kbd {
     display: block;
     font-size: 0.68rem;
     color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 140px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    min-width: 0;
 }
 
 .metric-val-wrap {
@@ -5486,12 +5486,16 @@ kbd {
 @media (max-width: 1024px) {
     .vps-metrics-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .vps-metric-box.metric-node {
+        grid-column: span 2;
     }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
     .vps-monitor-card {
-        padding: 16px;
+        padding: 16px 14px;
     }
 
     .vps-monitor-header {
@@ -5511,6 +5515,11 @@ kbd {
 
     .vps-metrics-grid {
         grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .vps-metric-box.metric-node {
+        grid-column: auto;
     }
 }
 
@@ -9435,37 +9444,60 @@ h3,
 
     /* 3. VPS Monitor Card on Mobile */
     .vps-monitor-card {
-        padding: 14px 12px;
+        padding: 16px 14px;
         border-radius: 16px;
         margin-bottom: 16px;
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
     }
 
     .vps-monitor-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: 10px;
+        gap: 12px;
         padding-bottom: 12px;
         margin-bottom: 12px;
     }
 
     .vps-header-left {
-        gap: 10px;
+        gap: 12px;
+        width: 100%;
+        min-width: 0;
     }
 
     .vps-icon-wrap {
-        width: 38px;
-        height: 38px;
+        width: 40px;
+        height: 40px;
         border-radius: 10px;
+        flex-shrink: 0;
+    }
+
+    .vps-title-group {
+        flex: 1;
+        min-width: 0;
+        gap: 3px;
+    }
+
+    .vps-badge-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
     }
 
     .vps-main-heading {
-        font-size: 1rem;
+        font-size: 1.05rem;
+        line-height: 1.25;
+        word-break: break-word;
     }
 
     .vps-subtext {
-        font-size: 0.72rem;
+        font-size: 0.74rem;
         white-space: normal;
-        line-height: 1.35;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.4;
     }
 
     .vps-header-right {
@@ -9475,70 +9507,190 @@ h3,
     .vps-status-pill {
         width: 100%;
         justify-content: center;
-        padding: 6px 12px;
-        font-size: 0.74rem;
+        padding: 7px 14px;
+        font-size: 0.76rem;
     }
 
     .vps-metrics-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        width: 100%;
     }
 
     .vps-metric-box {
-        padding: 10px 10px;
-        border-radius: 12px;
-        gap: 8px;
+        padding: 14px 14px;
+        border-radius: 14px;
+        gap: 10px;
+        min-width: 0;
+        box-sizing: border-box;
+        width: 100%;
     }
 
     .vps-metric-box:active {
-        transform: scale(0.97);
+        transform: scale(0.98);
+    }
+
+    .metric-top-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .metric-icon-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        flex: 1;
     }
 
     .metric-badge-icon {
-        width: 26px;
-        height: 26px;
-        border-radius: 6px;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        flex-shrink: 0;
     }
 
     .metric-name {
-        font-size: 0.78rem;
+        font-size: 0.86rem;
+        font-weight: 800;
+        line-height: 1.2;
+        word-break: break-word;
     }
 
     .metric-sub {
-        font-size: 0.62rem;
-        max-width: 90px;
+        font-size: 0.72rem;
+        max-width: none;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.35;
+    }
+
+    .metric-val-wrap {
+        text-align: right;
+        flex-shrink: 0;
+        min-width: 0;
+        display: flex;
+        align-items: center;
     }
 
     .metric-pct {
-        font-size: 1.15rem;
+        font-size: 1.25rem;
+        font-weight: 800;
+        white-space: nowrap;
+        line-height: 1;
+    }
+
+    .metric-badge-pill {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 8px;
+        white-space: nowrap;
     }
 
     .metric-bottom-info {
-        font-size: 0.62rem;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 2px;
+        font-size: 0.72rem;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+        min-width: 0;
+        color: var(--text-secondary);
     }
 
     .vps-metric-box.metric-node {
-        grid-column: span 2;
+        grid-column: auto;
     }
 
     .metric-runtime-details {
-        gap: 4px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        width: 100%;
     }
 
     .runtime-chip {
-        padding: 3px 4px;
-        border-radius: 6px;
+        min-width: 0;
+        padding: 6px 6px;
+        border-radius: 8px;
+        text-align: center;
+        box-sizing: border-box;
     }
 
     .chip-k {
-        font-size: 0.52rem;
+        font-size: 0.6rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .chip-v {
-        font-size: 0.68rem;
+        font-size: 0.74rem;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    @media (max-width: 360px) {
+        .vps-monitor-card {
+            padding: 12px 10px;
+        }
+
+        .vps-metric-box {
+            padding: 12px 10px;
+            gap: 8px;
+        }
+
+        .metric-icon-title {
+            gap: 8px;
+        }
+
+        .metric-badge-icon {
+            width: 28px;
+            height: 28px;
+        }
+
+        .metric-name {
+            font-size: 0.82rem;
+        }
+
+        .metric-sub {
+            font-size: 0.68rem;
+        }
+
+        .metric-pct {
+            font-size: 1.15rem;
+        }
+
+        .metric-bottom-info {
+            font-size: 0.68rem;
+        }
+
+        .metric-runtime-details {
+            gap: 4px;
+        }
+
+        .runtime-chip {
+            padding: 4px 3px;
+        }
+
+        .chip-k {
+            font-size: 0.54rem;
+        }
+
+        .chip-v {
+            font-size: 0.68rem;
+        }
     }
 
     /* 4. 6-Tile Key Stats Grid */
