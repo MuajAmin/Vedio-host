@@ -158,16 +158,28 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     height: 22px;
     padding: 0 6px;
     border-radius: 12px;
-    background: #ff3366;
+    background: linear-gradient(135deg, #ff2d55 0%, #ef4444 100%);
     color: #ffffff;
     font-size: 11px;
     font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(255, 51, 102, 0.6), 0 0 0 2.5px var(--bg-deep, #060609);
-    animation: msgBadgeSpring 0.45s var(--msg-spring);
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.75), 0 2px 6px rgba(0, 0, 0, 0.4), 0 0 0 2.5px var(--bg-deep, #060609);
+    animation: msgBadgeSpring 0.45s var(--msg-spring), msgBadgePulse 2.4s infinite ease-in-out;
     letter-spacing: -0.2px;
+    z-index: 10;
+}
+
+@keyframes msgBadgePulse {
+    0%, 100% {
+        box-shadow: 0 0 12px rgba(239, 68, 68, 0.75), 0 2px 6px rgba(0, 0, 0, 0.4), 0 0 0 2.5px var(--bg-deep, #060609);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.95), 0 3px 8px rgba(0, 0, 0, 0.5), 0 0 0 2.5px var(--bg-deep, #060609);
+        transform: scale(1.08);
+    }
 }
 
 @keyframes msgBadgeSpring {
@@ -189,14 +201,178 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     height: 18px;
     padding: 0 4px;
     border-radius: 9px;
-    background: #ff3366;
+    background: linear-gradient(135deg, #ff2d55 0%, #ef4444 100%);
     color: #ffffff;
     font-size: 10px;
     font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(255, 51, 102, 0.6);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.7), 0 2px 5px rgba(0, 0, 0, 0.4);
+    animation: msgBadgeSpring 0.45s var(--msg-spring);
+    z-index: 5;
+}
+
+/* ------------------------------------------------------------
+   2.5. FLOATING MESSAGE NOTIFICATION TOAST
+   ------------------------------------------------------------ */
+.msg-floating-toast {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 1000;
+    pointer-events: none;
+    transition: transform 0.4s var(--msg-spring), opacity 0.35s ease, visibility 0.35s ease;
+    transform: translateY(-24px) scale(0.92);
+    opacity: 0;
+    visibility: hidden;
+}
+
+.msg-floating-toast.is-visible {
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    visibility: visible;
+}
+
+.msg-floating-toast-card {
+    background: rgba(12, 14, 24, 0.94);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    border: 1px solid rgba(255, 51, 102, 0.32);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.75), 0 0 28px rgba(255, 51, 102, 0.22);
+    border-radius: 20px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 380px;
+    min-width: 290px;
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    user-select: none;
+}
+
+.msg-floating-toast-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 51, 102, 0.6);
+    box-shadow: 0 22px 55px rgba(0, 0, 0, 0.8), 0 0 34px rgba(255, 51, 102, 0.35);
+}
+
+.msg-floating-toast-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.msg-floating-toast-avatar-wrap .avatar-img,
+.msg-floating-toast-avatar-wrap .avatar-letter,
+.msg-floating-toast-avatar-wrap .msg-toast-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 51, 102, 0.5);
+}
+
+.msg-toast-dot {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #ff2d55;
+    border: 2px solid #0c0e18;
+    box-shadow: 0 0 8px rgba(255, 45, 85, 0.9);
+}
+
+.msg-floating-toast-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.msg-floating-toast-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
+.msg-floating-toast-sender {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-primary, #ffffff);
+    letter-spacing: -0.01em;
+}
+
+.msg-floating-toast-time {
+    font-size: 10.5px;
+    color: var(--msg-text-muted, #9a94a6);
+    font-weight: 500;
+}
+
+.msg-floating-toast-text {
+    font-size: 12.5px;
+    color: var(--msg-text-muted, #b3adc2);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.35;
+}
+
+.msg-floating-toast-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.msg-floating-toast-reply-btn {
+    background: linear-gradient(135deg, #ff2d55 0%, #ef4444 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 12px;
+    padding: 6px 12px;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.msg-floating-toast-reply-btn:hover {
+    transform: scale(1.05);
+    opacity: 0.95;
+}
+
+.msg-floating-toast-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--msg-text-muted, #9a94a6);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    transition: color 0.15s ease;
+}
+
+.msg-floating-toast-close-btn:hover {
+    color: #ffffff;
+}
+
+@media (max-width: 600px) {
+    .msg-floating-toast {
+        top: 14px;
+        right: 14px;
+        left: 14px;
+    }
+    .msg-floating-toast-card {
+        max-width: 100%;
+        min-width: 0;
+    }
 }
 
 /* ------------------------------------------------------------
@@ -1710,7 +1886,10 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     }
 
     .msg-floating-launcher {
-        display: none !important;
+        bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+        right: 18px;
+        width: 54px;
+        height: 54px;
     }
 
     .msg-drawer-widget {

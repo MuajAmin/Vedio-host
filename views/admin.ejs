@@ -1,5 +1,8 @@
 <%
 const h = escapeHtml;
+const currentUnread = (typeof unreadCount !== 'undefined' && unreadCount > 0) ? unreadCount : 0;
+const unreadDisplay = currentUnread > 0 ? (currentUnread > 99 ? '99+' : currentUnread) : '0';
+const unreadStyle = currentUnread > 0 ? 'display:flex;' : 'display:none;';
 const avatars = (typeof userAvatars !== 'undefined' && userAvatars) ? userAvatars : ((typeof locals !== 'undefined' && locals.userAvatars) ? locals.userAvatars : {});
 function renderAvatar(uname, extraCls = '') {
     const avatar = avatars[uname];
@@ -763,7 +766,7 @@ const videoRows = recentVideos.length === 0
                         <circle cx="12" cy="11.5" r="1" fill="currentColor"/>
                         <circle cx="15.5" cy="11.5" r="1" fill="currentColor"/>
                     </svg>
-                    <span class="nav-msg-badge" style="display:none;">0</span>
+                    <span class="nav-msg-badge" style="${unreadStyle}">${unreadDisplay}</span>
                 </div>
                 <span class="nav-btn-text">Chat</span>
             </a>
@@ -1350,7 +1353,7 @@ const videoRows = recentVideos.length === 0
                 <svg class="nav-icon-filled" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
                     <path d="M21 12c0 4.42-4.03 8-9 8-1.5 0-2.91-.36-4.15-1.01L3 21l2.01-4.84A7.9 7.9 0 0 1 3 12c0-4.42 4.03-8 9-8s9 3.58 9 8z"/>
                 </svg>
-                <span class="nav-msg-badge bottom-nav-badge" style="display:none;">0</span>
+                <span class="nav-msg-badge bottom-nav-badge" style="${unreadStyle}">${unreadDisplay}</span>
             </div>
             <span class="bottom-nav-label">Chat</span>
         </a>

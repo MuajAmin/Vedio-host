@@ -65,6 +65,14 @@
     const navMsgBadges = document.querySelectorAll('.nav-msg-badge');
     const fullPageMessagesList = document.getElementById('msgFullpageList');
     const drawerMessagesList = document.getElementById('msgDrawerList');
+    const floatingToast = document.getElementById('msgFloatingToast');
+    const floatingToastText = document.getElementById('msgFloatingToastText');
+    const floatingToastReply = document.getElementById('msgFloatingToastReply');
+    const floatingToastClose = document.getElementById('msgFloatingToastClose');
+
+    let toastDismissTimeout = null;
+    let isDrawerLoaded = false;
+    let isDrawerLoading = false;
 
     function getActiveContainers() {
         const list = [];
@@ -74,20 +82,22 @@
     }
 
     // ------------------------------------------------------------
-    //  2. UNREAD BADGE SYNCHRONIZER
+    //  2. UNREAD BADGE & TOAST SYNCHRONIZER
     // ------------------------------------------------------------
     function updateUnreadBadges(count) {
         const num = Math.max(0, parseInt(count, 10) || 0);
+        const text = num > 99 ? '99+' : String(num);
+
         if (unreadPill) {
             if (num > 0) {
-                unreadPill.textContent = num > 99 ? '99+' : num;
+                unreadPill.textContent = text;
                 unreadPill.style.display = 'flex';
             } else {
                 unreadPill.style.display = 'none';
             }
         }
 
-        // Show launcher only when there is a new/unread message or the drawer is open
+        // Show launcher when there is a new/unread message or the drawer is open
         if (launcher) {
             const isDrawerOpen = drawer && drawer.classList.contains('is-open');
             if (num > 0 || isDrawerOpen) {
@@ -101,12 +111,82 @@
 
         navMsgBadges.forEach(badge => {
             if (num > 0) {
-                badge.textContent = num > 99 ? '99+' : num;
+                badge.textContent = text;
                 badge.style.display = 'flex';
             } else {
                 badge.style.display = 'none';
             }
         });
+
+        if (num === 0) {
+            hideFloatingMessageToast();
+        }
+    }
+
+    function showFloatingMessageToast(msg) {
+        if (!floatingToast || !msg) return;
+        const isDrawerOpen = drawer && drawer.classList.contains('is-open');
+        const isFullPage = !!fullPageMessagesList;
+        if (isDrawerOpen || isFullPage) return;
+
+        let previewText = 'New message';
+        if (msg.text) {
+            previewText = msg.text.length > 55 ? msg.text.slice(0, 55) + '…' : msg.text;
+        } else if (msg.voiceUrl) {
+            previewText = '🎤 Voice note';
+        } else if (msg.video) {
+            previewText = `🎬 Shared video: ${msg.video.title || 'video'}`;
+        }
+
+        if (floatingToastText) {
+            floatingToastText.textContent = previewText;
+        }
+
+        floatingToast.style.display = 'block';
+        void floatingToast.offsetWidth; // Force reflow
+        floatingToast.classList.add('is-visible');
+
+        clearTimeout(toastDismissTimeout);
+        toastDismissTimeout = setTimeout(() => {
+            hideFloatingMessageToast();
+        }, 6000);
+    }
+
+    function hideFloatingMessageToast() {
+        if (!floatingToast) return;
+        floatingToast.classList.remove('is-visible');
+        clearTimeout(toastDismissTimeout);
+        setTimeout(() => {
+            if (!floatingToast.classList.contains('is-visible')) {
+                floatingToast.style.display = 'none';
+            }
+        }, 350);
+    }
+
+    function loadDrawerHistory() {
+        if (isDrawerLoaded || isDrawerLoading || !drawerMessagesList) return;
+        isDrawerLoading = true;
+
+        fetch('/api/messages?limit=40')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && Array.isArray(data.messages)) {
+                    const emptyState = drawerMessagesList.querySelector('.msg-empty-state');
+                    if (emptyState && data.messages.length > 0) emptyState.remove();
+
+                    data.messages.forEach(msg => {
+                        if (!drawerMessagesList.querySelector(`[data-msg-id="${msg.id}"]`)) {
+                            drawerMessagesList.insertAdjacentHTML('beforeend', renderMessageHTML(msg));
+                        }
+                    });
+                    isDrawerLoaded = true;
+                    scrollToBottom(drawerMessagesList);
+                }
+            })
+            .catch(err => console.error('[messages] Error loading drawer history:', err))
+            .finally(() => {
+                isDrawerLoading = false;
+            });
     }
 
     // ------------------------------------------------------------
@@ -150,6 +230,7 @@
                     if (isDrawerOpen || isFullPage) {
                         markMessagesAsRead();
                     } else {
+                        showFloatingMessageToast(msg);
                         if (typeof data.unreadCount === 'number') {
                             updateUnreadBadges(data.unreadCount);
                         }
@@ -158,6 +239,15 @@
             } catch (err) {
                 console.error('[messages] SSE error parsing new-message:', err);
             }
+        });
+
+        sseSource.addEventListener('unread-count', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (typeof data.unreadCount === 'number') {
+                    updateUnreadBadges(data.unreadCount);
+                }
+            } catch {}
         });
 
         sseSource.addEventListener('messages-read', () => {
@@ -961,31 +1051,59 @@
     // ------------------------------------------------------------
     //  12. FLOATING LAUNCHER & DRAWER INTERACTION
     // ------------------------------------------------------------
+    function openDrawer() {
+        if (!drawer || !launcher) return;
+        drawer.classList.add('is-open');
+        launcher.classList.add('is-open');
+        launcher.classList.remove('has-unread');
+        hideFloatingMessageToast();
+        loadDrawerHistory();
+        markMessagesAsRead();
+        if (drawerMessagesList) {
+            scrollToBottom(drawerMessagesList);
+        }
+        const input = drawer.querySelector('.msg-textarea');
+        if (input) input.focus();
+    }
+
+    function closeDrawer() {
+        if (!drawer || !launcher) return;
+        drawer.classList.remove('is-open');
+        launcher.classList.remove('is-open');
+        const badgeCount = parseInt(unreadPill ? unreadPill.textContent : '0', 10) || 0;
+        if (badgeCount <= 0) {
+            launcher.classList.remove('has-unread');
+            launcher.style.display = 'none';
+        }
+    }
+
     if (launcher && drawer) {
         launcher.addEventListener('click', () => {
-            const isOpen = drawer.classList.toggle('is-open');
-            launcher.classList.toggle('is-open', isOpen);
-            if (isOpen) {
-                markMessagesAsRead();
-                if (drawerMessagesList) {
-                    scrollToBottom(drawerMessagesList);
-                }
-                const input = drawer.querySelector('.msg-textarea');
-                if (input) input.focus();
+            if (drawer.classList.contains('is-open')) {
+                closeDrawer();
+            } else {
+                openDrawer();
             }
         });
 
         if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                drawer.classList.remove('is-open');
-                launcher.classList.remove('is-open');
-                const badgeCount = parseInt(unreadPill ? unreadPill.textContent : '0', 10) || 0;
-                if (badgeCount <= 0) {
-                    launcher.classList.remove('has-unread');
-                    launcher.style.display = 'none';
-                }
-            });
+            closeBtn.addEventListener('click', closeDrawer);
         }
+    }
+
+    if (floatingToast) {
+        floatingToast.addEventListener('click', (e) => {
+            if (e.target.closest('#msgFloatingToastClose') || e.target.closest('.msg-floating-toast-close-btn')) {
+                hideFloatingMessageToast();
+                return;
+            }
+            hideFloatingMessageToast();
+            if (drawer && launcher) {
+                openDrawer();
+            } else {
+                window.location.href = '/messages';
+            }
+        });
     }
 
     // ------------------------------------------------------------
