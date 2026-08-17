@@ -327,11 +327,14 @@
         // Active Call Controls
         btnMute: document.getElementById('callBtnMute'),
         btnCamera: document.getElementById('callBtnCamera'),
+        btnCameraFlip: document.getElementById('callBtnCameraFlip'),
         btnSpeaker: document.getElementById('callBtnSpeaker'),
         btnEnd: document.getElementById('callBtnEnd'),
         btnMinimize: document.getElementById('callBtnMinimize'),
         callMuteLabel: document.getElementById('callMuteLabel'),
         callCamLabel: document.getElementById('callCamLabel'),
+        callCameraItem: document.getElementById('callCameraItem'),
+        callCameraFlipItem: document.getElementById('callCameraFlipItem'),
         callSpeakerLabel: document.getElementById('callSpeakerLabel'),
         callSpeakerItem: document.getElementById('callSpeakerItem'),
 
@@ -419,6 +422,12 @@
         }
         if (DOM.callCamLabel) {
             DOM.callCamLabel.style.display = isVideo ? 'block' : 'none';
+        }
+        if (DOM.callCameraItem) {
+            DOM.callCameraItem.style.display = isVideo ? 'flex' : 'none';
+        }
+        if (DOM.callCameraFlipItem) {
+            DOM.callCameraFlipItem.style.display = isVideo ? 'flex' : 'none';
         }
 
         // Hide reconnect banner
@@ -952,16 +961,61 @@
         }
     }
 
+    function showCallHudToast(title, subtitle, variant = 'info') {
+        let toast = document.getElementById('globalCallHudToast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'globalCallHudToast';
+            toast.className = 'call-hud-toast';
+            document.body.appendChild(toast);
+        }
+
+        const iconSvg = variant === 'success'
+            ? `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#34d399" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`
+            : (variant === 'danger'
+                ? `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fb7185" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`
+                : `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#38bdf8" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`);
+
+        toast.className = `call-hud-toast call-hud-${variant} is-visible`;
+        toast.innerHTML = `
+            <div class="call-hud-icon">${iconSvg}</div>
+            <div class="call-hud-text">
+                <span class="call-hud-title">${title}</span>
+                ${subtitle ? `<span class="call-hud-subtitle">${subtitle}</span>` : ''}
+            </div>
+        `;
+
+        clearTimeout(toast._dismissTimer);
+        toast._dismissTimer = setTimeout(() => {
+            toast.classList.remove('is-visible');
+        }, 3500);
+    }
+
     function endCallLocally(reason = 'Ended') {
         if (CallState.state === 'idle') return; // Already cleaned up
 
-        callLog('CALL_ENDED_LOCALLY', { reason, callId: CallState.callId });
+        const duration = CallState.durationSeconds;
+        callLog('CALL_ENDED_LOCALLY', { reason, callId: CallState.callId, duration });
 
         playCallEndedChime();
         stopAudioVisualizer();
         hideActiveCallModal();
         hideIncomingCallModal();
         hideMinimizedPill();
+
+        // Show HUD Feedback
+        if (duration > 0) {
+            const mins = Math.floor(duration / 60);
+            const secs = duration % 60;
+            const durStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+            showCallHudToast('Call Ended', `Duration: ${durStr}`, 'info');
+        } else if (reason === 'Rejected') {
+            showCallHudToast('Call Declined', 'Call was declined', 'danger');
+        } else if (reason === 'No answer' || reason === 'Timeout') {
+            showCallHudToast('Call Missed', 'No answer', 'danger');
+        } else if (reason === 'Cancelled') {
+            showCallHudToast('Call Cancelled', 'Call was cancelled', 'info');
+        }
 
         // Hide reconnect/error banners
         if (DOM.reconnectBanner) DOM.reconnectBanner.style.display = 'none';
@@ -1150,6 +1204,49 @@
         }
     }
 
+    async function flipCamera() {
+        if (!CallState.localStream || CallState.callType !== 'video') return;
+        const currentFacing = CallState.facingMode || 'user';
+        const nextFacing = currentFacing === 'user' ? 'environment' : 'user';
+        CallState.facingMode = nextFacing;
+
+        try {
+            const oldTrack = CallState.localStream.getVideoTracks()[0];
+            const newStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: nextFacing,
+                    width: { ideal: 1280, max: 1920 },
+                    height: { ideal: 720, max: 1080 }
+                }
+            }).catch(() => {
+                return navigator.mediaDevices.getUserMedia({ video: true });
+            });
+
+            const newTrack = newStream.getVideoTracks()[0];
+            if (newTrack) {
+                if (CallState.peerConnection) {
+                    const senders = CallState.peerConnection.getSenders();
+                    const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+                    if (videoSender) {
+                        videoSender.replaceTrack(newTrack);
+                    }
+                }
+                if (oldTrack) {
+                    oldTrack.stop();
+                    CallState.localStream.removeTrack(oldTrack);
+                }
+                CallState.localStream.addTrack(newTrack);
+                if (DOM.localVideo) {
+                    DOM.localVideo.srcObject = CallState.localStream;
+                    DOM.localVideo.style.transform = nextFacing === 'user' ? 'scaleX(-1)' : 'none';
+                }
+                callLog('CAMERA_FLIPPED', { facingMode: nextFacing });
+            }
+        } catch (e) {
+            callLog('CAMERA_FLIP_ERROR', { error: e.message });
+        }
+    }
+
     // ------------------------------------------------------------
     //  12. SSE SIGNALING HANDLERS
     // ------------------------------------------------------------
@@ -1296,6 +1393,9 @@
         if (DOM.btnCamera) {
             DOM.btnCamera.addEventListener('click', toggleCamera);
         }
+        if (DOM.btnCameraFlip) {
+            DOM.btnCameraFlip.addEventListener('click', flipCamera);
+        }
         if (DOM.btnSpeaker) {
             DOM.btnSpeaker.addEventListener('click', toggleSpeaker);
         }
@@ -1355,8 +1455,9 @@
             }
         });
 
-        // Touch drag for Picture-in-Picture window on mobile
+        // Touch drag for Picture-in-Picture window and Minimized Pill on mobile
         setupPipDraggable();
+        setupMinimizedPillDraggable();
 
         // Window unload cleanup — use Blob for proper Content-Type
         window.addEventListener('beforeunload', () => {
@@ -1384,18 +1485,30 @@
             }
         });
 
-        // Visibility change — pause/resume visualizer, check connection
+        // Visibility change — pause/resume visualizer & optimize video track on Android backgrounding
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') {
-                // Pause visualizer to save CPU
+                // Pause visualizer to save CPU & battery
                 if (visualizerAnimationId) {
                     cancelAnimationFrame(visualizerAnimationId);
                     visualizerAnimationId = null;
+                }
+                // If in a video call, temporarily pause local video track to save battery & data
+                if (CallState.localStream && CallState.callType === 'video' && !CallState.isCameraOff) {
+                    const videoTracks = CallState.localStream.getVideoTracks();
+                    videoTracks.forEach(t => { t.enabled = false; });
+                    sendSignalingMessage('media-state', { cameraOff: true });
                 }
             } else if (document.visibilityState === 'visible') {
                 // Resume visualizer if in a call
                 if ((CallState.state === 'connected' || CallState.state === 'connecting') && audioAnalyser) {
                     startVisualizerLoop();
+                }
+                // Resume video track if user had camera active
+                if (CallState.localStream && CallState.callType === 'video' && !CallState.isCameraOff) {
+                    const videoTracks = CallState.localStream.getVideoTracks();
+                    videoTracks.forEach(t => { t.enabled = true; });
+                    sendSignalingMessage('media-state', { cameraOff: false });
                 }
                 // Check WebRTC connection state
                 if (CallState.peerConnection && CallState.state === 'connected') {
@@ -1473,6 +1586,56 @@
         window.addEventListener('touchmove', onTouchMove, { passive: true });
         window.addEventListener('touchend', onTouchEnd);
         pip.addEventListener('mousedown', onTouchStart);
+        window.addEventListener('mousemove', onTouchMove);
+        window.addEventListener('mouseup', onTouchEnd);
+    }
+
+    function setupMinimizedPillDraggable() {
+        const pill = DOM.minimizedPill;
+        if (!pill) return;
+
+        let isDragging = false;
+        let hasMoved = false;
+        let startX, startY, initialLeft, initialTop;
+
+        const onTouchStart = (e) => {
+            if (e.target.closest('#minimizedQuickEndBtn')) return;
+            isDragging = true;
+            hasMoved = false;
+            const touch = e.touches ? e.touches[0] : e;
+            startX = touch.clientX;
+            startY = touch.clientY;
+            const rect = pill.getBoundingClientRect();
+            initialLeft = rect.left;
+            initialTop = rect.top;
+        };
+
+        const onTouchMove = (e) => {
+            if (!isDragging) return;
+            const touch = e.touches ? e.touches[0] : e;
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+
+            if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+                hasMoved = true;
+            }
+
+            let newLeft = Math.max(8, Math.min(window.innerWidth - pill.offsetWidth - 8, initialLeft + dx));
+            let newTop = Math.max(10, Math.min(window.innerHeight - pill.offsetHeight - 60, initialTop + dy));
+
+            pill.style.left = `${newLeft}px`;
+            pill.style.top = `${newTop}px`;
+            pill.style.bottom = 'auto';
+        };
+
+        const onTouchEnd = () => {
+            isDragging = false;
+        };
+
+        pill.addEventListener('touchstart', onTouchStart, { passive: true });
+        window.addEventListener('touchmove', onTouchMove, { passive: true });
+        window.addEventListener('touchend', onTouchEnd);
+        pill.addEventListener('mousedown', onTouchStart);
         window.addEventListener('mousemove', onTouchMove);
         window.addEventListener('mouseup', onTouchEnd);
     }

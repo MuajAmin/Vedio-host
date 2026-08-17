@@ -1085,84 +1085,326 @@
     box-shadow: 0 4px 15px rgba(56, 189, 248, 0.25);
 }
 
-/* Chat Stream Call History Bubble */
+/* ============================================================
+   CHAT STREAM CALL EVENT CARDS (Luxury Glassmorphic Design)
+   ============================================================ */
+
+.msg-row-call-event {
+    margin: 6px 0;
+    max-width: 100%;
+}
+
+.msg-row-call-event .msg-bubble {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    overflow: visible;
+}
+
+.msg-row-call-event .msg-bubble-wrap {
+    max-width: 100%;
+}
+
+.msg-call-meta-bottom {
+    margin-top: 4px;
+    padding: 0 4px;
+    font-size: 11px;
+}
+
 .msg-call-event-card {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 12px 18px;
-    background: rgba(18, 24, 40, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 13px 18px;
+    min-width: 290px;
+    max-width: 390px;
+    background: rgba(13, 16, 28, 0.82);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 20px;
-    margin: 6px 0;
-    max-width: 340px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    transition: all 0.2s;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.25s ease,
+                border-color 0.25s ease;
 }
 
 .msg-call-event-card:hover {
-    background: rgba(18, 24, 40, 0.8);
-    border-color: rgba(255, 255, 255, 0.18);
+    transform: translateY(-2px);
+    background: rgba(16, 20, 36, 0.92);
 }
 
-.msg-call-event-icon-wrap {
-    width: 42px;
-    height: 42px;
+/* Glow Top Edge Accent */
+.msg-call-glow-edge {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1.5px;
+    opacity: 0.85;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+}
+
+/* Status-Specific Theme Variants */
+.msg-call-event-card.call-status-completed {
+    border-color: rgba(16, 185, 129, 0.3);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), 0 0 24px rgba(16, 185, 129, 0.08);
+}
+.msg-call-event-card.call-status-completed .msg-call-glow-edge {
+    background: linear-gradient(90deg, transparent, #10b981 30%, #06b6d4 70%, transparent);
+}
+.msg-call-event-card.call-status-completed:hover {
+    border-color: rgba(16, 185, 129, 0.55);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.55), 0 0 32px rgba(16, 185, 129, 0.2);
+}
+
+.msg-call-event-card.call-status-missed {
+    border-color: rgba(244, 63, 94, 0.35);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), 0 0 24px rgba(244, 63, 94, 0.12);
+}
+.msg-call-event-card.call-status-missed .msg-call-glow-edge {
+    background: linear-gradient(90deg, transparent, #f43f5e 30%, #fb7185 70%, transparent);
+}
+.msg-call-event-card.call-status-missed:hover {
+    border-color: rgba(244, 63, 94, 0.6);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.55), 0 0 34px rgba(244, 63, 94, 0.24);
+}
+
+.msg-call-event-card.call-status-rejected {
+    border-color: rgba(245, 158, 11, 0.3);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), 0 0 20px rgba(245, 158, 11, 0.08);
+}
+.msg-call-event-card.call-status-rejected .msg-call-glow-edge {
+    background: linear-gradient(90deg, transparent, #f59e0b 30%, #fbbf24 70%, transparent);
+}
+.msg-call-event-card.call-status-rejected:hover {
+    border-color: rgba(245, 158, 11, 0.55);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.55), 0 0 28px rgba(245, 158, 11, 0.18);
+}
+
+.msg-call-event-card.call-status-cancelled {
+    border-color: rgba(148, 163, 184, 0.24);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+}
+.msg-call-event-card.call-status-cancelled .msg-call-glow-edge {
+    background: linear-gradient(90deg, transparent, #94a3b8 30%, #cbd5e1 70%, transparent);
+}
+
+/* Icon Container & Badge */
+.msg-call-icon-container {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+}
+
+.msg-call-icon-inner {
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
+    transition: transform 0.2s ease;
 }
 
-.msg-call-event-icon-wrap.is-completed {
-    background: rgba(16, 185, 129, 0.15);
-    color: var(--call-accent-green);
-    border: 1px solid rgba(16, 185, 129, 0.3);
+.msg-call-event-card:hover .msg-call-icon-inner {
+    transform: scale(1.08);
 }
 
-.msg-call-event-icon-wrap.is-missed {
-    background: rgba(244, 63, 94, 0.15);
-    color: var(--call-accent-red);
-    border: 1px solid rgba(244, 63, 94, 0.3);
+.call-status-completed .msg-call-icon-inner {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 182, 212, 0.16) 100%);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.42);
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.25);
 }
 
-.msg-call-event-details {
+.call-status-missed .msg-call-icon-inner {
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.24) 0%, rgba(225, 29, 72, 0.18) 100%);
+    color: #fb7185;
+    border: 1px solid rgba(244, 63, 94, 0.48);
+    box-shadow: 0 0 18px rgba(244, 63, 94, 0.3);
+}
+
+.call-status-rejected .msg-call-icon-inner {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.22) 0%, rgba(217, 119, 6, 0.16) 100%);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.2);
+}
+
+.call-status-cancelled .msg-call-icon-inner {
+    background: linear-gradient(135deg, rgba(148, 163, 184, 0.18) 0%, rgba(100, 116, 139, 0.12) 100%);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.32);
+}
+
+/* Missed Call Animated Pulse Ring */
+.msg-call-pulse-ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(244, 63, 94, 0.6);
+    animation: msgCallPulseRingAnim 2.2s infinite cubic-bezier(0.2, 0.8, 0.4, 1);
+    pointer-events: none;
+}
+
+@keyframes msgCallPulseRingAnim {
+    0% { transform: scale(0.96); opacity: 0.9; }
+    100% { transform: scale(1.42); opacity: 0; }
+}
+
+/* Direction Badge Indicator */
+.msg-call-dir-badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0a0d18;
+    border: 1.5px solid #1a2034;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+    z-index: 2;
+}
+
+.msg-call-dir-badge.dir-outgoing,
+.msg-call-dir-badge.dir-incoming {
+    color: #34d399;
+}
+
+.msg-call-dir-badge.dir-missed,
+.msg-call-dir-badge.dir-missed-out {
+    color: #f43f5e;
+}
+
+.msg-call-dir-badge.dir-rejected {
+    color: #f59e0b;
+}
+
+.msg-call-dir-badge.dir-cancelled {
+    color: #94a3b8;
+}
+
+/* Call Info Typography */
+.msg-call-info {
     flex: 1;
     min-width: 0;
 }
 
-.msg-call-event-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--call-text-primary);
+.msg-call-headline {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
     margin-bottom: 2px;
 }
 
-.msg-call-event-subtitle {
-    font-size: 12px;
-    color: var(--call-text-muted);
+.msg-call-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.msg-call-event-action-btn {
-    padding: 6px 12px;
-    border-radius: 10px;
+.msg-call-status-badge {
+    font-size: 9.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 1.5px 6.5px;
+    border-radius: 5px;
+    line-height: 1.2;
+}
+
+.msg-call-status-badge.call-status-completed {
+    background: rgba(16, 185, 129, 0.16);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.32);
+}
+
+.msg-call-status-badge.call-status-missed {
+    background: rgba(244, 63, 94, 0.18);
+    color: #fb7185;
+    border: 1px solid rgba(244, 63, 94, 0.36);
+}
+
+.msg-call-status-badge.call-status-rejected {
+    background: rgba(245, 158, 11, 0.16);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.32);
+}
+
+.msg-call-status-badge.call-status-cancelled {
+    background: rgba(148, 163, 184, 0.14);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.msg-call-meta-line {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: #94a3b8;
+    line-height: 1.3;
+}
+
+.msg-call-subtitle {
+    color: #94a3b8;
+}
+
+.msg-call-time-dot {
+    opacity: 0.4;
+}
+
+.msg-call-time-chip {
+    font-size: 10.5px;
+    opacity: 0.75;
+}
+
+/* Call Back Action Pill */
+.msg-call-actions {
+    flex-shrink: 0;
+}
+
+.msg-call-action-pill {
+    padding: 6.5px 12px;
+    border-radius: 11px;
     font-size: 11px;
     font-weight: 700;
-    background: rgba(56, 189, 248, 0.12);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    color: var(--call-accent-cyan);
+    letter-spacing: 0.2px;
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.14) 0%, rgba(14, 165, 233, 0.08) 100%);
+    border: 1px solid rgba(56, 189, 248, 0.36);
+    color: #38bdf8;
     cursor: pointer;
-    transition: all 0.18s;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    white-space: nowrap;
 }
 
-.msg-call-event-action-btn:hover {
-    background: var(--call-accent-cyan);
-    color: #06080e;
-    transform: scale(1.05);
+.msg-call-action-pill:hover {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+    color: #ffffff;
+    border-color: #38bdf8;
+    transform: translateY(-1.5px) scale(1.05);
+    box-shadow: 0 6px 18px rgba(14, 165, 233, 0.4);
+}
+
+.msg-call-action-pill:active {
+    transform: scale(0.95);
 }
 
 
@@ -1241,6 +1483,28 @@
     .minimized-call-pill {
         bottom: calc(16px + env(safe-area-inset-bottom, 0px));
         left: calc(16px + env(safe-area-inset-left, 0px));
+    }
+
+    .msg-call-event-card {
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+        padding: 11px 14px;
+        gap: 10px;
+    }
+
+    .msg-call-icon-container {
+        width: 38px;
+        height: 38px;
+    }
+
+    .msg-call-title {
+        font-size: 12.5px;
+    }
+
+    .msg-call-action-pill {
+        padding: 5px 10px;
+        font-size: 10.5px;
     }
 }
 
@@ -1459,4 +1723,77 @@
         right: 12px;
     }
 }
+
+/* ============================================================
+   GLOBAL FLOATING CALL HUD TOAST
+   ============================================================ */
+.call-hud-toast {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-24px) scale(0.9);
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    background: rgba(13, 16, 28, 0.94);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 30px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 24px rgba(56, 189, 248, 0.15);
+    z-index: 10005;
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 0.25s ease,
+                box-shadow 0.25s ease;
+}
+
+.call-hud-toast.is-visible {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.call-hud-toast.call-hud-success {
+    border-color: rgba(16, 185, 129, 0.45);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 24px rgba(16, 185, 129, 0.22);
+}
+
+.call-hud-toast.call-hud-danger {
+    border-color: rgba(244, 63, 94, 0.45);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 24px rgba(244, 63, 94, 0.25);
+}
+
+.call-hud-toast.call-hud-info {
+    border-color: rgba(56, 189, 248, 0.45);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 24px rgba(56, 189, 248, 0.22);
+}
+
+.call-hud-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.call-hud-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.call-hud-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f8fafc;
+    letter-spacing: -0.2px;
+}
+
+.call-hud-subtitle {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
 

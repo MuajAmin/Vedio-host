@@ -1,12 +1,15 @@
 {
-  "name": "VideoHost Private Cinema",
+  "name": "VideoHost Cinema",
   "short_name": "VideoHost",
-  "description": "Private Video Hub for Muaj & Hajera",
+  "description": "Private Mobile Cinema & Messaging for Muaj & Hajera",
   "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#060609",
   "theme_color": "#060609",
   "orientation": "any",
+  "categories": ["entertainment", "social", "video"],
   "icons": [
     {
       "src": "/css/icon-192.png",
@@ -19,6 +22,29 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Library",
+      "short_name": "Library",
+      "description": "Browse private video library",
+      "url": "/dashboard",
+      "icons": [{ "src": "/css/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Messages",
+      "short_name": "Chat",
+      "description": "Direct chat and voice notes",
+      "url": "/messages",
+      "icons": [{ "src": "/css/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Upload Video",
+      "short_name": "Upload",
+      "description": "Upload a new video",
+      "url": "/upload",
+      "icons": [{ "src": "/css/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

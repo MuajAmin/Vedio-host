@@ -20,23 +20,215 @@ document.addEventListener('DOMContentLoaded', () => {
     const prefersReducedMotion = window.matchMedia &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    // Dynamic navbar elevation on scroll
-    const navbars = document.querySelectorAll('.navbar, .android-app-bar');
-    if (navbars.length > 0) {
-        let lastScrollY = window.scrollY;
-        const handleNavScroll = () => {
-            const isScrolled = window.scrollY > 12;
-            navbars.forEach(nav => {
-                if (isScrolled) {
-                    nav.classList.add('is-scrolled');
-                } else {
-                    nav.classList.remove('is-scrolled');
+    let vpsPollingInterval = null;
+
+    // ========================================
+    // SPA Router Engine (PJAX with Global Element Preservation)
+    // ========================================
+    function initSpaNavigation() {
+        if (window.__SPA_ROUTER_ATTACHED__) return;
+        window.__SPA_ROUTER_ATTACHED__ = true;
+
+        const progressBar = document.getElementById('androidTopProgressBar');
+        let isNavigating = false;
+
+        function startProgress() {
+            if (progressBar) {
+                progressBar.style.width = '35%';
+                progressBar.classList.add('is-loading');
+                progressBar.classList.remove('is-finished');
+            }
+        }
+
+        function advanceProgress() {
+            if (progressBar) {
+                progressBar.style.width = '75%';
+            }
+        }
+
+        function finishProgress() {
+            if (progressBar) {
+                progressBar.style.width = '100%';
+                setTimeout(() => {
+                    progressBar.classList.add('is-finished');
+                    progressBar.classList.remove('is-loading');
+                    setTimeout(() => {
+                        progressBar.style.width = '0%';
+                        progressBar.classList.remove('is-finished');
+                    }, 300);
+                }, 150);
+            }
+        }
+
+        function resetProgress() {
+            if (progressBar) {
+                progressBar.style.width = '0%';
+                progressBar.classList.remove('is-loading', 'is-finished');
+            }
+        }
+
+        function cleanupCurrentPage() {
+            // Clean video player memory
+            const vid = document.getElementById('vpVideo');
+            if (vid) {
+                try {
+                    vid.pause();
+                    vid.removeAttribute('src');
+                    vid.load();
+                } catch (e) {}
+            }
+            if (vpsPollingInterval) {
+                clearInterval(vpsPollingInterval);
+                vpsPollingInterval = null;
+            }
+            window.dispatchEvent(new CustomEvent('page:cleanup'));
+        }
+
+        async function navigateTo(url, push = true) {
+            if (isNavigating) return;
+            isNavigating = true;
+            startProgress();
+
+            try {
+                cleanupCurrentPage();
+                advanceProgress();
+
+                const res = await fetch(url, {
+                    headers: { 'X-Requested-With': 'VideoHost-PJAX' }
+                });
+
+                if (res.redirected) {
+                    window.location.href = res.url;
+                    return;
                 }
-            });
-        };
-        window.addEventListener('scroll', handleNavScroll, { passive: true });
-        handleNavScroll();
+
+                if (!res.ok) {
+                    window.location.href = url;
+                    return;
+                }
+
+                const html = await res.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                const currentContainer = document.querySelector('.app-container, .login-container') || document.querySelector('.main-content');
+                const newContainer = doc.querySelector('.app-container, .login-container') || doc.querySelector('.main-content');
+
+                if (currentContainer && newContainer) {
+                    currentContainer.replaceWith(newContainer);
+                } else {
+                    window.location.href = url;
+                    return;
+                }
+
+                // Update document title and data-page
+                document.title = doc.title;
+                const newPage = doc.body.getAttribute('data-page') || '';
+                document.body.setAttribute('data-page', newPage);
+
+                // Update theme if changed
+                const newTheme = doc.documentElement.getAttribute('data-theme');
+                if (newTheme) {
+                    document.documentElement.setAttribute('data-theme', newTheme);
+                }
+
+                // Update active bottom bar item
+                const targetPath = new URL(url, window.location.origin).pathname;
+                document.querySelectorAll('.mobile-bottom-bar a, .android-bottom-nav a').forEach(a => {
+                    const href = a.getAttribute('href');
+                    if (href && (href === targetPath || (href === '/dashboard' && targetPath === '/') || (targetPath.startsWith('/watch/') && href === '/dashboard'))) {
+                        a.classList.add('active');
+                    } else {
+                        a.classList.remove('active');
+                    }
+                });
+
+                if (push) {
+                    window.history.pushState({ url }, doc.title, url);
+                }
+
+                window.scrollTo({ top: 0, behavior: 'instant' });
+
+                // Run page-specific initializers for the new DOM
+                initPageModules();
+
+                // Dispatch global event for messages, calling, and watchTogether
+                window.dispatchEvent(new CustomEvent('page:navigate', { detail: { url, page: newPage } }));
+
+                finishProgress();
+            } catch (err) {
+                console.error('[SPA] Route error:', err);
+                resetProgress();
+                window.location.href = url;
+            } finally {
+                isNavigating = false;
+            }
+        }
+
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('a');
+            if (!link) return;
+
+            if (link.target && link.target !== '_self') return;
+            if (link.hasAttribute('download')) return;
+            if (link.getAttribute('href')?.startsWith('#')) return;
+
+            const href = link.getAttribute('href');
+            if (!href || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+
+            try {
+                const destUrl = new URL(link.href, window.location.href);
+                if (destUrl.origin !== window.location.origin) return;
+
+                const path = destUrl.pathname;
+                if (
+                    path.startsWith('/stream/') ||
+                    path.startsWith('/thumbnails/') ||
+                    path.startsWith('/avatars/') ||
+                    path.startsWith('/voice/') ||
+                    path.startsWith('/download/') ||
+                    path.startsWith('/login') ||
+                    path.startsWith('/logout')
+                ) {
+                    return;
+                }
+
+                if (destUrl.pathname === window.location.pathname && destUrl.search === window.location.search) {
+                    e.preventDefault();
+                    return;
+                }
+
+                e.preventDefault();
+                navigateTo(destUrl.href, true);
+            } catch (err) {}
+        });
+
+        window.addEventListener('popstate', () => {
+            navigateTo(window.location.href, false);
+        });
     }
+
+    // ========================================
+    // Page Component Modules Initializer
+    // ========================================
+    function initPageModules() {
+        // Dynamic navbar elevation on scroll
+        const navbars = document.querySelectorAll('.navbar, .android-app-bar');
+        if (navbars.length > 0) {
+            let lastScrollY = window.scrollY;
+            const handleNavScroll = () => {
+                const isScrolled = window.scrollY > 12;
+                navbars.forEach(nav => {
+                    if (isScrolled) {
+                        nav.classList.add('is-scrolled');
+                    } else {
+                        nav.classList.remove('is-scrolled');
+                    }
+                });
+            };
+            window.addEventListener('scroll', handleNavScroll, { passive: true });
+            handleNavScroll();
+        }
 
     // Thumbnail error fallback — replaces inline onerror blocked by CSP
     document.addEventListener('error', (e) => {
@@ -3387,9 +3579,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 .catch(() => {});
         }
 
-        // Start VPS live polling every 3.5 seconds on admin page
-        setInterval(pollVpsMetrics, 10000);
-    }
+        // Start VPS live polling if on admin page
+        if (document.getElementById('vpsHealthPill') || document.getElementById('vpsCpuFill')) {
+            if (vpsPollingInterval) clearInterval(vpsPollingInterval);
+            vpsPollingInterval = setInterval(pollVpsMetrics, 10000);
+        }
+    } // End admin block
+    } // End initPageModules
+
+    // Initialize SPA navigation engine & current page modules on startup
+    initSpaNavigation();
+    initPageModules();
 
 });
 

@@ -196,6 +196,30 @@ input, textarea, select {
     font-size: 16px; /* Android Chrome auto-zoom prevention */
 }
 
+/* ---- Android Native Route Progress Indicator ---- */
+.android-top-progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0%;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent-gold), var(--accent-gold-bright), var(--accent-warm));
+    box-shadow: 0 0 10px var(--accent-gold-glow-strong), 0 0 4px var(--accent-gold);
+    z-index: 999999;
+    opacity: 0;
+    pointer-events: none;
+    transition: width 0.25s cubic-bezier(0.1, 0.9, 0.2, 1), opacity 0.3s ease;
+}
+
+.android-top-progress-bar.is-loading {
+    opacity: 1;
+}
+
+.android-top-progress-bar.is-finished {
+    width: 100% !important;
+    opacity: 0;
+}
+
 /* ---- Ambient Background Effects (GPU Accelerated) ---- */
 .ambient-background {
     position: fixed;

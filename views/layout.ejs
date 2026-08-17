@@ -12,13 +12,15 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
-    <script src="/js/theme-init.js?v=6.7"></script>
-    <link rel="stylesheet" href="/css/style.css?v=6.7">
-    <link rel="stylesheet" href="/css/messages.css?v=3.0">
-    <link rel="stylesheet" href="/css/calling.css?v=2.0">
+    <script src="/js/theme-init.js?v=8.0"></script>
+    <link rel="stylesheet" href="/css/style.css?v=8.0">
+    <link rel="stylesheet" href="/css/messages.css?v=8.0">
+    <link rel="stylesheet" href="/css/calling.css?v=8.0">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
+    <!-- Android Native Route Navigation Progress Indicator -->
+    <div class="android-top-progress-bar" id="androidTopProgressBar" aria-hidden="true"></div>
     <%- body %>
 
         <% if (typeof user !=='undefined' && user && (typeof isMessagesPage === 'undefined' || !isMessagesPage) && (typeof page === 'undefined' || page !== 'messages')) { %>
@@ -344,7 +346,7 @@
                         <div class="call-action-btn-group">
                             <button type="button" class="call-btn-circle call-btn-decline" id="incomingDeclineBtn" aria-label="Decline Call">
                                 <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
-                                    <path d="M12 10.5c-2.4 0-4.7-.8-6.6-2.2-.4-.3-.6-.8-.6-1.3 0-.5.2-1 .6-1.3l2.2-2.2c.4-.4 1-.4 1.4 0l2.3 2.3c.4.4.4 1 0 1.4L9.8 8.7c1.3.8 2.8 1.3 4.4 1.3s3.1-.5 4.4-1.3l-1.5-1.5c-.4-.4-.4-1 0-1.4l2.3-2.3c.4-.4 1-.4 1.4 0l2.2 2.2c.4.4.6.8.6 1.3s-.2 1-.6 1.3c-1.9 1.4-4.2 2.2-6.6 2.2z"/>
+                                    <path d="M12 9c-3.1 0-6.1 1.05-8.5 2.85-.45.35-.7.9-.7 1.48 0 .58.25 1.13.68 1.55l2.25 2.25c.42.42 1.08.42 1.5 0l2.25-2.25c.2-.2.32-.48.32-.77V12.7c1.43-.45 2.95-.7 4.5-.7s3.07.25 4.5.7v1.41c0 .29.12.57.32.77l2.25 2.25c.42.42 1.08.42 1.5 0l2.25-2.25c.43-.42.68-.97.68-1.55 0-.58-.25-1.13-.7-1.48C18.1 10.05 15.1 9 12 9z"/>
                                 </svg>
                             </button>
                             <span class="call-action-btn-label">Decline</span>
@@ -510,8 +512,8 @@
                         <span class="call-control-label" id="callSpeakerLabel">Speaker</span>
                     </div>
 
-                    <div class="call-control-item">
-                        <button type="button" class="call-control-btn" id="callBtnCamera" title="Toggle Camera" aria-label="Toggle Camera" style="display:none;">
+                    <div class="call-control-item" id="callCameraItem" style="display:none;">
+                        <button type="button" class="call-control-btn" id="callBtnCamera" title="Toggle Camera" aria-label="Toggle Camera">
                             <svg class="icon-cam-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
                                 <polygon points="23 7 16 12 23 17 23 7"/>
                                 <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
@@ -522,13 +524,23 @@
                                 <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                             </svg>
                         </button>
-                        <span class="call-control-label" id="callCamLabel" style="display:none;">Camera</span>
+                        <span class="call-control-label" id="callCamLabel">Camera</span>
+                    </div>
+
+                    <div class="call-control-item" id="callCameraFlipItem" style="display:none;">
+                        <button type="button" class="call-control-btn" id="callBtnCameraFlip" title="Flip Camera" aria-label="Flip Camera (Front/Back)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                                <path d="M20 10c0-4.418-3.582-8-8-8s-8 3.582-8 8c0 2.21 1 4.21 2.6 5.6L4 18h6v-6l-2.2 2.2C6.7 13.1 6 11.6 6 10c0-3.314 2.686-6 6-6s6 2.686 6 6c0 1.6-.7 3.1-1.8 4.2l1.4 1.4C19 14.2 20 12.2 20 10z"/>
+                                <path d="M12 7v6l4-3z" fill="currentColor"/>
+                            </svg>
+                        </button>
+                        <span class="call-control-label">Flip</span>
                     </div>
 
                     <div class="call-control-item">
                         <button type="button" class="call-control-btn btn-end-call" id="callBtnEnd" title="End Call" aria-label="End Call">
-                            <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26">
-                                <path d="M12 10.5c-2.4 0-4.7-.8-6.6-2.2-.4-.3-.6-.8-.6-1.3 0-.5.2-1 .6-1.3l2.2-2.2c.4-.4 1-.4 1.4 0l2.3 2.3c.4.4.4 1 0 1.4L9.8 8.7c1.3.8 2.8 1.3 4.4 1.3s3.1-.5 4.4-1.3l-1.5-1.5c-.4-.4-.4-1 0-1.4l2.3-2.3c.4-.4 1-.4 1.4 0l2.2 2.2c.4.4.6.8.6 1.3s-.2 1-.6 1.3c-1.9 1.4-4.2 2.2-6.6 2.2z"/>
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                                <path d="M12 9c-3.1 0-6.1 1.05-8.5 2.85-.45.35-.7.9-.7 1.48 0 .58.25 1.13.68 1.55l2.25 2.25c.42.42 1.08.42 1.5 0l2.25-2.25c.2-.2.32-.48.32-.77V12.7c1.43-.45 2.95-.7 4.5-.7s3.07.25 4.5.7v1.41c0 .29.12.57.32.77l2.25 2.25c.42.42 1.08.42 1.5 0l2.25-2.25c.43-.42.68-.97.68-1.55 0-.58-.25-1.13-.7-1.48C18.1 10.05 15.1 9 12 9z"/>
                             </svg>
                         </button>
                         <span class="call-control-label" style="color: var(--call-accent-red);">End</span>
@@ -554,8 +566,8 @@
                     </div>
                 </div>
                 <button type="button" class="minimized-call-quick-end" id="minimizedQuickEndBtn" title="End Call" aria-label="End Call">
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
-                        <path d="M12 10.5c-2.4 0-4.7-.8-6.6-2.2-.4-.3-.6-.8-.6-1.3 0-.5.2-1 .6-1.3l2.2-2.2c.4-.4 1-.4 1.4 0l2.3 2.3c.4.4.4 1 0 1.4L9.8 8.7c1.3.8 2.8 1.3 4.4 1.3s3.1-.5 4.4-1.3l-1.5-1.5c-.4-.4-.4-1 0-1.4l2.3-2.3c.4-.4 1-.4 1.4 0l2.2 2.2c.4.4.6.8.6 1.3s-.2 1-.6 1.3c-1.9 1.4-4.2 2.2-6.6 2.2z"/>
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                        <path d="M12 9c-3.1 0-6.1 1.05-8.5 2.85-.45.35-.7.9-.7 1.48 0 .58.25 1.13.68 1.55l2.25 2.25c.42.42 1.08.42 1.5 0l2.25-2.25c.2-.2.32-.48.32-.77V12.7c1.43-.45 2.95-.7 4.5-.7s3.07.25 4.5.7v1.41c0 .29.12.57.32.77l2.25 2.25c.42.42 1.08.42 1.5 0l2.25-2.25c.43-.42.68-.97.68-1.55 0-.58-.25-1.13-.7-1.48C18.1 10.05 15.1 9 12 9z"/>
                     </svg>
                 </button>
             </div>
@@ -564,10 +576,10 @@
             <audio id="remoteAudioTrack" autoplay playsinline style="display:none;"></audio>
             <% } %>
 
-            <script src="/js/app.js?v=6.6"></script>
-            <script src="/js/messages.js?v=3.1"></script>
-            <script src="/js/watchTogether.js?v=3.1"></script>
-            <script src="/js/calling.js?v=2.0"></script>
+            <script src="/js/app.js?v=8.0"></script>
+            <script src="/js/messages.js?v=8.0"></script>
+            <script src="/js/watchTogether.js?v=8.0"></script>
+            <script src="/js/calling.js?v=8.0"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').catch(function() {});

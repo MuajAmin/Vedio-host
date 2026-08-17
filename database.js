@@ -1030,7 +1030,8 @@ function getMessageStats(user1, user2) {
         const totalRow = db.prepare(`
             SELECT COUNT(*) AS total,
                    SUM(CASE WHEN video_id IS NOT NULL THEN 1 ELSE 0 END) AS videos_count,
-                   SUM(CASE WHEN voice_url IS NOT NULL THEN 1 ELSE 0 END) AS voice_count
+                   SUM(CASE WHEN voice_url IS NOT NULL THEN 1 ELSE 0 END) AS voice_count,
+                   SUM(CASE WHEN text LIKE '__CALL_EVENT__:%' THEN 1 ELSE 0 END) AS calls_count
             FROM messages
             WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
         `).get(user1, user2, user2, user1);
@@ -1038,10 +1039,11 @@ function getMessageStats(user1, user2) {
         return {
             totalMessages: totalRow ? (totalRow.total || 0) : 0,
             sharedVideos: totalRow ? (totalRow.videos_count || 0) : 0,
-            voiceMessages: totalRow ? (totalRow.voice_count || 0) : 0
+            voiceMessages: totalRow ? (totalRow.voice_count || 0) : 0,
+            totalCalls: totalRow ? (totalRow.calls_count || 0) : 0
         };
     } catch {
-        return { totalMessages: 0, sharedVideos: 0, voiceMessages: 0 };
+        return { totalMessages: 0, sharedVideos: 0, voiceMessages: 0, totalCalls: 0 };
     }
 }
 

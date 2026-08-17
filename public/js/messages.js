@@ -64,7 +64,7 @@
         lastKnownId: 0,
         unreadCount: 0,
         partnerPresence: null,
-        stats: { totalMessages: 0, sharedVideos: 0, voiceMessages: 0 },
+        stats: { totalMessages: 0, sharedVideos: 0, voiceMessages: 0, totalCalls: 0 },
         activeMediaTab: 'all',
         searchKeyword: '',
         replyToMessage: null,
@@ -91,8 +91,10 @@
         statTotalMessages: document.getElementById('msgStatTotalMessages'),
         statSharedVideos: document.getElementById('msgStatSharedVideos'),
         statVoiceMessages: document.getElementById('msgStatVoiceMessages'),
+        statCalls: document.getElementById('msgStatCalls'),
         tabCountVideos: document.getElementById('msgTabCountVideos'),
         tabCountVoice: document.getElementById('msgTabCountVoice'),
+        tabCountCalls: document.getElementById('msgTabCountCalls'),
         sidebarWatchingBanner: document.getElementById('msgSidebarWatchingBanner'),
         // In-chat Search
         searchToggleBtn: document.getElementById('msgSearchToggleBtn'),
@@ -222,47 +224,123 @@
         `;
     }
 
-    function renderCallEventHtml(rawText, isOut) {
+    function renderCallEventHtml(rawText, isOut, timeStr) {
         try {
             const jsonStr = rawText.replace('__CALL_EVENT__:', '');
             const data = JSON.parse(jsonStr);
             const isVideo = data.callType === 'video';
-            const isCompleted = data.status === 'completed';
+            const status = data.status || 'completed';
+            const durationSeconds = Number(data.durationSeconds || 0);
 
             let title = '';
             let subtitle = '';
-            if (isCompleted) {
-                const mins = Math.floor((data.durationSeconds || 0) / 60);
-                const secs = (data.durationSeconds || 0) % 60;
+            let statusTag = '';
+            let statusClass = '';
+            let directionBadge = '';
+            let iconSvg = '';
+
+            if (status === 'completed') {
+                statusClass = 'call-status-completed';
+                const mins = Math.floor(durationSeconds / 60);
+                const secs = durationSeconds % 60;
                 const durStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-                title = isVideo ? 'Video Call Ended' : 'Audio Call Ended';
-                subtitle = `Duration: ${durStr}`;
-            } else if (data.status === 'rejected') {
-                title = isVideo ? 'Declined Video Call' : 'Declined Audio Call';
-                subtitle = isOut ? 'Call was declined' : 'You declined the call';
+                
+                title = isOut
+                    ? (isVideo ? 'Outgoing Video Call' : 'Outgoing Voice Call')
+                    : (isVideo ? 'Incoming Video Call' : 'Incoming Voice Call');
+                statusTag = 'Connected';
+                subtitle = `${durStr} • HD Audio/Video`;
+
+                directionBadge = isOut
+                    ? `<span class="msg-call-dir-badge dir-outgoing" title="Outgoing Answered"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></span>`
+                    : `<span class="msg-call-dir-badge dir-incoming" title="Incoming Answered"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg></span>`;
+
+            } else if (status === 'missed') {
+                statusClass = 'call-status-missed';
+                if (isOut) {
+                    title = isVideo ? 'Outgoing Video Call' : 'Outgoing Voice Call';
+                    statusTag = 'No Answer';
+                    subtitle = 'Partner was unavailable';
+                    directionBadge = `<span class="msg-call-dir-badge dir-missed-out" title="Outgoing Unanswered"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></span>`;
+                } else {
+                    title = isVideo ? 'Missed Video Call' : 'Missed Voice Call';
+                    statusTag = 'Missed';
+                    subtitle = 'Tap below to return call';
+                    directionBadge = `<span class="msg-call-dir-badge dir-missed" title="Missed Call"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg></span>`;
+                }
+
+            } else if (status === 'rejected') {
+                statusClass = 'call-status-rejected';
+                if (isOut) {
+                    title = isVideo ? 'Video Call Declined' : 'Voice Call Declined';
+                    statusTag = 'Busy';
+                    subtitle = 'Partner declined the call';
+                    directionBadge = `<span class="msg-call-dir-badge dir-rejected" title="Declined"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>`;
+                } else {
+                    title = isVideo ? 'Declined Video Call' : 'Declined Voice Call';
+                    statusTag = 'Declined';
+                    subtitle = 'You declined the call';
+                    directionBadge = `<span class="msg-call-dir-badge dir-rejected" title="Declined"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>`;
+                }
+
             } else {
-                title = isVideo ? 'Missed Video Call' : 'Missed Audio Call';
-                subtitle = isOut ? 'No answer' : 'Missed call';
+                statusClass = 'call-status-cancelled';
+                if (isOut) {
+                    title = isVideo ? 'Cancelled Video Call' : 'Cancelled Voice Call';
+                    statusTag = 'Cancelled';
+                    subtitle = 'Cancelled before answer';
+                    directionBadge = `<span class="msg-call-dir-badge dir-cancelled" title="Cancelled"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></span>`;
+                } else {
+                    title = isVideo ? 'Missed Video Call' : 'Missed Voice Call';
+                    statusTag = 'Missed';
+                    subtitle = 'Caller cancelled';
+                    directionBadge = `<span class="msg-call-dir-badge dir-missed" title="Missed Call"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg></span>`;
+                }
             }
 
-            const iconSvg = isVideo
-                ? `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`
-                : `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-2.2 2.2a15.053 15.053 0 0 1-6.59-6.59l2.2-2.21a.96.96 0 0 0 .25-1A11.36 11.36 0 0 1 8.57 3.99c.07-.55-.38-1-1-1H4.02C3.47 3 3 3.47 3 4.02c0 9.39 7.63 17.02 17.02 17.02.55 0 1.02-.47 1.02-1.02v-3.64c0-.55-.47-1-1.03-1z"/></svg>`;
+            if (isVideo) {
+                iconSvg = `<svg class="msg-call-main-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                    <polygon points="23 7 16 12 23 17 23 7"/>
+                    <rect x="1" y="5" width="15" height="14" rx="3" ry="3"/>
+                </svg>`;
+            } else {
+                iconSvg = `<svg class="msg-call-main-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                </svg>`;
+            }
 
-            const callBackBtn = `<button type="button" class="msg-call-event-action-btn ${isVideo ? 'btn-trigger-video-call' : 'btn-trigger-audio-call'}" title="Call Back">
-                <span>Call Back</span>
-            </button>`;
+            const callBackBtn = `
+                <button type="button" class="msg-call-action-pill ${isVideo ? 'btn-trigger-video-call' : 'btn-trigger-audio-call'}" title="${isVideo ? 'Start Video Call' : 'Start Voice Call'}">
+                    ${isVideo
+                        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="13" height="13"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg><span>Video</span>`
+                        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="13" height="13"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Call Back</span>`
+                    }
+                </button>
+            `;
 
             return `
-                <div class="msg-call-event-card">
-                    <div class="msg-call-event-icon-wrap ${isCompleted ? 'is-completed' : 'is-missed'}">
-                        ${iconSvg}
+                <div class="msg-call-event-card ${statusClass} ${isVideo ? 'is-video' : 'is-audio'} ${isOut ? 'is-outgoing' : 'is-incoming'}">
+                    <div class="msg-call-glow-edge"></div>
+                    <div class="msg-call-icon-container">
+                        ${status === 'missed' && !isOut ? '<span class="msg-call-pulse-ring"></span>' : ''}
+                        <div class="msg-call-icon-inner">
+                            ${iconSvg}
+                        </div>
+                        ${directionBadge}
                     </div>
-                    <div class="msg-call-event-details">
-                        <div class="msg-call-event-title">${escapeHtml(title)}</div>
-                        <div class="msg-call-event-subtitle">${escapeHtml(subtitle)}</div>
+                    <div class="msg-call-info">
+                        <div class="msg-call-headline">
+                            <span class="msg-call-title">${escapeHtml(title)}</span>
+                            <span class="msg-call-status-badge ${statusClass}">${escapeHtml(statusTag)}</span>
+                        </div>
+                        <div class="msg-call-meta-line">
+                            <span class="msg-call-subtitle">${escapeHtml(subtitle)}</span>
+                            ${timeStr ? `<span class="msg-call-time-dot">•</span><span class="msg-call-time-chip">${escapeHtml(timeStr)}</span>` : ''}
+                        </div>
                     </div>
-                    ${callBackBtn}
+                    <div class="msg-call-actions">
+                        ${callBackBtn}
+                    </div>
                 </div>
             `;
         } catch {
@@ -272,7 +350,6 @@
 
     function renderMessageHTML(msg) {
         const isOut = msg.sender === currentUser;
-        const rowClass = isOut ? 'msg-row-outgoing' : 'msg-row-incoming';
         const timeStr = formatTime(msg.createdAt);
         const seenHtml = isOut
             ? `<span class="msg-seen-check ${msg.isRead ? 'is-seen' : ''}" title="${msg.isRead ? 'Seen' : 'Sent'}">${msg.isRead ? '✓✓' : '✓'}</span>`
@@ -339,20 +416,21 @@
         }
 
         // 3. Text Body or Call Event
+        const isCallEvent = !!(msg.text && msg.text.startsWith('__CALL_EVENT__:'));
         if (msg.text) {
-            if (msg.text.startsWith('__CALL_EVENT__:')) {
-                contentHtml += renderCallEventHtml(msg.text, isOut);
+            if (isCallEvent) {
+                contentHtml += renderCallEventHtml(msg.text, isOut, timeStr);
             } else {
                 contentHtml += `<div class="msg-text-content">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
             }
         }
 
-
         const reactionsHtml = renderReactionsHtml(msg.reactions, currentUser);
         const canDelete = isOut || currentUser === 'muaj';
+        const rowClass = (isOut ? 'msg-row-outgoing' : 'msg-row-incoming') + (isCallEvent ? ' msg-row-call-event' : '');
 
         return `
-            <div class="msg-row ${rowClass}" data-msg-id="${msg.id}">
+            <div class="msg-row ${rowClass}" data-msg-id="${msg.id}" ${isCallEvent ? 'data-is-call="true"' : ''}>
                 <div class="msg-action-toolbar">
                     <div class="msg-quick-react-pill">
                         <button type="button" class="msg-react-emoji-btn" data-emoji="❤️">❤️</button>
@@ -360,10 +438,12 @@
                         <button type="button" class="msg-react-emoji-btn" data-emoji="😂">😂</button>
                         <button type="button" class="msg-react-emoji-btn" data-emoji="🍿">🍿</button>
                     </div>
+                    ${!isCallEvent ? `
                     <button type="button" class="msg-action-btn btn-reply" title="Reply to Message" data-reply-id="${msg.id}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
                     </button>
-                    ${msg.text ? `<button type="button" class="msg-action-btn btn-copy" title="Copy Text">
+                    ` : ''}
+                    ${msg.text && !isCallEvent ? `<button type="button" class="msg-action-btn btn-copy" title="Copy Text">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>` : ''}
                     ${canDelete ? `<button type="button" class="msg-action-btn btn-delete" title="Delete Message">
@@ -376,10 +456,16 @@
                         ${contentHtml}
                     </div>
                     ${reactionsHtml}
+                    ${!isCallEvent ? `
                     <div class="msg-meta-row">
                         <span class="msg-time">${timeStr}</span>
                         ${seenHtml}
                     </div>
+                    ` : `
+                    <div class="msg-meta-row msg-call-meta-bottom">
+                        ${seenHtml}
+                    </div>
+                    `}
                 </div>
             </div>
         `;
@@ -440,20 +526,32 @@
         if (isDrawerOpen || State.isMessagesPage) return;
 
         let previewText = 'New message';
+        let isCallEvent = false;
+        let isVideo = false;
+
         if (msg.text) {
             if (msg.text.startsWith('__CALL_EVENT__:')) {
+                isCallEvent = true;
                 try {
                     const data = JSON.parse(msg.text.replace('__CALL_EVENT__:', ''));
-                    const isVideo = data.callType === 'video';
-                    if (data.status === 'completed') {
-                        previewText = isVideo ? '📹 Video call ended' : '📞 Audio call ended';
-                    } else if (data.status === 'rejected') {
-                        previewText = isVideo ? '📹 Declined video call' : '📞 Declined audio call';
+                    isVideo = data.callType === 'video';
+                    const status = data.status || 'completed';
+                    const durationSeconds = Number(data.durationSeconds || 0);
+                    const mins = Math.floor(durationSeconds / 60);
+                    const secs = durationSeconds % 60;
+                    const durStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+                    if (status === 'completed') {
+                        previewText = isVideo ? `📹 Video call ended • ${durStr}` : `📞 Voice call ended • ${durStr}`;
+                    } else if (status === 'rejected') {
+                        previewText = isVideo ? '📹 Declined video call' : '📞 Declined voice call';
+                    } else if (status === 'cancelled') {
+                        previewText = isVideo ? '📹 Cancelled video call' : '📞 Cancelled voice call';
                     } else {
-                        previewText = isVideo ? '📹 Missed video call' : '📞 Missed audio call';
+                        previewText = isVideo ? '📹 Missed video call' : '📞 Missed voice call';
                     }
                 } catch {
-                    previewText = '📞 Call update';
+                    previewText = '📞 Call notification';
                 }
             } else {
                 previewText = msg.text.length > 55 ? msg.text.slice(0, 55) + '…' : msg.text;
@@ -466,6 +564,18 @@
 
         if (DOM.floatingToastText) {
             DOM.floatingToastText.textContent = previewText;
+        }
+
+        if (DOM.floatingToastReply) {
+            if (isCallEvent) {
+                DOM.floatingToastReply.textContent = isVideo ? '📹 Video Back' : '📞 Call Back';
+                DOM.floatingToastReply.className = `msg-floating-toast-reply-btn ${isVideo ? 'btn-trigger-video-call' : 'btn-trigger-audio-call'}`;
+                DOM.floatingToastReply.href = '#';
+            } else {
+                DOM.floatingToastReply.textContent = 'Reply';
+                DOM.floatingToastReply.className = 'msg-floating-toast-reply-btn';
+                DOM.floatingToastReply.href = '/messages';
+            }
         }
 
         DOM.floatingToast.style.display = 'block';
@@ -499,8 +609,10 @@
         if (DOM.statTotalMessages) DOM.statTotalMessages.textContent = State.stats.totalMessages || 0;
         if (DOM.statSharedVideos) DOM.statSharedVideos.textContent = State.stats.sharedVideos || 0;
         if (DOM.statVoiceMessages) DOM.statVoiceMessages.textContent = State.stats.voiceMessages || 0;
+        if (DOM.statCalls) DOM.statCalls.textContent = State.stats.totalCalls || 0;
         if (DOM.tabCountVideos) DOM.tabCountVideos.textContent = State.stats.sharedVideos || 0;
         if (DOM.tabCountVoice) DOM.tabCountVoice.textContent = State.stats.voiceMessages || 0;
+        if (DOM.tabCountCalls) DOM.tabCountCalls.textContent = State.stats.totalCalls || 0;
     }
 
     function updatePartnerPresenceUI(presence) {
@@ -1846,6 +1958,50 @@
         });
     }
 
+    function applyFiltersToAll() {
+        const tab = State.activeMediaTab || 'all';
+        const kw = (State.searchKeyword || '').toLowerCase().trim();
+
+        getActiveContainers().forEach(container => {
+            const rows = container.querySelectorAll('.msg-row');
+            const dateDividers = container.querySelectorAll('.msg-date-divider');
+
+            rows.forEach(row => {
+                let matchesTab = true;
+                if (tab === 'videos') {
+                    matchesTab = !!row.querySelector('.msg-video-card');
+                } else if (tab === 'voice') {
+                    matchesTab = !!row.querySelector('.msg-voice-player');
+                } else if (tab === 'calls') {
+                    matchesTab = row.hasAttribute('data-is-call') || !!row.querySelector('.msg-call-event-card');
+                }
+
+                let matchesSearch = true;
+                if (kw) {
+                    const text = (row.innerText || '').toLowerCase();
+                    matchesSearch = text.includes(kw);
+                }
+
+                const visible = matchesTab && matchesSearch;
+                row.style.display = visible ? 'flex' : 'none';
+            });
+
+            // Clean up date dividers where all sibling rows until next divider are hidden
+            dateDividers.forEach(divider => {
+                let next = divider.nextElementSibling;
+                let hasVisible = false;
+                while (next && !next.classList.contains('msg-date-divider')) {
+                    if (next.classList.contains('msg-row') && next.style.display !== 'none') {
+                        hasVisible = true;
+                        break;
+                    }
+                    next = next.nextElementSibling;
+                }
+                divider.style.display = hasVisible ? 'flex' : 'none';
+            });
+        });
+    }
+
     // Shared Media Explorer Tabs in Sidebar
     document.querySelectorAll('.msg-media-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1989,5 +2145,27 @@
             }
         });
     }
+
+    // SPA Navigation Handler
+    window.addEventListener('page:navigate', (e) => {
+        const isMessagesNow = !!document.getElementById('msgFullpageList') || document.body.getAttribute('data-page') === 'messages';
+        State.isMessagesPage = isMessagesNow;
+        DOM.fullPageList = document.getElementById('msgFullpageList');
+        DOM.drawerList = document.getElementById('msgDrawerList');
+
+        // Re-setup composers in newly swapped DOM
+        document.querySelectorAll('.msg-composer-wrap').forEach(setupComposer);
+
+        if (isMessagesNow) {
+            if (DOM.launcher) DOM.launcher.style.display = 'none';
+            ingestSSRMessages();
+            getActiveContainers().forEach(scrollToBottom);
+            markMessagesAsRead();
+        } else {
+            if (DOM.launcher) {
+                DOM.launcher.style.display = State.unreadCount > 0 ? 'flex' : 'none';
+            }
+        }
+    });
 
 })();

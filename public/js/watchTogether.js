@@ -1044,4 +1044,17 @@
     window.addEventListener('beforeunload', cleanup);
     window.addEventListener('pagehide', cleanup);
 
+    // SPA Navigation Handler
+    window.addEventListener('page:navigate', () => {
+        isWatchPage = window.location.pathname.startsWith('/watch/');
+        video = document.getElementById('vpVideo') || document.querySelector('video');
+        if (isWatchPage && video) {
+            checkActiveRoom();
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('join') === '1' || urlParams.get('join') === 'true') {
+                joinRoom();
+            }
+        }
+    });
+
 })();
