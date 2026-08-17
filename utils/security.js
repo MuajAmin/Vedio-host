@@ -62,15 +62,35 @@ function renderAvatar(username, extraClass = '', userAvatars = {}) {
     return `<div class="avatar-letter ${roleClass} ${cleanClass}">${letter}</div>`;
 }
 
+// --- Unread count in-memory cache ---
+// attachLocals runs on every HTTP request; getUnreadMessageCount is a
+// synchronous SQLite query. Cache it for 5 seconds to avoid redundant
+// DB I/O. The SSE stream already pushes real-time badge updates.
+let _unreadCache = {};
+let _unreadCacheAt = 0;
+const UNREAD_CACHE_TTL = 5 * 1000;
+
+function invalidateUnreadCache() {
+    _unreadCache = {};
+    _unreadCacheAt = 0;
+}
+
 function attachLocals(req, res, next) {
     const user = req.session ? req.session.user : null;
     const avatars = getCachedAvatars();
     let unreadCount = 0;
     if (user) {
         try {
-            const db = require('../database');
-            if (db && typeof db.getUnreadMessageCount === 'function') {
-                unreadCount = db.getUnreadMessageCount(user);
+            const now = Date.now();
+            if (_unreadCache[user] !== undefined && (now - _unreadCacheAt) < UNREAD_CACHE_TTL) {
+                unreadCount = _unreadCache[user];
+            } else {
+                const db = require('../database');
+                if (db && typeof db.getUnreadMessageCount === 'function') {
+                    unreadCount = db.getUnreadMessageCount(user);
+                    _unreadCache[user] = unreadCount;
+                    _unreadCacheAt = now;
+                }
             }
         } catch {}
     }
@@ -110,6 +130,7 @@ module.exports = {
     escapeHtml,
     getCsrfToken,
     invalidateAvatarCache,
+    invalidateUnreadCache,
     renderAvatar,
     requireCsrf,
     timingSafeCompare

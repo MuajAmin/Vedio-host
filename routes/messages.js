@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { isAuthenticated } = require('../middleware/auth');
-const { requireCsrf } = require('../utils/security');
+const { requireCsrf, invalidateUnreadCache } = require('../utils/security');
 const db = require('../database');
 const { parseUserAgent, getClientIp } = require('../utils/device');
 
@@ -99,10 +99,14 @@ router.get('/messages', isAuthenticated, (req, res) => {
     // Auto mark partner's messages as read when opening page
     const readCount = db.markMessagesAsRead(partner, user);
     if (readCount > 0) {
+        invalidateUnreadCache();
         broadcastToUser(partner, 'messages-read', {
             readBy: user,
             readAt: new Date().toISOString(),
             count: readCount
+        });
+        broadcastToUser(user, 'unread-count', {
+            unreadCount: 0
         });
     }
 
@@ -202,10 +206,20 @@ router.post('/api/messages', isAuthenticated, (req, res) => {
         return res.status(500).json({ error: 'Failed to send message.' });
     }
 
-    // Broadcast new message to both users via SSE
-    broadcastToBoth(user, partner, 'new-message', {
+    // Invalidate in-memory unread cache
+    invalidateUnreadCache();
+
+    // Broadcast new message per user with accurate unread counts
+    const partnerUnread = db.getUnreadMessageCount(partner);
+    const senderUnread = db.getUnreadMessageCount(user);
+
+    broadcastToUser(partner, 'new-message', {
         message: saved,
-        unreadCount: db.getUnreadMessageCount(partner)
+        unreadCount: partnerUnread
+    });
+    broadcastToUser(user, 'new-message', {
+        message: saved,
+        unreadCount: senderUnread
     });
 
     // Log activity
@@ -248,9 +262,19 @@ router.post('/api/messages/voice', isAuthenticated, (req, res) => {
             return res.status(500).json({ error: 'Failed to save voice message.' });
         }
 
-        broadcastToBoth(user, partner, 'new-message', {
+        // Invalidate in-memory unread cache
+        invalidateUnreadCache();
+
+        const partnerUnread = db.getUnreadMessageCount(partner);
+        const senderUnread = db.getUnreadMessageCount(user);
+
+        broadcastToUser(partner, 'new-message', {
             message: saved,
-            unreadCount: db.getUnreadMessageCount(partner)
+            unreadCount: partnerUnread
+        });
+        broadcastToUser(user, 'new-message', {
+            message: saved,
+            unreadCount: senderUnread
         });
 
         res.json({ success: true, message: saved });
@@ -264,12 +288,18 @@ router.post('/api/messages/read', isAuthenticated, (req, res) => {
 
     const changes = db.markMessagesAsRead(partner, user);
     if (changes > 0) {
+        invalidateUnreadCache();
         broadcastToUser(partner, 'messages-read', {
             readBy: user,
             readAt: new Date().toISOString(),
             count: changes
         });
     }
+
+    // Always ensure reader's active tabs receive unread-count: 0
+    broadcastToUser(user, 'unread-count', {
+        unreadCount: 0
+    });
 
     res.json({ success: true, readCount: changes });
 });

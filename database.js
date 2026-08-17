@@ -270,7 +270,6 @@ function pruneExpiredSessions() {
 }
 
 function getAllActiveSessions(currentSid = null) {
-    pruneExpiredSessions();
     try {
         const rows = db.prepare('SELECT sid, sess, expires_at FROM sessions WHERE expires_at > ? ORDER BY expires_at DESC').all(Date.now());
         const hajeraPresence = getUserPresence('hajera');

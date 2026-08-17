@@ -10,20 +10,21 @@ const router = express.Router();
 const videosDir = path.join(__dirname, '..', 'uploads', 'videos');
 const thumbnailsDir = path.join(__dirname, '..', 'uploads', 'thumbnails');
 
-function listFiles(dir) {
-    if (!fs.existsSync(dir)) return [];
-
-    return fs.readdirSync(dir)
-        .map((name) => {
+async function listFiles(dir) {
+    try {
+        const entries = await fs.promises.readdir(dir);
+        const results = [];
+        for (const name of entries) {
             const fullPath = path.join(dir, name);
             try {
-                const stat = fs.statSync(fullPath);
-                return stat.isFile() ? { name, fullPath, size: stat.size } : null;
-            } catch {
-                return null;
-            }
-        })
-        .filter(Boolean);
+                const stat = await fs.promises.stat(fullPath);
+                if (stat.isFile()) results.push({ name, fullPath, size: stat.size });
+            } catch {}
+        }
+        return results;
+    } catch {
+        return [];
+    }
 }
 
 function sumBytes(files) {
@@ -244,7 +245,7 @@ function collectSystemMetrics() {
     };
 }
 
-function collectAdminStats(currentSid = null) {
+async function collectAdminStats(currentSid = null) {
     const videos = db.prepare(
         'SELECT id, title, filename, thumbnail, size, duration, uploaded_by, uploaded_at, import_quality FROM videos ORDER BY uploaded_at DESC'
     ).all();
@@ -258,8 +259,8 @@ function collectAdminStats(currentSid = null) {
 
     const importJobs = getImportJobs().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-    const videoFiles = listFiles(videosDir);
-    const thumbnailFiles = listFiles(thumbnailsDir);
+    const videoFiles = await listFiles(videosDir);
+    const thumbnailFiles = await listFiles(thumbnailsDir);
     const dbVideoFiles = new Set(videos.map(video => video.filename).filter(Boolean));
     const dbThumbnailFiles = new Set(videos.map(video => video.thumbnail).filter(Boolean));
     const activeImportIds = new Set(importJobs
@@ -359,17 +360,17 @@ function collectAdminStats(currentSid = null) {
     };
 }
 
-router.get('/admin', isMuaj, (req, res) => {
+router.get('/admin', isMuaj, async (req, res) => {
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(req.sessionID),
+        stats: await collectAdminStats(req.sessionID),
         cleanupResult: null,
         accessMessage: null
     });
 });
 
 router.post('/admin/cleanup', isMuaj, async (req, res) => {
-    const stats = collectAdminStats(req.sessionID);
+    const stats = await collectAdminStats(req.sessionID);
     const targets = [...stats.orphanVideos, ...stats.orphanThumbnails];
     let deleted = 0;
     let bytesFreed = 0;
@@ -384,29 +385,29 @@ router.post('/admin/cleanup', isMuaj, async (req, res) => {
 
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(req.sessionID),
+        stats: await collectAdminStats(req.sessionID),
         cleanupResult: { deleted, bytesFreed },
         accessMessage: null
     });
 });
 
 // Force logout all Hajera sessions
-router.post('/admin/hajera/logout-sessions', isMuaj, (req, res) => {
+router.post('/admin/hajera/logout-sessions', isMuaj, async (req, res) => {
     const destroyed = db.destroyUserSessions('hajera');
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(req.sessionID),
+        stats: await collectAdminStats(req.sessionID),
         cleanupResult: null,
         accessMessage: { type: 'success', text: `Hajera-র ${destroyed}টা session logout করা হয়েছে।` }
     });
 });
 
 // Force logout other Muaj sessions (keeps current device session)
-router.post('/admin/muaj/logout-other-sessions', isMuaj, (req, res) => {
+router.post('/admin/muaj/logout-other-sessions', isMuaj, async (req, res) => {
     const destroyed = db.destroyOtherUserSessions('muaj', req.sessionID);
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(req.sessionID),
+        stats: await collectAdminStats(req.sessionID),
         cleanupResult: null,
         accessMessage: { type: 'success', text: `Muaj-এর অন্যান্য ${destroyed}টা session logout করা হয়েছে। বর্তমান ডিভাইসটি সক্রিয় রয়েছে।` }
     });
@@ -421,7 +422,7 @@ router.post('/admin/muaj/logout-all-sessions', isMuaj, (req, res) => {
 });
 
 // Terminate a single specific session
-router.post('/admin/sessions/destroy/:sid', isMuaj, (req, res) => {
+router.post('/admin/sessions/destroy/:sid', isMuaj, async (req, res) => {
     const targetSid = req.params.sid;
     const isSelf = (targetSid === req.sessionID);
     const destroyed = db.destroySingleSession(targetSid);
@@ -444,37 +445,47 @@ router.post('/admin/sessions/destroy/:sid', isMuaj, (req, res) => {
 
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(req.sessionID),
+        stats: await collectAdminStats(req.sessionID),
         cleanupResult: null,
         accessMessage: { type: 'success', text: `Session (${targetSid.substring(0, 8)}...) সফলভাবে বন্ধ করা হয়েছে।` }
     });
 });
 
 // Block Hajera's access
-router.post('/admin/hajera/block', isMuaj, (req, res) => {
+router.post('/admin/hajera/block', isMuaj, async (req, res) => {
     const reason = (req.body.reason || '').trim() || 'Admin দ্বারা block করা হয়েছে';
     db.blockUser('hajera', reason);
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(req.sessionID),
+        stats: await collectAdminStats(req.sessionID),
         cleanupResult: null,
         accessMessage: { type: 'warning', text: `Hajera-কে block করা হয়েছে। কারণ: ${reason}` }
     });
 });
 
 // Unblock Hajera's access
-router.post('/admin/hajera/unblock', isMuaj, (req, res) => {
+router.post('/admin/hajera/unblock', isMuaj, async (req, res) => {
     db.unblockUser('hajera');
     res.render('admin', {
         user: req.session.user,
-        stats: collectAdminStats(req.sessionID),
+        stats: await collectAdminStats(req.sessionID),
         cleanupResult: null,
         accessMessage: { type: 'success', text: 'Hajera-কে unblock করা হয়েছে। এখন login করতে পারবে।' }
     });
 });
 
 // GET /admin/hajera/live-status — Live polling endpoint for Admin Dashboard
+// Cached for 2s to prevent 13+ DB queries per poll cycle
+let _liveStatusCache = null;
+let _liveStatusCacheAt = 0;
+const LIVE_STATUS_CACHE_TTL = 2000;
+
 router.get('/admin/hajera/live-status', isMuaj, (req, res) => {
+    const now = Date.now();
+    if (_liveStatusCache && (now - _liveStatusCacheAt) < LIVE_STATUS_CACHE_TTL) {
+        return res.json(_liveStatusCache);
+    }
+
     const presence = db.getUserPresence('hajera');
     const muajPresence = db.getUserPresence('muaj');
     const rawWatchStats = db.getUserWatchStats('hajera');
@@ -485,7 +496,7 @@ router.get('/admin/hajera/live-status', isMuaj, (req, res) => {
     const detailedSessions = db.getAllActiveSessions(req.sessionID);
     const isBlocked = db.isUserBlocked('hajera');
 
-    res.json({
+    _liveStatusCache = {
         presence,
         muajPresence,
         watchStats: {
@@ -501,13 +512,26 @@ router.get('/admin/hajera/live-status', isMuaj, (req, res) => {
         totalSessionCount,
         detailedSessions,
         isBlocked,
-        timestamp: Date.now()
-    });
+        timestamp: now
+    };
+    _liveStatusCacheAt = now;
+    res.json(_liveStatusCache);
 });
 
 // GET /admin/system/live-metrics — Real-time VPS & Server Health metrics
+// Cached for 2s — metrics don't change faster than that on 1 vCPU
+let _sysMetricsCache = null;
+let _sysMetricsCacheAt = 0;
+const SYS_METRICS_CACHE_TTL = 2000;
+
 router.get('/admin/system/live-metrics', isMuaj, (req, res) => {
-    res.json(collectSystemMetrics());
+    const now = Date.now();
+    if (_sysMetricsCache && (now - _sysMetricsCacheAt) < SYS_METRICS_CACHE_TTL) {
+        return res.json(_sysMetricsCache);
+    }
+    _sysMetricsCache = collectSystemMetrics();
+    _sysMetricsCacheAt = now;
+    res.json(_sysMetricsCache);
 });
 
 // POST /admin/hajera/clear-logs — Clear older activity logs

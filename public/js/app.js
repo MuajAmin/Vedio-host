@@ -3267,7 +3267,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Start live polling every 4 seconds
-        setInterval(pollHajeraLiveStatus, 4000);
+        setInterval(pollHajeraLiveStatus, 8000);
 
         // ========================================
         // VPS Telemetry & Real-Time Resource Polling
@@ -3388,7 +3388,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Start VPS live polling every 3.5 seconds on admin page
-        setInterval(pollVpsMetrics, 3500);
+        setInterval(pollVpsMetrics, 10000);
     }
 
 });

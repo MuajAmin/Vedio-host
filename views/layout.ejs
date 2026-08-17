@@ -12,9 +12,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
-    <script src="/js/theme-init.js?v=6.5"></script>
-    <link rel="stylesheet" href="/css/style.css?v=6.5">
-    <link rel="stylesheet" href="/css/messages.css?v=2.5">
+    <script src="/js/theme-init.js?v=6.6"></script>
+    <link rel="stylesheet" href="/css/style.css?v=6.6">
+    <link rel="stylesheet" href="/css/messages.css?v=2.6">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -127,6 +127,28 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Global Real-Time Floating Message Notification Toast -->
+            <div class="msg-floating-toast" id="msgFloatingToast" style="display:none;" role="alert" aria-live="polite">
+                <div class="msg-floating-toast-card">
+                    <div class="msg-floating-toast-avatar-wrap">
+                        <%- typeof renderAvatar === 'function' ? renderAvatar(partnerUsername, 'msg-toast-avatar') : '' %>
+                        <span class="msg-toast-dot"></span>
+                    </div>
+                    <div class="msg-floating-toast-content" id="msgFloatingToastContent">
+                        <div class="msg-floating-toast-header">
+                            <span class="msg-floating-toast-sender"><%= partnerName %></span>
+                            <span class="msg-floating-toast-time">Just now</span>
+                        </div>
+                        <p class="msg-floating-toast-text" id="msgFloatingToastText">New message</p>
+                    </div>
+                    <div class="msg-floating-toast-actions">
+                        <button type="button" class="msg-floating-toast-reply-btn" id="msgFloatingToastReply">Reply</button>
+                        <button type="button" class="msg-floating-toast-close-btn" id="msgFloatingToastClose" title="Dismiss">&times;</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Global Watch Together Invitation Toast (Pops up anywhere on the site for Hajera) -->
             <div class="wt-global-invite-toast" id="globalWtToast" style="display:none;" role="alert" aria-live="assertive">
                 <div class="wt-toast-pill">
@@ -267,8 +289,8 @@
                 </div>
             </div>
 
-            <script src="/js/app.js?v=6.5"></script>
-            <script src="/js/messages.js?v=2.5"></script>
+            <script src="/js/app.js?v=6.6"></script>
+            <script src="/js/messages.js?v=2.6"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').catch(function() {});

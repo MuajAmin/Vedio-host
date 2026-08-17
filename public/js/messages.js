@@ -1066,6 +1066,14 @@
     // Initial Auto-scroll
     getActiveContainers().forEach(scrollToBottom);
 
+    // Cleanup SSE on page unload to prevent connection overlap during navigation
+    window.addEventListener('beforeunload', () => {
+        if (sseSource) {
+            sseSource.close();
+            sseSource = null;
+        }
+    });
+
     // Start SSE listener
     initSSE();
 

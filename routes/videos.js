@@ -373,7 +373,7 @@ router.post('/api/presence/ping', isAuthenticated, (req, res) => {
         });
     }
 
-    res.json({ success: true, presence: db.getUserPresence(user) });
+    res.json({ success: true });
 });
 
 // POST /api/presence/leave - Client leaving beacon (pagehide / beforeunload)

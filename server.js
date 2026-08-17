@@ -109,6 +109,34 @@ app.use(session({
 }));
 app.use(attachLocals);
 
+// --- Diagnostic: Log slow requests (>200ms) ---
+// Helps verify the intermittent loading fix is working.
+// Safe to keep in production — only fires on genuinely slow routes.
+app.use((req, res, next) => {
+    const start = Date.now();
+    const originalEnd = res.end;
+    res.end = function (...args) {
+        const duration = Date.now() - start;
+        if (duration > 200) {
+            console.warn(`[SLOW] ${req.method} ${req.path} — ${duration}ms`);
+        }
+        return originalEnd.apply(this, args);
+    };
+    next();
+});
+
+// --- Diagnostic: Event loop lag monitor ---
+// Detects when synchronous operations block the event loop.
+let _lastLagCheck = Date.now();
+setInterval(() => {
+    const now = Date.now();
+    const lag = now - _lastLagCheck - 2000;
+    if (lag > 50) {
+        console.warn(`[EVENT-LOOP-LAG] ${lag}ms`);
+    }
+    _lastLagCheck = now;
+}, 2000).unref();
+
 // Ensure avatars directory exists
 const avatarsDir = path.join(__dirname, 'uploads', 'avatars');
 if (!fs.existsSync(avatarsDir)) {

@@ -1,19 +1,19 @@
 // ============================================================
-//  VideoHost Service Worker — PWA Offline Shell Cache
+//  VideoHost Service Worker ï¿½ PWA Offline Shell Cache
 //  Strategy: Cache-first for static assets, Network-only for
 //  dynamic routes (videos, API, SSE streams, thumbnails).
-//  2 users, 1 vCPU VPS — keep it lean.
+//  2 users, 1 vCPU VPS ï¿½ keep it lean.
 // ============================================================
 
-const CACHE_NAME = 'videohost-v5.8';
+const CACHE_NAME = 'videohost-v5.9';
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
-    '/css/style.css?v=5.8',
+    '/css/style.css?v=6.5',
     '/css/messages.css?v=2.1',
-    '/js/theme-init.js?v=5.8',
-    '/js/app.js?v=5.7',
-    '/js/messages.js?v=2.1',
+    '/js/theme-init.js?v=6.5',
+    '/js/app.js?v=6.5',
+    '/js/messages.js?v=2.5',
     '/js/watchTogether.js?v=2.2',
     '/css/icon-192.png',
     '/css/icon-512.png',
