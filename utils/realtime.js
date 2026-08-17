@@ -15,7 +15,18 @@ function addSseClient(username, res) {
     if (!sseClients.has(username)) {
         sseClients.set(username, new Set());
     }
-    sseClients.get(username).add(res);
+    const clientSet = sseClients.get(username);
+    clientSet.add(res);
+
+    // Auto-clean on socket close or error
+    const cleanup = () => {
+        removeSseClient(username, res);
+    };
+    if (typeof res.on === 'function') {
+        res.once('close', cleanup);
+        res.once('error', cleanup);
+        res.once('finish', cleanup);
+    }
 }
 
 /**
@@ -45,6 +56,10 @@ function broadcastToUser(username, event, data) {
     const toRemove = [];
 
     for (const client of clients) {
+        if (!client || client.destroyed || client.writableEnded || (client.writable === false)) {
+            toRemove.push(client);
+            continue;
+        }
         try {
             client.write(payload);
             if (typeof client.flush === 'function') client.flush();

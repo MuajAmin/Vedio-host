@@ -1,7 +1,7 @@
 // ============================================================
-//  WEBRTC REAL-TIME CALL CONTROLLER (AUDIO & VIDEO)
-//  Frontend Design Fidelity, Web Audio Frequency Visualizer,
-//  In-Call Reactions & High-Precision PeerConnection Lifecycle
+//  WEBRTC REAL-TIME CALL CONTROLLER v2.0
+//  Formal State Machine, Reconnection Strategy,
+//  Memory-Leak Prevention, Mobile Lifecycle, Structured Logging
 // ============================================================
 
 (function () {
@@ -14,7 +14,18 @@
     const partnerName = partnerUser === 'muaj' ? 'Muaj' : 'Hajera';
 
     // ------------------------------------------------------------
-    //  1. WEBRTC CONFIGURATION
+    //  1. STRUCTURED LOGGING
+    // ------------------------------------------------------------
+    function callLog(event, data = {}) {
+        const ts = new Date().toISOString().slice(11, 23);
+        const meta = Object.keys(data).length
+            ? ' | ' + Object.entries(data).map(([k, v]) => `${k}=${v}`).join(' ')
+            : '';
+        console.log(`[CALL ${ts}] ${event}${meta}`);
+    }
+
+    // ------------------------------------------------------------
+    //  2. WEBRTC CONFIGURATION
     // ------------------------------------------------------------
     const RTC_CONFIG = {
         iceServers: [
@@ -24,11 +35,37 @@
             { urls: 'stun:stun3.l.google.com:19302' },
             { urls: 'stun:stun4.l.google.com:19302' }
         ],
-        iceCandidatePoolSize: 6
+        iceCandidatePoolSize: 4
     };
 
     // ------------------------------------------------------------
-    //  2. WEB AUDIO SYNTHESIZER & REAL-TIME SPECTRUM ANALYSER
+    //  3. STATE MACHINE
+    // ------------------------------------------------------------
+    // Valid state transitions
+    const VALID_TRANSITIONS = {
+        idle:         ['calling', 'ringing'],
+        calling:      ['connecting', 'ended', 'failed', 'cancelled'],
+        ringing:      ['connecting', 'ended', 'rejected', 'missed'],
+        connecting:   ['connected', 'reconnecting', 'ended', 'failed'],
+        connected:    ['reconnecting', 'ended'],
+        reconnecting: ['connected', 'ended', 'failed'],
+        // Terminal states - no transitions out
+        ended:     [],
+        rejected:  [],
+        missed:    [],
+        failed:    [],
+        cancelled: []
+    };
+
+    const TERMINAL_STATES = new Set(['ended', 'rejected', 'missed', 'failed', 'cancelled']);
+
+    function canTransition(from, to) {
+        const allowed = VALID_TRANSITIONS[from];
+        return allowed && allowed.includes(to);
+    }
+
+    // ------------------------------------------------------------
+    //  4. WEB AUDIO SYNTHESIZER & REAL-TIME SPECTRUM ANALYSER
     // ------------------------------------------------------------
     let audioCtx = null;
     let ringInterval = null;
@@ -66,7 +103,6 @@
     function startIncomingRingtone() {
         stopRingtone();
         const playRingPattern = () => {
-            // Melodic ringtone pattern: F5 (698.46Hz) -> A5 (880Hz) -> C6 (1046.50Hz)
             playTone(698.46, 'sine', 0.25, 0, 0.16);
             playTone(880.00, 'sine', 0.25, 0.2, 0.18);
             playTone(1046.50, 'sine', 0.45, 0.4, 0.20);
@@ -78,7 +114,6 @@
     function startOutgoingRingback() {
         stopRingtone();
         const playRingback = () => {
-            // Dual tone ringback: 440Hz + 480Hz
             playTone(440, 'sine', 1.2, 0, 0.08);
             playTone(480, 'sine', 1.2, 0, 0.08);
         };
@@ -124,7 +159,7 @@
 
             startVisualizerLoop();
         } catch (e) {
-            console.warn('[AudioVisualizer] Setup notice:', e.message);
+            callLog('VISUALIZER_SETUP_ERROR', { error: e.message });
         }
     }
 
@@ -154,7 +189,6 @@
                     const dataIdx = Math.floor((idx / bars.length) * (dataArray.length / 2));
                     const val = dataArray[dataIdx] || 0;
                     sum += val;
-                    // Min 6px, Max 36px
                     const height = Math.max(6, Math.min(36, (val / 255) * 36 + 6));
                     bar.style.height = `${height}px`;
                 });
@@ -203,12 +237,15 @@
     }
 
     // ------------------------------------------------------------
-    //  3. CALL STATE STORE
+    //  5. CALL STATE STORE
     // ------------------------------------------------------------
+    let _callNonce = 0; // Monotonic counter to detect stale events
+
     const CallState = {
-        state: 'idle', // idle | calling | ringing | connecting | connected | reconnecting | ended
+        state: 'idle',
         callId: null,
-        callType: 'audio', // audio | video
+        callNonce: 0,
+        callType: 'audio',
         isCaller: false,
         partner: partnerUser,
         localStream: null,
@@ -218,12 +255,39 @@
         timerInterval: null,
         isMuted: false,
         isCameraOff: false,
+        isSpeakerOff: false,
         isMinimized: false,
-        iceCandidatesQueue: []
+        iceCandidatesQueue: [],
+        // Timeouts
+        ringTimeoutId: null,
+        reconnectTimeoutId: null,
+        iceRestartTimeoutId: null,
+        // Reconnection tracking
+        iceRestartAttempted: false
     };
 
+    // Transition state with validation
+    function transitionState(newState) {
+        const oldState = CallState.state;
+        if (oldState === newState) return true;
+
+        if (TERMINAL_STATES.has(oldState)) {
+            callLog('STATE_BLOCKED_TERMINAL', { from: oldState, to: newState });
+            return false;
+        }
+
+        if (!canTransition(oldState, newState)) {
+            callLog('STATE_BLOCKED_INVALID', { from: oldState, to: newState });
+            return false;
+        }
+
+        CallState.state = newState;
+        callLog('STATE_TRANSITION', { from: oldState, to: newState, callId: CallState.callId });
+        return true;
+    }
+
     // ------------------------------------------------------------
-    //  4. DOM REFERENCES
+    //  6. DOM REFERENCES
     // ------------------------------------------------------------
     const DOM = {
         // Incoming Call Modal
@@ -242,6 +306,7 @@
         activeCallStatusText: document.getElementById('activeCallStatusText'),
         activeCallSubstatus: document.getElementById('activeCallSubstatus'),
         activeCallTimer: document.getElementById('activeCallTimer'),
+        activeCallLiveDot: document.getElementById('activeCallLiveDot'),
         activeAvatarBig: document.getElementById('activeAvatarBig'),
         activeSoundwaves: document.getElementById('activeSoundwaves'),
         activeAudioStage: document.getElementById('activeAudioStage'),
@@ -250,14 +315,25 @@
         localVideo: document.getElementById('localVideoTrack'),
         localVideoPip: document.getElementById('localVideoPip'),
         remoteAudio: document.getElementById('remoteAudioTrack'),
+        remoteCameraOffOverlay: document.getElementById('remoteCameraOffOverlay'),
+
+        // Reconnecting / Error Banners
+        reconnectBanner: document.getElementById('callReconnectBanner'),
+        reconnectText: document.getElementById('callReconnectText'),
+        inlineAlert: document.getElementById('callInlineAlert'),
+        inlineAlertText: document.getElementById('callInlineAlertText'),
+        inlineAlertClose: document.getElementById('callInlineAlertClose'),
 
         // Active Call Controls
         btnMute: document.getElementById('callBtnMute'),
         btnCamera: document.getElementById('callBtnCamera'),
+        btnSpeaker: document.getElementById('callBtnSpeaker'),
         btnEnd: document.getElementById('callBtnEnd'),
         btnMinimize: document.getElementById('callBtnMinimize'),
         callMuteLabel: document.getElementById('callMuteLabel'),
         callCamLabel: document.getElementById('callCamLabel'),
+        callSpeakerLabel: document.getElementById('callSpeakerLabel'),
+        callSpeakerItem: document.getElementById('callSpeakerItem'),
 
         // Minimized Floating Pill
         minimizedPill: document.getElementById('callMinimizedPill'),
@@ -267,7 +343,7 @@
     };
 
     // ------------------------------------------------------------
-    //  5. UI UPDATERS
+    //  7. UI UPDATERS
     // ------------------------------------------------------------
     function formatDuration(sec) {
         const mins = Math.floor(sec / 60);
@@ -345,6 +421,9 @@
             DOM.callCamLabel.style.display = isVideo ? 'block' : 'none';
         }
 
+        // Hide reconnect banner
+        if (DOM.reconnectBanner) DOM.reconnectBanner.style.display = 'none';
+
         DOM.activeModal.classList.add('is-active');
         hideMinimizedPill();
     }
@@ -372,12 +451,43 @@
         if (DOM.activeCallStatusText) {
             DOM.activeCallStatusText.textContent = statusText;
         }
+        // Update live dot color
+        if (DOM.activeCallLiveDot) {
+            if (isConnected) {
+                DOM.activeCallLiveDot.style.background = 'var(--call-accent-green)';
+                DOM.activeCallLiveDot.style.boxShadow = '0 0 12px var(--call-accent-green)';
+            } else if (CallState.state === 'reconnecting') {
+                DOM.activeCallLiveDot.style.background = 'var(--call-accent-gold)';
+                DOM.activeCallLiveDot.style.boxShadow = '0 0 12px var(--call-accent-gold)';
+            } else {
+                DOM.activeCallLiveDot.style.background = 'var(--call-accent-cyan)';
+                DOM.activeCallLiveDot.style.boxShadow = '0 0 12px var(--call-accent-cyan)';
+            }
+        }
         if (DOM.activeCallSubstatus) {
             if (isConnected) {
                 DOM.activeCallSubstatus.textContent = 'End-to-End Encrypted • HD Audio';
             } else if (CallState.state === 'reconnecting') {
                 DOM.activeCallSubstatus.textContent = 'Network interrupted, reconnecting...';
             }
+        }
+        // Reconnect banner
+        if (DOM.reconnectBanner) {
+            DOM.reconnectBanner.style.display = CallState.state === 'reconnecting' ? 'flex' : 'none';
+        }
+        if (DOM.reconnectText) {
+            DOM.reconnectText.textContent = statusText;
+        }
+    }
+
+    function showInlineAlert(msg) {
+        if (DOM.inlineAlert && DOM.inlineAlertText) {
+            DOM.inlineAlertText.textContent = msg;
+            DOM.inlineAlert.style.display = 'flex';
+            // Auto-hide after 8s
+            setTimeout(() => {
+                if (DOM.inlineAlert) DOM.inlineAlert.style.display = 'none';
+            }, 8000);
         }
     }
 
@@ -406,7 +516,7 @@
     }
 
     // ------------------------------------------------------------
-    //  6. WEBRTC CORE IMPLEMENTATION
+    //  8. WEBRTC CORE IMPLEMENTATION
     // ------------------------------------------------------------
     async function acquireLocalMedia(isVideo = false) {
         try {
@@ -426,6 +536,8 @@
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             CallState.localStream = stream;
 
+            callLog('MEDIA_ACQUIRED', { audio: true, video: isVideo });
+
             // Connect local stream to sound visualizer if audio call
             if (!isVideo) {
                 setupAudioVisualizer(stream);
@@ -438,19 +550,28 @@
 
             return stream;
         } catch (err) {
-            console.error('[WebRTC] Media access error:', err);
-            alert('Unable to access microphone or camera. Please check browser permissions.');
+            callLog('MEDIA_ERROR', { error: err.name, message: err.message });
+            showInlineAlert(
+                err.name === 'NotAllowedError'
+                    ? 'Camera/microphone permission was denied. Please allow access in your browser settings.'
+                    : 'Unable to access camera or microphone. Please check your device.'
+            );
             throw err;
         }
     }
 
     function createPeerConnection() {
+        // Always close existing connection first
         if (CallState.peerConnection) {
             try { CallState.peerConnection.close(); } catch (e) {}
+            CallState.peerConnection = null;
         }
 
         const pc = new RTCPeerConnection(RTC_CONFIG);
         CallState.peerConnection = pc;
+        CallState.iceRestartAttempted = false;
+
+        callLog('PEER_CONNECTION_CREATED');
 
         // Add local tracks
         if (CallState.localStream) {
@@ -461,10 +582,17 @@
 
         // Handle remote stream tracks
         pc.ontrack = (event) => {
+            // Reset remoteStream for fresh tracks to prevent accumulation
             if (!CallState.remoteStream) {
                 CallState.remoteStream = new MediaStream();
             }
+
+            // Check for duplicate tracks
+            const existingTrack = CallState.remoteStream.getTrackById(event.track.id);
+            if (existingTrack) return;
+
             CallState.remoteStream.addTrack(event.track);
+            callLog('REMOTE_TRACK_ADDED', { kind: event.track.kind, id: event.track.id });
 
             if (CallState.callType === 'video' && DOM.remoteVideo) {
                 DOM.remoteVideo.srcObject = CallState.remoteStream;
@@ -476,10 +604,25 @@
                 DOM.remoteAudio.play().catch(() => {});
             }
 
-            // Hook up remote audio to visualizer as well
+            // Hook up remote audio to visualizer
             if (event.track.kind === 'audio') {
                 setupAudioVisualizer(CallState.remoteStream);
             }
+
+            // Monitor track ended for remote camera-off detection
+            event.track.onended = () => {
+                callLog('REMOTE_TRACK_ENDED', { kind: event.track.kind });
+            };
+            event.track.onmute = () => {
+                if (event.track.kind === 'video' && DOM.remoteCameraOffOverlay) {
+                    DOM.remoteCameraOffOverlay.style.display = 'flex';
+                }
+            };
+            event.track.onunmute = () => {
+                if (event.track.kind === 'video' && DOM.remoteCameraOffOverlay) {
+                    DOM.remoteCameraOffOverlay.style.display = 'none';
+                }
+            };
         };
 
         // ICE candidate exchange
@@ -491,28 +634,37 @@
 
         // Connection state monitoring
         pc.onconnectionstatechange = () => {
+            if (pc !== CallState.peerConnection) return; // Stale PC
             const state = pc.connectionState;
-            console.log('[WebRTC] Connection state:', state);
+            callLog('WEBRTC_CONNECTION_STATE', { state });
 
             if (state === 'connected') {
-                CallState.state = 'connected';
-                updateConnectionStatusUI('Connected', true);
-                playCallConnectedChime();
-                startCallTimer();
+                clearReconnectTimers();
+                if (transitionState('connected')) {
+                    updateConnectionStatusUI('Connected', true);
+                    playCallConnectedChime();
+                    startCallTimer();
+                }
             } else if (state === 'connecting') {
                 updateConnectionStatusUI('Connecting...');
-            } else if (state === 'disconnected' || state === 'failed') {
-                CallState.state = 'reconnecting';
-                updateConnectionStatusUI('Reconnecting...');
+            } else if (state === 'disconnected') {
+                handleDisconnected();
+            } else if (state === 'failed') {
+                handleConnectionFailed();
             } else if (state === 'closed') {
-                endCallLocally('Connection closed');
+                if (!TERMINAL_STATES.has(CallState.state)) {
+                    endCallLocally('Connection closed');
+                }
             }
         };
 
         pc.oniceconnectionstatechange = () => {
+            if (pc !== CallState.peerConnection) return;
             const iceState = pc.iceConnectionState;
-            if (iceState === 'failed') {
-                pc.restartIce();
+            callLog('ICE_CONNECTION_STATE', { state: iceState });
+
+            if (iceState === 'failed' && !CallState.iceRestartAttempted) {
+                attemptIceRestart();
             }
         };
 
@@ -530,21 +682,121 @@
                 data
             })
         }).catch(err => {
-            console.warn('[WebRTC] Signal POST error:', err.message);
+            callLog('SIGNAL_POST_ERROR', { type, error: err.message });
         });
     }
 
     // ------------------------------------------------------------
-    //  7. CALL LIFECYCLE FLOWS
+    //  9. RECONNECTION STRATEGY
     // ------------------------------------------------------------
-    async function startCall(callType = 'audio') {
-        if (CallState.state !== 'idle') {
-            alert('A call is already in progress.');
+    function handleDisconnected() {
+        // WebRTC 'disconnected' is often temporary (network hiccup)
+        // Wait 15s before considering it a failure
+        if (CallState.state === 'connected') {
+            transitionState('reconnecting');
+            updateConnectionStatusUI('Reconnecting...');
+            callLog('RECONNECT_WAITING', { timeout: '15s' });
+
+            clearReconnectTimers();
+            CallState.reconnectTimeoutId = setTimeout(() => {
+                if (CallState.state === 'reconnecting') {
+                    callLog('RECONNECT_TIMEOUT_EXPIRED');
+                    attemptIceRestart();
+                }
+            }, 15000);
+        }
+    }
+
+    function handleConnectionFailed() {
+        if (CallState.iceRestartAttempted) {
+            callLog('WEBRTC_FAILED_AFTER_RESTART');
+            endCallLocally('Connection failed');
+            notifyServerEndCall('webrtc_failed');
+        } else {
+            attemptIceRestart();
+        }
+    }
+
+    function attemptIceRestart() {
+        if (CallState.iceRestartAttempted) {
+            callLog('ICE_RESTART_ALREADY_ATTEMPTED');
+            endCallLocally('Connection could not be restored');
+            notifyServerEndCall('ice_restart_failed');
+            return;
+        }
+
+        CallState.iceRestartAttempted = true;
+        callLog('ICE_RESTART_ATTEMPTING');
+
+        if (!transitionState('reconnecting')) {
+            // Already in reconnecting or terminal state
+            return;
+        }
+        updateConnectionStatusUI('Reconnecting...');
+
+        const pc = CallState.peerConnection;
+        if (!pc || pc.connectionState === 'closed') {
+            endCallLocally('Connection lost');
+            notifyServerEndCall('pc_closed');
             return;
         }
 
         try {
-            CallState.state = 'calling';
+            pc.restartIce();
+        } catch (e) {
+            callLog('ICE_RESTART_ERROR', { error: e.message });
+        }
+
+        // Give ICE restart 10s to recover
+        clearReconnectTimers();
+        CallState.iceRestartTimeoutId = setTimeout(() => {
+            if (CallState.state === 'reconnecting') {
+                callLog('ICE_RESTART_TIMEOUT');
+                endCallLocally('Unable to reconnect');
+                notifyServerEndCall('reconnect_timeout');
+            }
+        }, 10000);
+    }
+
+    function clearReconnectTimers() {
+        if (CallState.reconnectTimeoutId) {
+            clearTimeout(CallState.reconnectTimeoutId);
+            CallState.reconnectTimeoutId = null;
+        }
+        if (CallState.iceRestartTimeoutId) {
+            clearTimeout(CallState.iceRestartTimeoutId);
+            CallState.iceRestartTimeoutId = null;
+        }
+    }
+
+    // Helper to notify server an end-call
+    function notifyServerEndCall(reason) {
+        const id = CallState.callId;
+        const dur = CallState.durationSeconds;
+        if (id) {
+            fetch('/api/call/end', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ callId: id, durationSeconds: dur, reason })
+            }).catch(() => {});
+        }
+    }
+
+    // ------------------------------------------------------------
+    //  10. CALL LIFECYCLE FLOWS
+    // ------------------------------------------------------------
+    async function startCall(callType = 'audio') {
+        if (CallState.state !== 'idle') {
+            showInlineAlert('A call is already in progress.');
+            return;
+        }
+
+        _callNonce++;
+        const nonce = _callNonce;
+
+        try {
+            if (!transitionState('calling')) return;
+            CallState.callNonce = nonce;
             CallState.callType = callType;
             CallState.isCaller = true;
             CallState.durationSeconds = 0;
@@ -552,6 +804,9 @@
 
             // Acquire local media first
             await acquireLocalMedia(callType === 'video');
+
+            // Check nonce hasn't changed (user may have cancelled during permission dialog)
+            if (CallState.callNonce !== nonce) return;
 
             // Send initiate call request
             const res = await fetch('/api/call/initiate', {
@@ -562,35 +817,56 @@
 
             const data = await res.json();
             if (!data.success) {
-                alert(data.error || 'Could not place call.');
+                showInlineAlert(data.error || 'Could not place call.');
                 cleanupCallState();
                 return;
             }
 
+            // Check nonce again
+            if (CallState.callNonce !== nonce) return;
+
             CallState.callId = data.callId;
+            callLog('CALL_STARTED', { callId: data.callId, type: callType });
 
             // Show active call screen with calling state
             showActiveCallModal();
             updateConnectionStatusUI('Ringing...');
             startOutgoingRingback();
 
+            // Client-side ring timeout (50s to give server 45s timeout room)
+            CallState.ringTimeoutId = setTimeout(() => {
+                if (CallState.state === 'calling' && CallState.callNonce === nonce) {
+                    callLog('CLIENT_RING_TIMEOUT');
+                    endCallLocally('No answer');
+                }
+            }, 50000);
+
         } catch (err) {
-            console.error('[Call] Start call failed:', err);
+            callLog('START_CALL_FAILED', { error: err.message });
             cleanupCallState();
         }
     }
 
     async function acceptIncomingCall() {
         if (!CallState.callId) return;
+        if (CallState.state !== 'ringing') {
+            callLog('ACCEPT_BLOCKED', { state: CallState.state });
+            return;
+        }
+
+        const nonce = CallState.callNonce;
 
         try {
             stopRingtone();
             hideIncomingCallModal();
 
-            CallState.state = 'connecting';
+            if (!transitionState('connecting')) return;
             CallState.isCaller = false;
 
             await acquireLocalMedia(CallState.callType === 'video');
+            if (CallState.callNonce !== nonce) return;
+
+            // Create peer connection AFTER media acquired
             createPeerConnection();
 
             showActiveCallModal();
@@ -604,11 +880,12 @@
 
             const data = await res.json();
             if (!data.success) {
-                alert(data.error || 'Failed to accept call.');
+                callLog('ACCEPT_SERVER_ERROR', { error: data.error });
+                showInlineAlert(data.error || 'Failed to accept call.');
                 endCallLocally('Failed to accept');
             }
         } catch (err) {
-            console.error('[Call] Accept call failed:', err);
+            callLog('ACCEPT_CALL_FAILED', { error: err.message });
             endCallLocally('Accept failed');
         }
     }
@@ -616,6 +893,8 @@
     async function rejectIncomingCall() {
         if (!CallState.callId) return;
         const id = CallState.callId;
+        callLog('CALL_REJECTED_BY_USER', { callId: id });
+
         hideIncomingCallModal();
         cleanupCallState();
 
@@ -631,6 +910,8 @@
     async function cancelCall() {
         if (!CallState.callId) return;
         const id = CallState.callId;
+        callLog('CALL_CANCELLED_BY_CALLER', { callId: id });
+
         endCallLocally('Cancelled');
 
         try {
@@ -645,8 +926,15 @@
     async function endCall() {
         if (CallState.state === 'idle') return;
 
+        // If still in calling state (not yet connected), cancel instead
+        if (CallState.state === 'calling') {
+            return cancelCall();
+        }
+
         const id = CallState.callId;
         const duration = CallState.durationSeconds;
+        callLog('CALL_END_BY_USER', { callId: id, duration });
+
         endCallLocally('Ended');
 
         if (id) {
@@ -665,18 +953,36 @@
     }
 
     function endCallLocally(reason = 'Ended') {
+        if (CallState.state === 'idle') return; // Already cleaned up
+
+        callLog('CALL_ENDED_LOCALLY', { reason, callId: CallState.callId });
+
         playCallEndedChime();
         stopAudioVisualizer();
         hideActiveCallModal();
         hideIncomingCallModal();
         hideMinimizedPill();
+
+        // Hide reconnect/error banners
+        if (DOM.reconnectBanner) DOM.reconnectBanner.style.display = 'none';
+        if (DOM.inlineAlert) DOM.inlineAlert.style.display = 'none';
+        if (DOM.remoteCameraOffOverlay) DOM.remoteCameraOffOverlay.style.display = 'none';
+
         cleanupCallState();
     }
 
+    // IDEMPOTENT cleanup — safe to call multiple times
     function cleanupCallState() {
         stopRingtone();
         stopCallTimer();
         stopAudioVisualizer();
+        clearReconnectTimers();
+
+        // Clear ring timeout
+        if (CallState.ringTimeoutId) {
+            clearTimeout(CallState.ringTimeoutId);
+            CallState.ringTimeoutId = null;
+        }
 
         // Stop all local tracks
         if (CallState.localStream) {
@@ -686,23 +992,40 @@
             CallState.localStream = null;
         }
 
+        // Stop remote tracks
+        if (CallState.remoteStream) {
+            CallState.remoteStream.getTracks().forEach(track => {
+                try { track.stop(); } catch (e) {}
+            });
+            CallState.remoteStream = null;
+        }
+
         // Close peer connection
         if (CallState.peerConnection) {
-            try { CallState.peerConnection.close(); } catch (e) {}
+            // Remove event handlers to prevent further callbacks
+            const pc = CallState.peerConnection;
+            pc.ontrack = null;
+            pc.onicecandidate = null;
+            pc.onconnectionstatechange = null;
+            pc.oniceconnectionstatechange = null;
+            try { pc.close(); } catch (e) {}
             CallState.peerConnection = null;
         }
 
+        // Clear media element references
         if (DOM.remoteVideo) DOM.remoteVideo.srcObject = null;
         if (DOM.localVideo) DOM.localVideo.srcObject = null;
         if (DOM.remoteAudio) DOM.remoteAudio.srcObject = null;
 
+        // Reset state
         CallState.state = 'idle';
         CallState.callId = null;
-        CallState.remoteStream = null;
         CallState.isMuted = false;
         CallState.isCameraOff = false;
+        CallState.isSpeakerOff = false;
         CallState.isMinimized = false;
         CallState.iceCandidatesQueue = [];
+        CallState.iceRestartAttempted = false;
 
         // Reset control button styles
         if (DOM.btnMute) {
@@ -721,10 +1044,19 @@
             if (camOn) camOn.style.display = 'block';
             if (camOff) camOff.style.display = 'none';
         }
+
+        if (DOM.btnSpeaker) {
+            DOM.btnSpeaker.classList.remove('is-disabled-state');
+            const spkOn = DOM.btnSpeaker.querySelector('.icon-speaker-on');
+            const spkOff = DOM.btnSpeaker.querySelector('.icon-speaker-off');
+            if (spkOn) spkOn.style.display = 'block';
+            if (spkOff) spkOff.style.display = 'none';
+        }
+        if (DOM.callSpeakerLabel) DOM.callSpeakerLabel.textContent = 'Speaker';
     }
 
     // ------------------------------------------------------------
-    //  8. CONTROLS TOGGLE (Mute & Camera)
+    //  11. CONTROLS TOGGLE (Mute, Camera, Speaker)
     // ------------------------------------------------------------
     function toggleMute() {
         if (!CallState.localStream) return;
@@ -735,6 +1067,11 @@
         audioTracks.forEach(track => {
             track.enabled = !CallState.isMuted;
         });
+
+        callLog('TOGGLE_MUTE', { muted: CallState.isMuted });
+
+        // Notify partner of media state change
+        sendSignalingMessage('media-state', { muted: CallState.isMuted });
 
         if (DOM.btnMute) {
             const micOn = DOM.btnMute.querySelector('.icon-mic-on');
@@ -764,6 +1101,11 @@
             track.enabled = !CallState.isCameraOff;
         });
 
+        callLog('TOGGLE_CAMERA', { cameraOff: CallState.isCameraOff });
+
+        // Notify partner of media state change
+        sendSignalingMessage('media-state', { cameraOff: CallState.isCameraOff });
+
         if (DOM.btnCamera) {
             const camOn = DOM.btnCamera.querySelector('.icon-cam-on');
             const camOff = DOM.btnCamera.querySelector('.icon-cam-off');
@@ -782,12 +1124,39 @@
         }
     }
 
+    function toggleSpeaker() {
+        if (!DOM.remoteAudio) return;
+        CallState.isSpeakerOff = !CallState.isSpeakerOff;
+        DOM.remoteAudio.muted = CallState.isSpeakerOff;
+        if (DOM.remoteVideo) DOM.remoteVideo.muted = CallState.isSpeakerOff;
+
+        callLog('TOGGLE_SPEAKER', { speakerOff: CallState.isSpeakerOff });
+
+        if (DOM.btnSpeaker) {
+            const spkOn = DOM.btnSpeaker.querySelector('.icon-speaker-on');
+            const spkOff = DOM.btnSpeaker.querySelector('.icon-speaker-off');
+
+            if (CallState.isSpeakerOff) {
+                DOM.btnSpeaker.classList.add('is-disabled-state');
+                if (spkOn) spkOn.style.display = 'none';
+                if (spkOff) spkOff.style.display = 'block';
+                if (DOM.callSpeakerLabel) DOM.callSpeakerLabel.textContent = 'Unmute';
+            } else {
+                DOM.btnSpeaker.classList.remove('is-disabled-state');
+                if (spkOn) spkOn.style.display = 'block';
+                if (spkOff) spkOff.style.display = 'none';
+                if (DOM.callSpeakerLabel) DOM.callSpeakerLabel.textContent = 'Speaker';
+            }
+        }
+    }
+
     // ------------------------------------------------------------
-    //  9. SSE SIGNALING HANDLERS
+    //  12. SSE SIGNALING HANDLERS
     // ------------------------------------------------------------
     async function handleIncomingCallEvent(data) {
         if (CallState.state !== 'idle') {
-            // Already busy in another call
+            // Already busy — auto-reject
+            callLog('INCOMING_REJECTED_BUSY', { callId: data.callId });
             fetch('/api/call/reject', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -796,18 +1165,36 @@
             return;
         }
 
-        CallState.state = 'ringing';
+        _callNonce++;
+        CallState.callNonce = _callNonce;
+
+        if (!transitionState('ringing')) return;
         CallState.callId = data.callId;
         CallState.callType = data.callType || 'audio';
         CallState.isCaller = false;
+
+        callLog('INCOMING_CALL', { callId: data.callId, type: data.callType, from: data.caller });
 
         showIncomingCallModal(data);
     }
 
     async function handleCallAcceptedEvent(data) {
         if (!CallState.isCaller || CallState.callId !== data.callId) return;
+        if (CallState.state !== 'calling') {
+            callLog('ACCEPTED_IGNORED_WRONG_STATE', { state: CallState.state });
+            return;
+        }
+
+        callLog('CALL_ACCEPTED_BY_REMOTE', { callId: data.callId });
 
         stopRingtone();
+        // Clear ring timeout
+        if (CallState.ringTimeoutId) {
+            clearTimeout(CallState.ringTimeoutId);
+            CallState.ringTimeoutId = null;
+        }
+
+        if (!transitionState('connecting')) return;
         updateConnectionStatusUI('Connecting...');
 
         // Caller initiates WebRTC offer
@@ -819,10 +1206,12 @@
             });
             await pc.setLocalDescription(offer);
 
+            callLog('WEBRTC_OFFER_SENT');
             sendSignalingMessage('offer', offer);
         } catch (err) {
-            console.error('[WebRTC] Create offer error:', err);
+            callLog('WEBRTC_OFFER_ERROR', { error: err.message });
             endCallLocally('Offer error');
+            notifyServerEndCall('offer_failed');
         }
     }
 
@@ -835,13 +1224,22 @@
             return;
         }
 
+        // Media state update from partner
+        if (signal.type === 'media-state' && signal.data) {
+            if (signal.data.cameraOff !== undefined && DOM.remoteCameraOffOverlay) {
+                DOM.remoteCameraOffOverlay.style.display = signal.data.cameraOff ? 'flex' : 'none';
+            }
+            return;
+        }
+
         const pc = CallState.peerConnection;
         if (!pc) return;
 
         try {
             if (signal.type === 'offer') {
+                callLog('WEBRTC_OFFER_RECEIVED');
                 await pc.setRemoteDescription(new RTCSessionDescription(signal.data));
-                
+
                 // Process any queued ICE candidates
                 while (CallState.iceCandidatesQueue.length > 0) {
                     const candidate = CallState.iceCandidatesQueue.shift();
@@ -850,9 +1248,11 @@
 
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
+                callLog('WEBRTC_ANSWER_SENT');
                 sendSignalingMessage('answer', answer);
 
             } else if (signal.type === 'answer') {
+                callLog('WEBRTC_ANSWER_RECEIVED');
                 await pc.setRemoteDescription(new RTCSessionDescription(signal.data));
 
                 // Process any queued ICE candidates
@@ -867,14 +1267,17 @@
                 } else {
                     CallState.iceCandidatesQueue.push(signal.data);
                 }
+            } else if (signal.type === 'ice-restart') {
+                callLog('ICE_RESTART_SIGNAL_RECEIVED');
+                // Partner requested ICE restart — recreate offer/answer
             }
         } catch (err) {
-            console.error('[WebRTC] Signal handling error:', err);
+            callLog('SIGNAL_HANDLING_ERROR', { type: signal.type, error: err.message });
         }
     }
 
     // ------------------------------------------------------------
-    //  10. EVENT LISTENERS & INTEGRATION
+    //  13. EVENT LISTENERS & INTEGRATION
     // ------------------------------------------------------------
     function setupDomEvents() {
         if (DOM.incomingAcceptBtn) {
@@ -892,6 +1295,9 @@
         }
         if (DOM.btnCamera) {
             DOM.btnCamera.addEventListener('click', toggleCamera);
+        }
+        if (DOM.btnSpeaker) {
+            DOM.btnSpeaker.addEventListener('click', toggleSpeaker);
         }
 
         if (DOM.btnMinimize) {
@@ -916,9 +1322,16 @@
             });
         }
 
+        // Inline alert close
+        if (DOM.inlineAlertClose) {
+            DOM.inlineAlertClose.addEventListener('click', () => {
+                if (DOM.inlineAlert) DOM.inlineAlert.style.display = 'none';
+            });
+        }
+
         // Quick In-Call Reaction Emojis
         document.querySelectorAll('.call-quick-emoji-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', () => {
                 const emoji = btn.getAttribute('data-call-emoji') || btn.textContent.trim();
                 spawnInCallEmoji(emoji);
                 sendSignalingMessage('call-emoji', { emoji });
@@ -945,14 +1358,78 @@
         // Touch drag for Picture-in-Picture window on mobile
         setupPipDraggable();
 
-        // Window unload cleanup
+        // Window unload cleanup — use Blob for proper Content-Type
         window.addEventListener('beforeunload', () => {
             if (CallState.state !== 'idle' && CallState.callId) {
-                navigator.sendBeacon('/api/call/end', JSON.stringify({
+                const payload = JSON.stringify({
                     callId: CallState.callId,
                     durationSeconds: CallState.durationSeconds,
                     reason: 'page_unload'
-                }));
+                });
+                const blob = new Blob([payload], { type: 'application/json' });
+                navigator.sendBeacon('/api/call/end', blob);
+            }
+        });
+
+        // Page hide (tab close / navigation on mobile)
+        window.addEventListener('pagehide', (e) => {
+            if (CallState.state !== 'idle' && CallState.callId && !e.persisted) {
+                const payload = JSON.stringify({
+                    callId: CallState.callId,
+                    durationSeconds: CallState.durationSeconds,
+                    reason: 'page_hide'
+                });
+                const blob = new Blob([payload], { type: 'application/json' });
+                navigator.sendBeacon('/api/call/end', blob);
+            }
+        });
+
+        // Visibility change — pause/resume visualizer, check connection
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                // Pause visualizer to save CPU
+                if (visualizerAnimationId) {
+                    cancelAnimationFrame(visualizerAnimationId);
+                    visualizerAnimationId = null;
+                }
+            } else if (document.visibilityState === 'visible') {
+                // Resume visualizer if in a call
+                if ((CallState.state === 'connected' || CallState.state === 'connecting') && audioAnalyser) {
+                    startVisualizerLoop();
+                }
+                // Check WebRTC connection state
+                if (CallState.peerConnection && CallState.state === 'connected') {
+                    const pcState = CallState.peerConnection.connectionState;
+                    if (pcState === 'disconnected' || pcState === 'failed') {
+                        handleDisconnected();
+                    }
+                }
+            }
+        });
+
+        // Online/Offline detection
+        window.addEventListener('offline', () => {
+            if (CallState.state === 'connected') {
+                callLog('NETWORK_OFFLINE');
+                transitionState('reconnecting');
+                updateConnectionStatusUI('Network disconnected...');
+            }
+        });
+
+        window.addEventListener('online', () => {
+            if (CallState.state === 'reconnecting') {
+                callLog('NETWORK_ONLINE');
+                updateConnectionStatusUI('Reconnecting...');
+                // Check if WebRTC connection recovered
+                if (CallState.peerConnection) {
+                    const pcState = CallState.peerConnection.connectionState;
+                    if (pcState === 'connected') {
+                        transitionState('connected');
+                        updateConnectionStatusUI('Connected', true);
+                    } else if (pcState === 'failed' || pcState === 'disconnected') {
+                        attemptIceRestart();
+                    }
+                }
             }
         });
     }
@@ -1000,14 +1477,55 @@
         window.addEventListener('mouseup', onTouchEnd);
     }
 
-    // Global custom event listeners dispatched from SSE
+    // Global custom event listeners dispatched from SSE (registered ONCE)
     window.addEventListener('call:incoming', (e) => handleIncomingCallEvent(e.detail));
     window.addEventListener('call:accepted', (e) => handleCallAcceptedEvent(e.detail));
     window.addEventListener('call:signal', (e) => handleCallSignalEvent(e.detail));
-    window.addEventListener('call:rejected', () => endCallLocally('Rejected'));
-    window.addEventListener('call:cancelled', () => endCallLocally('Cancelled'));
-    window.addEventListener('call:ended', () => endCallLocally('Ended'));
-    window.addEventListener('call:timeout', () => endCallLocally('No answer'));
+    window.addEventListener('call:rejected', (e) => {
+        if (e.detail && e.detail.callId && e.detail.callId !== CallState.callId) return;
+        callLog('CALL_REJECTED_BY_REMOTE');
+        endCallLocally('Rejected');
+    });
+    window.addEventListener('call:cancelled', (e) => {
+        if (e.detail && e.detail.callId && e.detail.callId !== CallState.callId) return;
+        callLog('CALL_CANCELLED_BY_REMOTE');
+        endCallLocally('Cancelled');
+    });
+    window.addEventListener('call:ended', (e) => {
+        if (e.detail && e.detail.callId && e.detail.callId !== CallState.callId) return;
+        callLog('CALL_ENDED_BY_REMOTE');
+        endCallLocally('Ended');
+    });
+    window.addEventListener('call:timeout', (e) => {
+        if (e.detail && e.detail.callId && e.detail.callId !== CallState.callId) return;
+        callLog('CALL_TIMEOUT_FROM_SERVER');
+        endCallLocally('No answer');
+    });
+
+    // Clean up call on page navigation or unload
+    function handlePageUnload() {
+        if (CallState.callId && !TERMINAL_STATES.has(CallState.state)) {
+            const payload = JSON.stringify({
+                callId: CallState.callId,
+                durationSeconds: CallState.durationSeconds,
+                reason: 'page_unload'
+            });
+
+            if (navigator.sendBeacon) {
+                const blob = new Blob([payload], { type: 'application/json' });
+                navigator.sendBeacon('/api/call/end', blob);
+            } else {
+                fetch('/api/call/end', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: payload,
+                    keepalive: true
+                }).catch(() => {});
+            }
+        }
+    }
+    window.addEventListener('beforeunload', handlePageUnload);
+    window.addEventListener('pagehide', handlePageUnload);
 
     // Global API object
     window.VideoHostCall = {

@@ -693,6 +693,143 @@
     transform: scaleX(-1); /* Mirror local view */
 }
 
+/* Remote Camera-Off Overlay in Video Stage */
+.video-camera-off-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    background: radial-gradient(circle at center, #111827 0%, #06080e 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+}
+
+.camera-off-avatar-wrap {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.camera-off-avatar-wrap .call-avatar-img,
+.camera-off-avatar-wrap .avatar-img,
+.camera-off-avatar-wrap .avatar-letter {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    font-size: 38px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.camera-off-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--call-text-muted);
+    letter-spacing: 0.02em;
+}
+
+/* Reconnecting Banner */
+.active-call-reconnect-banner {
+    position: absolute;
+    top: calc(72px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 18px;
+    background: rgba(245, 158, 11, 0.22);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 9999px;
+    color: #fbbf24;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(245, 158, 11, 0.2);
+    animation: bannerPop 0.3s ease;
+}
+
+@keyframes bannerPop {
+    from { opacity: 0; transform: translate(-50%, -10px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.call-reconnect-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(251, 191, 36, 0.3);
+    border-top-color: #fbbf24;
+    border-radius: 50%;
+    animation: spinnerSpin 0.8s linear infinite;
+}
+
+@keyframes spinnerSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* Inline Permission / Error Alert */
+.active-call-inline-alert {
+    position: absolute;
+    top: calc(80px + env(safe-area-inset-top, 0px));
+    left: 20px;
+    right: 20px;
+    max-width: 480px;
+    margin: 0 auto;
+    z-index: 35;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    background: rgba(244, 63, 94, 0.9);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+    animation: bannerPop 0.3s ease;
+}
+
+.active-call-inline-alert svg {
+    flex-shrink: 0;
+}
+
+.active-call-inline-alert span {
+    flex: 1;
+    line-height: 1.4;
+}
+
+.call-inline-alert-close {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+    opacity: 0.8;
+    transition: opacity 0.15s;
+}
+
+.call-inline-alert-close:hover {
+    opacity: 1;
+}
+
 /* ------------------------------------------------------------
    3. BOTTOM FLOATING CONTROL DOCK
    ------------------------------------------------------------ */
@@ -703,7 +840,7 @@
     align-items: center;
     justify-content: center;
     gap: 20px;
-    padding: 16px 32px 24px;
+    padding: 16px 32px calc(24px + env(safe-area-inset-bottom, 0px));
     margin: 0 auto;
     background: linear-gradient(0deg, rgba(6, 8, 14, 0.95) 0%, transparent 100%);
 }
@@ -737,6 +874,7 @@
     transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     outline: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .call-control-btn:hover {
@@ -778,8 +916,8 @@
    ------------------------------------------------------------ */
 .minimized-call-pill {
     position: fixed;
-    bottom: 24px;
-    left: 24px;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    left: calc(24px + env(safe-area-inset-left, 0px));
     z-index: 999990;
     display: flex;
     align-items: center;
@@ -794,6 +932,7 @@
     cursor: pointer;
     transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s;
     animation: pillPop 0.35s ease;
+    -webkit-tap-highlight-color: transparent;
 }
 
 @keyframes pillPop {
@@ -1028,12 +1167,15 @@
 
 
 /* ------------------------------------------------------------
-   6. RESPONSIVE OPTIMIZATIONS (Mobile Viewports)
+   6. RESPONSIVE OPTIMIZATIONS ACROSS ALL MOBILE VIEWPORTS
    ------------------------------------------------------------ */
+
+/* Tablet & Large Mobile (<= 600px) */
 @media (max-width: 600px) {
     .incoming-call-card {
         padding: 30px 20px 26px;
         border-radius: 28px;
+        max-width: 92vw;
     }
 
     .incoming-call-avatar-wrap,
@@ -1045,21 +1187,24 @@
     .call-btn-circle {
         width: 60px;
         height: 60px;
+        min-width: 48px;
+        min-height: 48px;
     }
 
     .active-call-header {
-        padding: 16px 20px;
+        padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 14px;
     }
 
     .active-call-audio-card {
-        padding: 32px 20px 26px;
+        padding: 28px 18px 24px;
         border-radius: 28px;
+        max-width: 92vw;
     }
 
     .active-call-avatar-container,
     .active-call-avatar-big {
-        width: 110px;
-        height: 110px;
+        width: 108px;
+        height: 108px;
     }
 
     .active-call-partner-name {
@@ -1067,29 +1212,251 @@
     }
 
     .active-call-control-dock {
-        gap: 16px;
-        padding: 12px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+        gap: 14px;
+        padding: 12px 16px calc(18px + env(safe-area-inset-bottom, 0px));
     }
 
     .call-control-btn {
         width: 52px;
         height: 52px;
+        min-width: 48px;
+        min-height: 48px;
     }
 
     .call-control-btn.btn-end-call {
         width: 58px;
         height: 58px;
+        min-width: 52px;
+        min-height: 52px;
     }
 
     .local-video-pip-container {
-        width: 108px;
-        height: 150px;
-        top: 70px;
-        right: 16px;
+        width: 104px;
+        height: 145px;
+        top: calc(64px + env(safe-area-inset-top, 0px));
+        right: 14px;
+        border-radius: 18px;
     }
 
     .minimized-call-pill {
         bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-        left: 16px;
+        left: calc(16px + env(safe-area-inset-left, 0px));
     }
 }
+
+/* Standard Mobile (<= 412px - Pixel, Samsung Galaxy) */
+@media (max-width: 412px) {
+    .incoming-call-actions {
+        gap: 28px;
+    }
+
+    .incoming-call-card {
+        padding: 26px 16px 22px;
+        border-radius: 24px;
+    }
+
+    .incoming-call-caller-name {
+        font-size: 22px;
+    }
+
+    .active-call-audio-card {
+        padding: 24px 16px 20px;
+    }
+
+    .active-call-avatar-container,
+    .active-call-avatar-big {
+        width: 96px;
+        height: 96px;
+    }
+
+    .active-call-avatar-big .call-avatar-img,
+    .active-call-avatar-big .avatar-img,
+    .active-call-avatar-big .avatar-letter {
+        font-size: 42px;
+    }
+
+    .active-call-partner-name {
+        font-size: 22px;
+    }
+
+    .active-call-control-dock {
+        gap: 10px;
+        padding: 10px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .call-control-btn {
+        width: 48px;
+        height: 48px;
+    }
+
+    .call-control-btn.btn-end-call {
+        width: 54px;
+        height: 54px;
+    }
+
+    .call-control-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .active-call-soundwaves {
+        gap: 3px;
+        height: 32px;
+    }
+
+    .soundwave-bar {
+        width: 3px;
+    }
+
+    .local-video-pip-container {
+        width: 90px;
+        height: 125px;
+        top: calc(58px + env(safe-area-inset-top, 0px));
+        right: 10px;
+    }
+}
+
+/* Compact Mobile (<= 375px - iPhone SE, Small Android) */
+@media (max-width: 375px) {
+    .incoming-call-caller-name {
+        font-size: 20px;
+    }
+
+    .incoming-call-actions {
+        gap: 20px;
+    }
+
+    .call-btn-circle {
+        width: 54px;
+        height: 54px;
+    }
+
+    .active-call-control-dock {
+        gap: 8px;
+    }
+
+    .call-control-btn {
+        width: 48px;
+        height: 48px;
+    }
+
+    .call-control-label {
+        font-size: 10px;
+    }
+
+    .active-call-avatar-container,
+    .active-call-avatar-big {
+        width: 86px;
+        height: 86px;
+    }
+
+    .active-call-quick-reactions {
+        gap: 4px;
+        padding: 4px 8px;
+    }
+
+    .call-quick-emoji-btn {
+        font-size: 16px;
+        padding: 2px 4px;
+    }
+}
+
+/* Ultra Compact (<= 320px) */
+@media (max-width: 320px) {
+    .incoming-call-card {
+        padding: 20px 12px 18px;
+    }
+
+    .active-call-audio-card {
+        padding: 18px 12px 16px;
+    }
+
+    .active-call-partner-name {
+        font-size: 18px;
+    }
+
+    .call-control-btn {
+        width: 44px;
+        height: 44px;
+    }
+
+    .call-control-btn.btn-end-call {
+        width: 48px;
+        height: 48px;
+    }
+
+    .local-video-pip-container {
+        width: 78px;
+        height: 108px;
+    }
+}
+
+/* Landscape Mode on Mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+    .active-call-modal {
+        flex-direction: row;
+    }
+
+    .active-call-header {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 8px 16px;
+        background: rgba(6, 8, 14, 0.8);
+    }
+
+    .active-call-body {
+        padding: 50px 10px 10px;
+    }
+
+    .active-call-audio-card {
+        padding: 12px 20px;
+        border-radius: 20px;
+        max-height: 80vh;
+    }
+
+    .active-call-avatar-container,
+    .active-call-avatar-big {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 8px;
+    }
+
+    .active-call-partner-name {
+        font-size: 18px;
+        margin-bottom: 2px;
+    }
+
+    .active-call-soundwaves {
+        height: 24px;
+        margin-bottom: 8px;
+    }
+
+    .active-call-control-dock {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 6px 16px calc(6px + env(safe-area-inset-bottom, 0px));
+        gap: 12px;
+    }
+
+    .call-control-btn {
+        width: 42px;
+        height: 42px;
+    }
+
+    .call-control-btn.btn-end-call {
+        width: 46px;
+        height: 46px;
+    }
+
+    .local-video-pip-container {
+        width: 90px;
+        height: 120px;
+        top: 50px;
+        right: 12px;
+    }
+}
+

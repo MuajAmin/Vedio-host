@@ -75,12 +75,13 @@ app.use((req, res, next) => {
     }
     res.setHeader(
         'Content-Security-Policy',
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; img-src 'self' data:; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'"
     );
     next();
 });
 app.use(express.urlencoded({ extended: false, limit: '32kb' }));
-app.use(express.json({ limit: '32kb' }));
+app.use(express.json({ limit: '64kb' }));
+app.use(express.text({ limit: '64kb', type: 'text/plain' }));
 app.use(express.static(path.join(__dirname, 'public'), {
     etag: true,
     immutable: isProduction,

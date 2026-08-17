@@ -5,16 +5,18 @@
 //  2 users, 1 vCPU VPS � keep it lean.
 // ============================================================
 
-const CACHE_NAME = 'videohost-v6.0';
+const CACHE_NAME = 'videohost-v7.0';
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
     '/css/style.css?v=6.7',
     '/css/messages.css?v=2.8',
+    '/css/calling.css?v=1.1',
     '/js/theme-init.js?v=6.7',
     '/js/app.js?v=6.6',
     '/js/messages.js?v=3.0',
     '/js/watchTogether.js?v=3.0',
+    '/js/calling.js?v=1.1',
     '/css/icon-192.png',
     '/css/icon-512.png',
 ];

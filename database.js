@@ -25,6 +25,7 @@ db.pragma('foreign_keys = ON');
 db.pragma('synchronous = NORMAL');
 db.pragma('temp_store = MEMORY');
 db.pragma('cache_size = -4096'); // 4MB — optimized for 1GB RAM VPS
+db.pragma('busy_timeout = 5000'); // Wait up to 5s for locks during concurrent writes
 
 // Create tables
 db.exec(`
@@ -158,6 +159,7 @@ db.exec(`
     );
 
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_at ON videos(uploaded_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_videos_uploaded_asc ON videos(uploaded_at ASC);
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_watch_progress_user_updated ON watch_progress(user, updated_at DESC);
@@ -165,6 +167,7 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_watch_ledger_user_date ON watch_time_ledger(user, watch_date);
     CREATE INDEX IF NOT EXISTS idx_messages_recipient_unread ON messages(recipient, is_read);
     CREATE INDEX IF NOT EXISTS idx_messages_pair_created ON messages(sender, recipient, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_messages_pair_id ON messages(sender, recipient, id DESC);
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_reactions_message_id ON message_reactions(message_id);
     CREATE INDEX IF NOT EXISTS idx_call_logs_users ON call_logs(caller, receiver, created_at DESC);

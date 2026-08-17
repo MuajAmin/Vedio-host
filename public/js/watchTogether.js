@@ -1040,4 +1040,8 @@
         }
     }
 
+    // Cleanup on page unload or navigation
+    window.addEventListener('beforeunload', cleanup);
+    window.addEventListener('pagehide', cleanup);
+
 })();

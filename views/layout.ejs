@@ -15,7 +15,7 @@
     <script src="/js/theme-init.js?v=6.7"></script>
     <link rel="stylesheet" href="/css/style.css?v=6.7">
     <link rel="stylesheet" href="/css/messages.css?v=3.0">
-    <link rel="stylesheet" href="/css/calling.css?v=1.1">
+    <link rel="stylesheet" href="/css/calling.css?v=2.0">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -372,6 +372,21 @@
                     <div class="call-bg-radial-gradient"></div>
                 </div>
 
+                <!-- Reconnecting / Error Banner (hidden by default) -->
+                <div class="active-call-reconnect-banner" id="callReconnectBanner" style="display:none;">
+                    <div class="call-reconnect-spinner"></div>
+                    <span id="callReconnectText">Reconnecting...</span>
+                </div>
+
+                <!-- Inline Permission / Error Alert (hidden by default) -->
+                <div class="active-call-inline-alert" id="callInlineAlert" style="display:none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <span id="callInlineAlertText">Unable to access microphone</span>
+                    <button type="button" class="call-inline-alert-close" id="callInlineAlertClose">&times;</button>
+                </div>
+
                 <!-- Header -->
                 <div class="active-call-header">
                     <div class="active-call-header-info">
@@ -380,7 +395,7 @@
                             <span class="active-call-hd-tag">HD Voice</span>
                         </div>
                         <div class="active-call-status-pill">
-                            <span class="active-call-live-dot"></span>
+                            <span class="active-call-live-dot" id="activeCallLiveDot"></span>
                             <span id="activeCallStatusText">Connecting...</span>
                         </div>
                         <span class="active-call-timer" id="activeCallTimer">00:00</span>
@@ -413,7 +428,7 @@
                                 <h2 class="active-call-partner-name" id="activePartnerName"><%= callPartnerDisplayName %></h2>
                                 <p class="active-call-substatus" id="activeCallSubstatus">Private 1-on-1 End-to-End Media</p>
                             </div>
-                            
+
                             <!-- Dynamic 14-Bar Audio Spectrum Equalizer -->
                             <div class="active-call-soundwaves" id="activeSoundwaves" aria-label="Audio Visualizer">
                                 <span class="soundwave-bar" style="--bar-idx: 0;"></span>
@@ -446,9 +461,15 @@
                     <!-- Video Call Stage -->
                     <div class="active-call-video-stage" id="activeVideoStage">
                         <video class="remote-video-element" id="remoteVideoTrack" autoplay playsinline></video>
+                        <!-- Remote camera-off overlay (shown when partner disables camera) -->
+                        <div class="video-camera-off-overlay" id="remoteCameraOffOverlay" style="display:none;">
+                            <div class="camera-off-avatar-wrap">
+                                <%- typeof renderAvatar === 'function' ? renderAvatar(callPartnerUsername, 'call-avatar-img camera-off-avatar') : '' %>
+                            </div>
+                            <span class="camera-off-label">Camera Off</span>
+                        </div>
                         <div class="local-video-pip-container" id="localVideoPip" title="Drag to move preview">
                             <video class="local-video-element" id="localVideoTrack" autoplay playsinline muted></video>
-                            <div class="pip-glass-overlay"></div>
                         </div>
                     </div>
                 </div>
@@ -472,6 +493,21 @@
                             </svg>
                         </button>
                         <span class="call-control-label" id="callMuteLabel">Mute</span>
+                    </div>
+
+                    <div class="call-control-item" id="callSpeakerItem">
+                        <button type="button" class="call-control-btn" id="callBtnSpeaker" title="Speaker" aria-label="Toggle Speaker">
+                            <svg class="icon-speaker-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                            </svg>
+                            <svg class="icon-speaker-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22" style="display:none;">
+                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                                <line x1="23" y1="9" x2="17" y2="15"/>
+                                <line x1="17" y1="9" x2="23" y2="15"/>
+                            </svg>
+                        </button>
+                        <span class="call-control-label" id="callSpeakerLabel">Speaker</span>
                     </div>
 
                     <div class="call-control-item">
@@ -531,7 +567,7 @@
             <script src="/js/app.js?v=6.6"></script>
             <script src="/js/messages.js?v=3.1"></script>
             <script src="/js/watchTogether.js?v=3.1"></script>
-            <script src="/js/calling.js?v=1.1"></script>
+            <script src="/js/calling.js?v=2.0"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').catch(function() {});

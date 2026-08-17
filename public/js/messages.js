@@ -1969,13 +1969,15 @@
         }
     });
 
-    // Cleanup on page unload
-    window.addEventListener('beforeunload', () => {
+    // Cleanup on page unload or navigation
+    function cleanupSSEOnNav() {
         if (sseSource) {
             sseSource.close();
             sseSource = null;
         }
-    });
+    }
+    window.addEventListener('beforeunload', cleanupSSEOnNav);
+    window.addEventListener('pagehide', cleanupSSEOnNav);
 
     // Mobile Virtual Keyboard Scroll Adjuster
     if (window.visualViewport) {

@@ -245,6 +245,22 @@ function collectSystemMetrics() {
     };
 }
 
+let cachedDiskStats = null;
+let cachedDiskStatsTime = 0;
+const DISK_STATS_CACHE_TTL = 30 * 1000; // 30 seconds cache for disk scans
+
+async function getDiskFilesWithCache() {
+    const now = Date.now();
+    if (cachedDiskStats && (now - cachedDiskStatsTime < DISK_STATS_CACHE_TTL)) {
+        return cachedDiskStats;
+    }
+    const videoFiles = await listFiles(videosDir);
+    const thumbnailFiles = await listFiles(thumbnailsDir);
+    cachedDiskStats = { videoFiles, thumbnailFiles };
+    cachedDiskStatsTime = now;
+    return cachedDiskStats;
+}
+
 async function collectAdminStats(currentSid = null) {
     const videos = db.prepare(
         'SELECT id, title, filename, thumbnail, size, duration, uploaded_by, uploaded_at, import_quality FROM videos ORDER BY uploaded_at DESC'
@@ -259,8 +275,7 @@ async function collectAdminStats(currentSid = null) {
 
     const importJobs = getImportJobs().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-    const videoFiles = await listFiles(videosDir);
-    const thumbnailFiles = await listFiles(thumbnailsDir);
+    const { videoFiles, thumbnailFiles } = await getDiskFilesWithCache();
     const dbVideoFiles = new Set(videos.map(video => video.filename).filter(Boolean));
     const dbThumbnailFiles = new Set(videos.map(video => video.thumbnail).filter(Boolean));
     const activeImportIds = new Set(importJobs
@@ -382,6 +397,9 @@ router.post('/admin/cleanup', isMuaj, async (req, res) => {
             bytesFreed += file.size;
         } catch {}
     }
+
+    cachedDiskStats = null; // Invalidate cache after cleanup
+    cachedDiskStatsTime = 0;
 
     res.render('admin', {
         user: req.session.user,
