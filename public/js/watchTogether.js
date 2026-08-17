@@ -38,6 +38,8 @@
     let chatOpen = false;
     let unreadCount = 0;
     let toastTimer = null;
+    let hostSyncInterval = null; // Periodic sync interval (host only)
+    let wtDataReceivedViaSSE = false; // Flag to skip redundant checkActiveRoom API call
 
     const SYNC_THROTTLE_MS = 250;
     const SYNC_TOLERANCE_SEC = 1.0;
@@ -264,6 +266,8 @@
         const data = e.detail;
         if (!data) return;
 
+        wtDataReceivedViaSSE = true; // SSE already delivered WT data
+
         if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
 
         if (isGuest || (!isHost && data.host !== currentUser)) {
@@ -283,6 +287,8 @@
             hideInvites();
             return;
         }
+
+        wtDataReceivedViaSSE = true; // SSE already delivered WT data
 
         if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
 
@@ -680,7 +686,7 @@
         });
 
         // Periodic alignment every 2.5s while playing
-        setInterval(() => {
+        hostSyncInterval = setInterval(() => {
             if (!video.paused && syncActive) {
                 sendSync('update');
             }
@@ -985,6 +991,12 @@
             eventSource = null;
         }
 
+        // Clear host sync interval to prevent leaked timers
+        if (hostSyncInterval) {
+            clearInterval(hostSyncInterval);
+            hostSyncInterval = null;
+        }
+
         if (wtPanel) wtPanel.classList.remove('wt-active');
 
         if (isHost) {
@@ -1013,7 +1025,12 @@
     // ============================================================
     //  13. INITIALIZATION & RECOVERY
     // ============================================================
-    checkActiveRoom();
+    // Delay checkActiveRoom to allow SSE connected event to deliver WT data first
+    setTimeout(() => {
+        if (!wtDataReceivedViaSSE) {
+            checkActiveRoom();
+        }
+    }, 1200);
 
     // Auto-join check on watch page load with query param
     if (isWatchPage) {

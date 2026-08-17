@@ -70,7 +70,7 @@
         replyToMessage: null,
         isSyncing: false,
         isInitialSyncDone: false,
-        sseConnected: false
+        lastSyncAt: 0 // debounce timestamp for syncState()
     };
 
     // ------------------------------------------------------------
@@ -567,6 +567,11 @@
     // ------------------------------------------------------------
     function syncState(options = {}) {
         if (State.isSyncing) return Promise.resolve();
+
+        // Debounce: prevent duplicate calls within 500ms (visibilitychange + focus fire together)
+        const now = Date.now();
+        if (!options.force && (now - State.lastSyncAt) < 500) return Promise.resolve();
+        State.lastSyncAt = now;
         State.isSyncing = true;
 
         const params = new URLSearchParams();
@@ -680,6 +685,10 @@
     //  9. SERVER-SENT EVENTS (SSE) REAL-TIME LISTENER
     // ------------------------------------------------------------
     function initSSE() {
+        // Only create a new EventSource if none exists or the existing one is CLOSED
+        if (sseSource && sseSource.readyState !== 2) {
+            return; // CONNECTING (0) or OPEN (1) — let it be
+        }
         if (sseSource) {
             sseSource.close();
             sseSource = null;
@@ -688,7 +697,6 @@
         sseSource = new EventSource('/messages/stream');
 
         sseSource.addEventListener('connected', (e) => {
-            State.sseConnected = true;
             try {
                 const data = JSON.parse(e.data);
                 if (typeof data.unreadCount === 'number') updateUnreadBadges(data.unreadCount);
@@ -699,7 +707,7 @@
                 }
 
                 // Incremental sync on connect/reconnect to catch any missed messages
-                syncState();
+                syncState({ force: true });
             } catch {}
         });
 
@@ -814,7 +822,7 @@
         });
 
         sseSource.onerror = () => {
-            State.sseConnected = false;
+            // EventSource auto-reconnects; readyState check in initSSE() prevents duplicates
         };
     }
 
@@ -1822,31 +1830,24 @@
         }
     }
 
-    // Start Real-Time SSE Stream
+    // Start Real-Time SSE Stream (syncState is called from the 'connected' handler)
     initSSE();
-
-    // Initial background reconciliation sync
-    syncState();
 
     // Reconcile and reconnect on page restoration from bfcache
     window.addEventListener('pageshow', (event) => {
-        if (event.persisted || !State.sseConnected) {
+        if (event.persisted) {
+            // bfcache restore — SSE is dead, force reconnect
+            if (sseSource) { sseSource.close(); sseSource = null; }
             initSSE();
-            syncState();
         }
     });
 
-    // Reconcile and mark as read on window focus / visibility change
+    // Reconcile on tab visibility change (covers both focus and visibility)
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-            if (!State.sseConnected) initSSE();
+            initSSE(); // no-op if already connected (readyState check inside)
             syncState();
         }
-    });
-
-    window.addEventListener('focus', () => {
-        if (!State.sseConnected) initSSE();
-        syncState();
     });
 
     // Cleanup on page unload

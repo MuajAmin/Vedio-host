@@ -286,7 +286,8 @@ router.post('/api/messages/read', isAuthenticated, (req, res) => {
 
     const changes = db.markMessagesAsRead(partner, user);
     if (changes > 0) {
-        invalidateUnreadCache();
+        invalidateUnreadCache(partner);
+        invalidateUnreadCache(user);
         broadcastToUser(partner, 'messages-read', {
             readBy: user,
             readAt: new Date().toISOString(),
@@ -295,7 +296,6 @@ router.post('/api/messages/read', isAuthenticated, (req, res) => {
     }
 
     const remainingUnread = db.getUnreadMessageCount(user);
-    invalidateUnreadCache(user);
 
     // Always ensure reader's active tabs receive accurate remaining unread count
     broadcastToUser(user, 'unread-count', {
