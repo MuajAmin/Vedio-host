@@ -207,6 +207,10 @@ app.use((req, res, next) => {
     if (req.path.startsWith('/api/messages') && (req.method === 'POST' || req.method === 'GET')) {
         return next();
     }
+    // WebRTC Calling API — handled via session auth
+    if (req.path.startsWith('/api/call/') && (req.method === 'POST' || req.method === 'GET')) {
+        return next();
+    }
     return requireCsrf(req, res, next);
 });
 
@@ -219,6 +223,7 @@ const adminRoutes = require('./routes/admin');
 const profileRoutes = require('./routes/profile');
 const watchTogetherRoutes = require('./routes/watchTogether');
 const messagesRoutes = require('./routes/messages');
+const callRoutes = require('./routes/calls');
 
 app.use('/', authRoutes);
 app.use('/', videoRoutes);
@@ -228,6 +233,7 @@ app.use('/', adminRoutes);
 app.use('/', profileRoutes);
 app.use('/', watchTogetherRoutes);
 app.use('/', messagesRoutes);
+app.use('/', callRoutes);
 
 
 

@@ -15,6 +15,7 @@
     <script src="/js/theme-init.js?v=6.7"></script>
     <link rel="stylesheet" href="/css/style.css?v=6.7">
     <link rel="stylesheet" href="/css/messages.css?v=3.0">
+    <link rel="stylesheet" href="/css/calling.css?v=1.0">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -307,9 +308,148 @@
                 </div>
             </div>
 
+            <% if (typeof user !=='undefined' && user) { %>
+            <!-- ============================================================ -->
+            <!-- GLOBAL WEBRTC INCOMING CALL MODAL                            -->
+            <!-- ============================================================ -->
+            <% const callPartnerUsername = user === 'muaj' ? 'hajera' : 'muaj'; %>
+            <% const callPartnerDisplayName = user === 'muaj' ? 'Hajera' : 'Muaj'; %>
+            <div class="incoming-call-backdrop" id="globalIncomingCallModal" role="dialog" aria-modal="true" aria-labelledby="incomingCallerName">
+                <div class="incoming-call-card">
+                    <div class="incoming-call-avatar-wrap" id="incomingAvatarWrap">
+                        <span class="incoming-call-pulse-ring"></span>
+                        <span class="incoming-call-pulse-ring"></span>
+                        <span class="incoming-call-pulse-ring"></span>
+                        <%- typeof renderAvatar === 'function' ? renderAvatar(callPartnerUsername, 'call-avatar-img') : '' %>
+                    </div>
+                    <h3 class="incoming-call-caller-name" id="incomingCallerName"><%= callPartnerDisplayName %></h3>
+                    <div class="incoming-call-type-badge" id="incomingCallTypeBadge">
+                        <span>📞 Incoming Audio Call</span>
+                    </div>
+                    <div class="incoming-call-actions">
+                        <div class="call-action-btn-group">
+                            <button type="button" class="call-btn-circle call-btn-decline" id="incomingDeclineBtn" aria-label="Decline Call">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                                    <path d="M12 10.5c-2.4 0-4.7-.8-6.6-2.2-.4-.3-.6-.8-.6-1.3 0-.5.2-1 .6-1.3l2.2-2.2c.4-.4 1-.4 1.4 0l2.3 2.3c.4.4.4 1 0 1.4L9.8 8.7c1.3.8 2.8 1.3 4.4 1.3s3.1-.5 4.4-1.3l-1.5-1.5c-.4-.4-.4-1 0-1.4l2.3-2.3c.4-.4 1-.4 1.4 0l2.2 2.2c.4.4.6.8.6 1.3s-.2 1-.6 1.3c-1.9 1.4-4.2 2.2-6.6 2.2z"/>
+                                </svg>
+                            </button>
+                            <span class="call-action-btn-label">Decline</span>
+                        </div>
+                        <div class="call-action-btn-group">
+                            <button type="button" class="call-btn-circle call-btn-accept" id="incomingAcceptBtn" aria-label="Accept Call">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                                    <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-2.2 2.2a15.053 15.053 0 0 1-6.59-6.59l2.2-2.21a.96.96 0 0 0 .25-1A11.36 11.36 0 0 1 8.57 3.99c.07-.55-.38-1-1-1H4.02C3.47 3 3 3.47 3 4.02c0 9.39 7.63 17.02 17.02 17.02.55 0 1.02-.47 1.02-1.02v-3.64c0-.55-.47-1-1.03-1z"/>
+                                </svg>
+                            </button>
+                            <span class="call-action-btn-label">Accept</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================ -->
+            <!-- GLOBAL WEBRTC ACTIVE CALL STAGE                              -->
+            <!-- ============================================================ -->
+            <div class="active-call-modal" id="globalActiveCallModal" role="dialog" aria-modal="true">
+                <!-- Header -->
+                <div class="active-call-header">
+                    <div class="active-call-header-info">
+                        <span class="active-call-type-tag" id="activeCallTypeTag">Audio Call</span>
+                        <div class="active-call-status-pill">
+                            <span class="active-call-live-dot"></span>
+                            <span id="activeCallStatusText">Connecting...</span>
+                        </div>
+                        <span class="active-call-timer" id="activeCallTimer">00:00</span>
+                    </div>
+                    <div class="active-call-hdr-actions">
+                        <button type="button" class="active-call-hdr-btn" id="callBtnMinimize" title="Minimize Call">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
+                                <polyline points="4 14 10 14 10 20"/>
+                                <polyline points="20 10 14 10 14 4"/>
+                                <line x1="14" y1="10" x2="21" y2="3"/>
+                                <line x1="3" y1="21" x2="10" y2="14"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Call Body -->
+                <div class="active-call-body">
+                    <!-- Audio Call Stage -->
+                    <div class="active-call-audio-stage" id="activeAudioStage">
+                        <div class="active-call-avatar-big" id="activeAvatarBig">
+                            <%- typeof renderAvatar === 'function' ? renderAvatar(callPartnerUsername, 'call-avatar-img') : '' %>
+                        </div>
+                        <div class="active-call-soundwaves" id="activeSoundwaves">
+                            <span class="soundwave-bar"></span>
+                            <span class="soundwave-bar"></span>
+                            <span class="soundwave-bar"></span>
+                            <span class="soundwave-bar"></span>
+                            <span class="soundwave-bar"></span>
+                        </div>
+                        <h2 class="active-call-partner-name" id="activePartnerName"><%= callPartnerDisplayName %></h2>
+                        <p class="active-call-substatus">End-to-End Encrypted P2P Media</p>
+                    </div>
+
+                    <!-- Video Call Stage -->
+                    <div class="active-call-video-stage" id="activeVideoStage">
+                        <video class="remote-video-element" id="remoteVideoTrack" autoplay playsinline></video>
+                        <div class="local-video-pip-container" id="localVideoPip">
+                            <video class="local-video-element" id="localVideoTrack" autoplay playsinline muted></video>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Control Dock -->
+                <div class="active-call-control-dock">
+                    <button type="button" class="call-control-btn" id="callBtnMute" title="Mute Microphone">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                            <line x1="12" y1="19" x2="12" y2="23"/>
+                            <line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="call-control-btn" id="callBtnCamera" title="Toggle Camera" style="display:none;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                            <polygon points="23 7 16 12 23 17 23 7"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="call-control-btn btn-end-call" id="callBtnEnd" title="End Call">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26">
+                            <path d="M12 10.5c-2.4 0-4.7-.8-6.6-2.2-.4-.3-.6-.8-.6-1.3 0-.5.2-1 .6-1.3l2.2-2.2c.4-.4 1-.4 1.4 0l2.3 2.3c.4.4.4 1 0 1.4L9.8 8.7c1.3.8 2.8 1.3 4.4 1.3s3.1-.5 4.4-1.3l-1.5-1.5c-.4-.4-.4-1 0-1.4l2.3-2.3c.4-.4 1-.4 1.4 0l2.2 2.2c.4.4.6.8.6 1.3s-.2 1-.6 1.3c-1.9 1.4-4.2 2.2-6.6 2.2z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ============================================================ -->
+            <!-- MINIMIZED FLOATING CALL PILL                                 -->
+            <!-- ============================================================ -->
+            <div class="minimized-call-pill" id="callMinimizedPill" style="display:none;" title="Click to expand call">
+                <div class="minimized-call-avatar">
+                    <%- typeof renderAvatar === 'function' ? renderAvatar(callPartnerUsername, 'call-avatar-img') : '' %>
+                </div>
+                <div class="minimized-call-info">
+                    <span class="minimized-call-name" id="minimizedCallName"><%= callPartnerDisplayName %></span>
+                    <span class="minimized-call-timer" id="minimizedCallTimer">00:00</span>
+                </div>
+                <button type="button" class="minimized-call-quick-end" id="minimizedQuickEndBtn" title="End Call">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                        <path d="M12 10.5c-2.4 0-4.7-.8-6.6-2.2-.4-.3-.6-.8-.6-1.3 0-.5.2-1 .6-1.3l2.2-2.2c.4-.4 1-.4 1.4 0l2.3 2.3c.4.4.4 1 0 1.4L9.8 8.7c1.3.8 2.8 1.3 4.4 1.3s3.1-.5 4.4-1.3l-1.5-1.5c-.4-.4-.4-1 0-1.4l2.3-2.3c.4-.4 1-.4 1.4 0l2.2 2.2c.4.4.6.8.6 1.3s-.2 1-.6 1.3c-1.9 1.4-4.2 2.2-6.6 2.2z"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Hidden Audio for Remote Stream -->
+            <audio id="remoteAudioTrack" autoplay playsinline style="display:none;"></audio>
+            <% } %>
+
             <script src="/js/app.js?v=6.6"></script>
             <script src="/js/messages.js?v=3.1"></script>
             <script src="/js/watchTogether.js?v=3.1"></script>
+            <script src="/js/calling.js?v=1.0"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').catch(function() {});

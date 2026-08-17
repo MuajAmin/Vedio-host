@@ -143,6 +143,20 @@ db.exec(`
         FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS call_logs (
+        id TEXT PRIMARY KEY,
+        caller TEXT NOT NULL,
+        receiver TEXT NOT NULL,
+        call_type TEXT NOT NULL DEFAULT 'audio',
+        status TEXT NOT NULL DEFAULT 'missed',
+        started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        answered_at DATETIME,
+        ended_at DATETIME,
+        duration_seconds INTEGER DEFAULT 0,
+        end_reason TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_at ON videos(uploaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
@@ -153,6 +167,8 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_pair_created ON messages(sender, recipient, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_reactions_message_id ON message_reactions(message_id);
+    CREATE INDEX IF NOT EXISTS idx_call_logs_users ON call_logs(caller, receiver, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_call_logs_created ON call_logs(created_at DESC);
 `);
 
 // Migrations for older SQLite files.
@@ -1026,6 +1042,110 @@ function getMessageStats(user1, user2) {
     }
 }
 
+function createCallLog({ id, caller, receiver, callType = 'audio' }) {
+    if (!id || !caller || !receiver) return null;
+    try {
+        const nowIso = new Date().toISOString();
+        db.prepare(`
+            INSERT INTO call_logs (id, caller, receiver, call_type, status, started_at, created_at)
+            VALUES (?, ?, ?, ?, 'ringing', ?, ?)
+        `).run(id, caller, receiver, callType, nowIso, nowIso);
+        return getCallLog(id);
+    } catch (err) {
+        console.error('[db] Error creating call log:', err.message);
+        return null;
+    }
+}
+
+function updateCallLog(id, updates = {}) {
+    if (!id) return null;
+    try {
+        const fields = [];
+        const values = [];
+
+        if (updates.status !== undefined) {
+            fields.push('status = ?');
+            values.push(updates.status);
+        }
+        if (updates.answeredAt !== undefined) {
+            fields.push('answered_at = ?');
+            values.push(updates.answeredAt);
+        }
+        if (updates.endedAt !== undefined) {
+            fields.push('ended_at = ?');
+            values.push(updates.endedAt);
+        }
+        if (updates.durationSeconds !== undefined) {
+            fields.push('duration_seconds = ?');
+            values.push(Number(updates.durationSeconds || 0));
+        }
+        if (updates.endReason !== undefined) {
+            fields.push('end_reason = ?');
+            values.push(updates.endReason);
+        }
+
+        if (fields.length === 0) return getCallLog(id);
+
+        values.push(id);
+        db.prepare(`UPDATE call_logs SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+        return getCallLog(id);
+    } catch (err) {
+        console.error('[db] Error updating call log:', err.message);
+        return null;
+    }
+}
+
+function getCallLog(id) {
+    if (!id) return null;
+    try {
+        const row = db.prepare('SELECT * FROM call_logs WHERE id = ?').get(id);
+        if (!row) return null;
+        return {
+            id: row.id,
+            caller: row.caller,
+            receiver: row.receiver,
+            callType: row.call_type,
+            status: row.status,
+            startedAt: normalizeIsoDate(row.started_at),
+            answeredAt: normalizeIsoDate(row.answered_at),
+            endedAt: normalizeIsoDate(row.ended_at),
+            durationSeconds: row.duration_seconds || 0,
+            endReason: row.end_reason,
+            createdAt: normalizeIsoDate(row.created_at)
+        };
+    } catch (err) {
+        console.error('[db] Error getting call log:', err.message);
+        return null;
+    }
+}
+
+function getRecentCallLogs(user1, user2, limit = 30) {
+    try {
+        const rows = db.prepare(`
+            SELECT * FROM call_logs
+            WHERE (caller = ? AND receiver = ?) OR (caller = ? AND receiver = ?)
+            ORDER BY created_at DESC
+            LIMIT ?
+        `).all(user1, user2, user2, user1, limit);
+        return rows.map(r => ({
+            id: r.id,
+            caller: r.caller,
+            receiver: r.receiver,
+            callType: r.call_type,
+            status: r.status,
+            startedAt: normalizeIsoDate(r.started_at),
+            answeredAt: normalizeIsoDate(r.answered_at),
+            endedAt: normalizeIsoDate(r.ended_at),
+            durationSeconds: r.duration_seconds || 0,
+            endReason: r.end_reason,
+            createdAt: normalizeIsoDate(r.created_at)
+        }));
+    } catch (err) {
+        console.error('[db] Error getting recent call logs:', err.message);
+        return [];
+    }
+}
+
 db.getUserAvatar = getUserAvatar;
 db.getAllUserAvatars = getAllUserAvatars;
 db.setUserAvatar = setUserAvatar;
@@ -1057,6 +1177,10 @@ db.deleteMessage = deleteMessage;
 db.getMessageStats = getMessageStats;
 db.toggleMessageReaction = toggleMessageReaction;
 db.getReactionsForMessage = getReactionsForMessage;
+db.createCallLog = createCallLog;
+db.updateCallLog = updateCallLog;
+db.getCallLog = getCallLog;
+db.getRecentCallLogs = getRecentCallLogs;
 
 module.exports = db;
 

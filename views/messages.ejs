@@ -211,10 +211,62 @@ if (msgList.length === 0) {
             `;
         }
 
-        let textContentHtml = '';
-        if (msg.text) {
-            textContentHtml = `<div class="msg-text-content">${h(msg.text).replace(/\n/g, '<br>')}</div>`;
+function renderCallEventHtml(rawText, isOut) {
+    try {
+        const jsonStr = rawText.replace('__CALL_EVENT__:', '');
+        const data = JSON.parse(jsonStr);
+        const isVideo = data.callType === 'video';
+        const isCompleted = data.status === 'completed';
+
+        let title = '';
+        let subtitle = '';
+        if (isCompleted) {
+            const mins = Math.floor((data.durationSeconds || 0) / 60);
+            const secs = (data.durationSeconds || 0) % 60;
+            const durStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+            title = isVideo ? 'Video Call Ended' : 'Audio Call Ended';
+            subtitle = `Duration: ${durStr}`;
+        } else if (data.status === 'rejected') {
+            title = isVideo ? 'Declined Video Call' : 'Declined Audio Call';
+            subtitle = isOut ? 'Call was declined' : 'You declined the call';
+        } else {
+            title = isVideo ? 'Missed Video Call' : 'Missed Audio Call';
+            subtitle = isOut ? 'No answer' : 'Missed call';
         }
+
+        const iconSvg = isVideo
+            ? `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`
+            : `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-2.2 2.2a15.053 15.053 0 0 1-6.59-6.59l2.2-2.21a.96.96 0 0 0 .25-1A11.36 11.36 0 0 1 8.57 3.99c.07-.55-.38-1-1-1H4.02C3.47 3 3 3.47 3 4.02c0 9.39 7.63 17.02 17.02 17.02.55 0 1.02-.47 1.02-1.02v-3.64c0-.55-.47-1-1.03-1z"/></svg>`;
+
+        const callBackBtn = `<button type="button" class="msg-call-event-action-btn ${isVideo ? 'btn-trigger-video-call' : 'btn-trigger-audio-call'}" title="Call Back">
+            <span>Call Back</span>
+        </button>`;
+
+        return `
+            <div class="msg-call-event-card">
+                <div class="msg-call-event-icon-wrap ${isCompleted ? 'is-completed' : 'is-missed'}">
+                    ${iconSvg}
+                </div>
+                <div class="msg-call-event-details">
+                    <div class="msg-call-event-title">${h(title)}</div>
+                    <div class="msg-call-event-subtitle">${h(subtitle)}</div>
+                </div>
+                ${callBackBtn}
+            </div>
+        `;
+    } catch {
+        return `<div class="msg-text-content">${h(rawText)}</div>`;
+    }
+}
+
+let textContentHtml = '';
+if (msg.text) {
+    if (msg.text.startsWith('__CALL_EVENT__:')) {
+        textContentHtml = renderCallEventHtml(msg.text, isOut);
+    } else {
+        textContentHtml = `<div class="msg-text-content">${h(msg.text).replace(/\n/g, '<br>')}</div>`;
+    }
+}
 
         const reactionsHtml = renderReactionsHtml(msg.reactions, currentUser);
         const canDelete = isOut || currentUser === 'muaj';
@@ -402,6 +454,17 @@ const videoOptionsHtml = videoList.map(v => `
                     </div>
                 </div>
                 <div class="msg-header-actions">
+                    <button type="button" class="msg-hdr-call-btn" id="msgHeaderAudioCallBtn" title="Start Audio Call with ${h(partnerName)}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="msg-hdr-call-btn btn-video-call" id="msgHeaderVideoCallBtn" title="Start Video Call with ${h(partnerName)}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="19" height="19">
+                            <polygon points="23 7 16 12 23 17 23 7"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                    </button>
                     <button type="button" class="msg-hdr-btn" id="msgSearchToggleBtn" title="Search in Conversation">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17">
                             <circle cx="11" cy="11" r="8"/>

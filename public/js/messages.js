@@ -222,6 +222,54 @@
         `;
     }
 
+    function renderCallEventHtml(rawText, isOut) {
+        try {
+            const jsonStr = rawText.replace('__CALL_EVENT__:', '');
+            const data = JSON.parse(jsonStr);
+            const isVideo = data.callType === 'video';
+            const isCompleted = data.status === 'completed';
+
+            let title = '';
+            let subtitle = '';
+            if (isCompleted) {
+                const mins = Math.floor((data.durationSeconds || 0) / 60);
+                const secs = (data.durationSeconds || 0) % 60;
+                const durStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                title = isVideo ? 'Video Call Ended' : 'Audio Call Ended';
+                subtitle = `Duration: ${durStr}`;
+            } else if (data.status === 'rejected') {
+                title = isVideo ? 'Declined Video Call' : 'Declined Audio Call';
+                subtitle = isOut ? 'Call was declined' : 'You declined the call';
+            } else {
+                title = isVideo ? 'Missed Video Call' : 'Missed Audio Call';
+                subtitle = isOut ? 'No answer' : 'Missed call';
+            }
+
+            const iconSvg = isVideo
+                ? `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`
+                : `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-2.2 2.2a15.053 15.053 0 0 1-6.59-6.59l2.2-2.21a.96.96 0 0 0 .25-1A11.36 11.36 0 0 1 8.57 3.99c.07-.55-.38-1-1-1H4.02C3.47 3 3 3.47 3 4.02c0 9.39 7.63 17.02 17.02 17.02.55 0 1.02-.47 1.02-1.02v-3.64c0-.55-.47-1-1.03-1z"/></svg>`;
+
+            const callBackBtn = `<button type="button" class="msg-call-event-action-btn ${isVideo ? 'btn-trigger-video-call' : 'btn-trigger-audio-call'}" title="Call Back">
+                <span>Call Back</span>
+            </button>`;
+
+            return `
+                <div class="msg-call-event-card">
+                    <div class="msg-call-event-icon-wrap ${isCompleted ? 'is-completed' : 'is-missed'}">
+                        ${iconSvg}
+                    </div>
+                    <div class="msg-call-event-details">
+                        <div class="msg-call-event-title">${escapeHtml(title)}</div>
+                        <div class="msg-call-event-subtitle">${escapeHtml(subtitle)}</div>
+                    </div>
+                    ${callBackBtn}
+                </div>
+            `;
+        } catch {
+            return `<div class="msg-text-content">${escapeHtml(rawText)}</div>`;
+        }
+    }
+
     function renderMessageHTML(msg) {
         const isOut = msg.sender === currentUser;
         const rowClass = isOut ? 'msg-row-outgoing' : 'msg-row-incoming';
@@ -290,10 +338,15 @@
             `;
         }
 
-        // 3. Text Body
+        // 3. Text Body or Call Event
         if (msg.text) {
-            contentHtml += `<div class="msg-text-content">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
+            if (msg.text.startsWith('__CALL_EVENT__:')) {
+                contentHtml += renderCallEventHtml(msg.text, isOut);
+            } else {
+                contentHtml += `<div class="msg-text-content">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
+            }
         }
+
 
         const reactionsHtml = renderReactionsHtml(msg.reactions, currentUser);
         const canDelete = isOut || currentUser === 'muaj';
@@ -388,7 +441,23 @@
 
         let previewText = 'New message';
         if (msg.text) {
-            previewText = msg.text.length > 55 ? msg.text.slice(0, 55) + '…' : msg.text;
+            if (msg.text.startsWith('__CALL_EVENT__:')) {
+                try {
+                    const data = JSON.parse(msg.text.replace('__CALL_EVENT__:', ''));
+                    const isVideo = data.callType === 'video';
+                    if (data.status === 'completed') {
+                        previewText = isVideo ? '📹 Video call ended' : '📞 Audio call ended';
+                    } else if (data.status === 'rejected') {
+                        previewText = isVideo ? '📹 Declined video call' : '📞 Declined audio call';
+                    } else {
+                        previewText = isVideo ? '📹 Missed video call' : '📞 Missed audio call';
+                    }
+                } catch {
+                    previewText = '📞 Call update';
+                }
+            } else {
+                previewText = msg.text.length > 55 ? msg.text.slice(0, 55) + '…' : msg.text;
+            }
         } else if (msg.voiceUrl) {
             previewText = '🎤 Voice note';
         } else if (msg.video) {
@@ -730,6 +799,56 @@
             try {
                 const data = JSON.parse(e.data);
                 window.dispatchEvent(new CustomEvent('wt:status', { detail: data }));
+            } catch {}
+        });
+
+        // WebRTC Real-Time Calling SSE Listeners
+        sseSource.addEventListener('incoming-call', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                window.dispatchEvent(new CustomEvent('call:incoming', { detail: data }));
+            } catch {}
+        });
+
+        sseSource.addEventListener('call-accepted', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                window.dispatchEvent(new CustomEvent('call:accepted', { detail: data }));
+            } catch {}
+        });
+
+        sseSource.addEventListener('call-signal', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                window.dispatchEvent(new CustomEvent('call:signal', { detail: data }));
+            } catch {}
+        });
+
+        sseSource.addEventListener('call-rejected', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                window.dispatchEvent(new CustomEvent('call:rejected', { detail: data }));
+            } catch {}
+        });
+
+        sseSource.addEventListener('call-cancelled', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                window.dispatchEvent(new CustomEvent('call:cancelled', { detail: data }));
+            } catch {}
+        });
+
+        sseSource.addEventListener('call-ended', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                window.dispatchEvent(new CustomEvent('call:ended', { detail: data }));
+            } catch {}
+        });
+
+        sseSource.addEventListener('call-timeout', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                window.dispatchEvent(new CustomEvent('call:timeout', { detail: data }));
             } catch {}
         });
 
