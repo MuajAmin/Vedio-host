@@ -73,6 +73,7 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     z-index: 995;
     transition: transform 0.35s var(--msg-spring), box-shadow 0.3s ease, opacity 0.3s ease;
     user-select: none;
+    text-decoration: none;
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -330,6 +331,9 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
 }
 
 .msg-floating-toast-reply-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: linear-gradient(135deg, #ff2d55 0%, #ef4444 100%);
     color: #ffffff;
     border: none;
@@ -338,6 +342,7 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     font-size: 11.5px;
     font-weight: 700;
     cursor: pointer;
+    text-decoration: none;
     transition: transform 0.15s ease, opacity 0.15s ease;
     box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
 }
@@ -1975,4 +1980,361 @@ body[data-user="hajera"] .msg-floating-launcher {
     background: linear-gradient(135deg, #fed7aa 0%, #fb7185 30%, #f43f5e 70%, #be123c 100%);
     box-shadow: 0 10px 32px rgba(244, 63, 94, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.6);
 }
+
+/* ============================================================
+   14. WHATSAPP-STYLE QUOTED MESSAGE IN BUBBLE
+   ============================================================ */
+.msg-quote-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 10px;
+    margin-bottom: 7px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 0.2s var(--msg-spring), background 0.2s ease, border-color 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.msg-row-incoming .msg-quote-card {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.msg-quote-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.msg-quote-card:active {
+    transform: scale(0.98);
+}
+
+.msg-quote-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 4px;
+    border-radius: 4px 0 0 4px;
+    background: var(--msg-primary);
+}
+
+.msg-quote-card.is-reply-to-me .msg-quote-bar {
+    background: var(--msg-primary);
+}
+
+.msg-quote-card.is-reply-to-partner .msg-quote-bar {
+    background: #38bdf8;
+}
+
+body[data-user="muaj"] .msg-quote-card.is-reply-to-partner .msg-quote-bar {
+    background: #f472b6;
+}
+
+.msg-quote-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-left: 2px;
+}
+
+.msg-quote-author {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: -0.1px;
+    color: var(--msg-primary);
+    text-transform: capitalize;
+}
+
+.msg-quote-card.is-reply-to-partner .msg-quote-author {
+    color: #38bdf8;
+}
+
+body[data-user="muaj"] .msg-quote-card.is-reply-to-partner .msg-quote-author {
+    color: #f472b6;
+}
+
+.msg-quote-snippet {
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--msg-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    max-width: 100%;
+}
+
+.msg-quote-media-indicator {
+    font-weight: 700;
+    color: #fff;
+}
+
+.msg-quote-deleted {
+    color: #ef4444;
+    font-style: italic;
+    font-size: 11.5px;
+}
+
+.msg-quote-thumb {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* ------------------------------------------------------------
+   15. COMPOSER QUOTED REPLY BAR
+   ------------------------------------------------------------ */
+.msg-reply-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    background: rgba(22, 25, 40, 0.96);
+    backdrop-filter: blur(24px);
+    border: 1px solid var(--msg-border-highlight);
+    border-radius: 14px;
+    position: relative;
+    overflow: hidden;
+    animation: msgReplySlideIn 0.3s var(--msg-spring);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes msgReplySlideIn {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.msg-reply-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.msg-reply-bar-indicator {
+    width: 3.5px;
+    height: 32px;
+    border-radius: 2px;
+    background: var(--msg-primary);
+    flex-shrink: 0;
+}
+
+.msg-reply-bar-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.msg-reply-bar-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 800;
+    color: var(--msg-primary);
+    letter-spacing: -0.1px;
+}
+
+.msg-reply-bar-snippet {
+    font-size: 12.5px;
+    color: var(--msg-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+.msg-reply-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.msg-reply-bar-thumb img {
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.msg-reply-bar-cancel {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--msg-text-muted);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.msg-reply-bar-cancel:hover {
+    background: rgba(239, 68, 68, 0.25);
+    color: #ef4444;
+    border-color: #ef4444;
+    transform: rotate(90deg) scale(1.1);
+}
+
+/* ------------------------------------------------------------
+   16. CLICK-TO-JUMP TARGET HIGHLIGHT ANIMATION
+   ------------------------------------------------------------ */
+.msg-row.msg-row-target-highlight .msg-bubble {
+    animation: msgTargetPulse 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes msgTargetPulse {
+    0% {
+        transform: scale(1.04);
+        box-shadow: 0 0 32px var(--msg-primary-glow), 0 0 0 2px var(--msg-primary);
+        filter: brightness(1.25);
+    }
+    35% {
+        transform: scale(1.03);
+        box-shadow: 0 0 24px var(--msg-primary-glow), 0 0 0 2px var(--msg-primary);
+        filter: brightness(1.18);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+        filter: brightness(1);
+    }
+}
+
+/* ------------------------------------------------------------
+   17. MOBILE LONG-PRESS ACTIONS MODAL & SWIPE GESTURES
+   ------------------------------------------------------------ */
+.msg-mobile-actions-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 7, 12, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.msg-mobile-actions-backdrop.is-open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.msg-mobile-actions-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(16, 18, 30, 0.98);
+    backdrop-filter: blur(36px);
+    -webkit-backdrop-filter: blur(36px);
+    border-top: 1px solid var(--msg-border-highlight);
+    border-radius: 26px 26px 0 0;
+    padding: 12px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transform: translateY(100%);
+    transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
+    z-index: 10001;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.msg-mobile-actions-backdrop.is-open .msg-mobile-actions-sheet {
+    transform: translateY(0);
+}
+
+.msg-mobile-actions-pill {
+    width: 38px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.22);
+    margin: 0 auto 2px;
+}
+
+.msg-mobile-reactions-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 8px 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.msg-mobile-react-btn {
+    font-size: 24px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 10px;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.msg-mobile-react-btn:active {
+    transform: scale(1.4);
+}
+
+.msg-mobile-actions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.msg-mobile-action-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 13px 16px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--text-primary, #fff);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.msg-mobile-action-item:active {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(0.98);
+}
+
+.msg-row.is-swipe-ready {
+    border-left: 3px solid var(--msg-primary);
+}
+
 

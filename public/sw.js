@@ -5,16 +5,16 @@
 //  2 users, 1 vCPU VPS � keep it lean.
 // ============================================================
 
-const CACHE_NAME = 'videohost-v5.9';
+const CACHE_NAME = 'videohost-v6.0';
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
-    '/css/style.css?v=6.5',
-    '/css/messages.css?v=2.1',
-    '/js/theme-init.js?v=6.5',
-    '/js/app.js?v=6.5',
-    '/js/messages.js?v=2.5',
-    '/js/watchTogether.js?v=2.2',
+    '/css/style.css?v=6.7',
+    '/css/messages.css?v=2.8',
+    '/js/theme-init.js?v=6.7',
+    '/js/app.js?v=6.6',
+    '/js/messages.js?v=3.0',
+    '/js/watchTogether.js?v=3.0',
     '/css/icon-192.png',
     '/css/icon-512.png',
 ];
@@ -28,7 +28,7 @@ function isNetworkOnly(url) {
         pathname.startsWith('/avatars/') ||
         pathname.startsWith('/voice/') ||
         pathname.startsWith('/import-progress/') ||
-        pathname.startsWith('/watch-together/stream/') ||
+        pathname.startsWith('/watch-together/') ||
         pathname.startsWith('/messages/stream') ||
         pathname.startsWith('/api/') ||
         pathname.startsWith('/login') ||

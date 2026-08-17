@@ -29,6 +29,13 @@ function isMuaj(req, res, next) {
     if (req.session && req.session.user === 'muaj') {
         return next();
     }
+    const isAjaxOrApi = req.xhr || 
+        (req.headers.accept && req.headers.accept.includes('application/json')) ||
+        (req.path && (req.path.startsWith('/api/') || req.path.startsWith('/watch-together/')));
+
+    if (isAjaxOrApi) {
+        return res.status(403).json({ error: 'শুধুমাত্র Muaj এই কাজ করতে পারবে!' });
+    }
     return res.status(403).render('forbidden', {
         user: req.session ? req.session.user : null,
         message: 'শুধুমাত্র Muaj এই কাজ করতে পারবে!'

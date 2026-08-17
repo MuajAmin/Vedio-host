@@ -1,15 +1,16 @@
 /**
- * Watch Together — Cinema Real-Time Sync & Live Chat Engine
- * Real-time video sync, live chat, floating reactions & dual cinema mode between Muaj & Hajera
+ * Watch Together — Cinema Real-Time Sync & Global Notification Engine
+ * Unified controller for global floating invitations, video playback synchronization,
+ * live chat drawer, and interactive floating reactions between Muaj & Hajera.
  */
 (function () {
     'use strict';
 
-    // Prevent double initialization
+    // Prevent double execution on the same page
     if (window.__WATCH_TOGETHER_INITIALIZED__) return;
     window.__WATCH_TOGETHER_INITIALIZED__ = true;
 
-    // Detect user from body attribute or badge
+    // Detect logged in user
     const currentUser = (document.body.dataset.user ||
         (document.body.querySelector('.badge-admin') ? 'muaj' :
             (document.body.querySelector('.badge-viewer') ? 'hajera' : ''))).toLowerCase();
@@ -19,13 +20,13 @@
     const isHost = currentUser === 'muaj';
     const isGuest = currentUser === 'hajera';
 
-    // Video element on watch pages
+    // Video & Player element (present only on watch pages)
     const video = document.getElementById('vpVideo');
     const playerContainer = document.getElementById('playerContainer');
     const isWatchPage = !!video;
     const currentVideoId = video ? video.dataset.videoId : null;
 
-    // State
+    // Internal State
     let roomId = null;
     let eventSource = null;
     let syncActive = false;
@@ -33,13 +34,21 @@
     let ignoreNextPlay = false;
     let ignoreNextPause = false;
     let lastSyncTime = 0;
-    let dismissedRoomId = null;
-    let dismissExpiry = 0;
     let userAvatars = {};
-    const SYNC_THROTTLE_MS = 250;
-    const SYNC_TOLERANCE_SEC = 1.2;
+    let chatOpen = false;
+    let unreadCount = 0;
+    let toastTimer = null;
 
-    // DOM Elements (Watch page)
+    const SYNC_THROTTLE_MS = 250;
+    const SYNC_TOLERANCE_SEC = 1.0;
+
+    // Global DOM Elements (present in layout.ejs on ALL pages)
+    const globalWtToast = document.getElementById('globalWtToast');
+    const globalWtToastTitle = document.getElementById('globalWtToastTitle');
+    const globalWtToastJoin = document.getElementById('globalWtToastJoin');
+    const globalWtToastClose = document.getElementById('globalWtToastClose');
+
+    // Watch Page DOM Elements (present only on /watch/:id)
     const wtPanel = document.getElementById('wtPanel');
     const wtChatPanel = document.getElementById('wtChatPanel');
     const wtStartBtn = document.getElementById('wtStartBtn');
@@ -62,19 +71,10 @@
     const wtToastAvatar = document.getElementById('wtToastAvatar');
     const wtToastSender = document.getElementById('wtToastSender');
     const wtToastMsg = document.getElementById('wtToastMsg');
-
-    // DOM Elements (Global layout)
-    const globalWtToast = document.getElementById('globalWtToast');
-    const globalWtToastTitle = document.getElementById('globalWtToastTitle');
-    const globalWtToastJoin = document.getElementById('globalWtToastJoin');
-    const globalWtToastClose = document.getElementById('globalWtToastClose');
-
-    let chatOpen = false;
-    let unreadCount = 0;
-    let toastTimer = null;
+    const emojiBar = document.getElementById('wtEmojiBar');
 
     // ============================================================
-    //  AUDIO FEEDBACK (SYNTHETIC ZERO-DEPENDENCY CHIME)
+    //  1. SYNTHETIC AUDIO FEEDBACK (Zero External Assets)
     // ============================================================
     let audioCtx = null;
     function playChime(type = 'pop') {
@@ -88,13 +88,22 @@
                 return;
             }
 
+            const now = audioCtx.currentTime;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain);
             gain.connect(audioCtx.destination);
 
-            const now = audioCtx.currentTime;
-            if (type === 'reaction') {
+            if (type === 'invite') {
+                // Majestic dual-tone chime for Watch Together invites
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(587.33, now); // D5
+                osc.frequency.setValueAtTime(880.00, now + 0.15); // A5
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+                osc.start(now);
+                osc.stop(now + 0.45);
+            } else if (type === 'reaction') {
                 osc.type = 'triangle';
                 osc.frequency.setValueAtTime(520, now);
                 osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
@@ -111,13 +120,11 @@
                 osc.start(now);
                 osc.stop(now + 0.25);
             }
-        } catch {
-            // Graceful fallback if audio is not permitted
-        }
+        } catch {}
     }
 
     // ============================================================
-    //  UTILITIES
+    //  2. UTILITIES
     // ============================================================
     function postJSON(url, body = {}) {
         return fetch(url, {
@@ -128,18 +135,18 @@
         }).then(r => r.json());
     }
 
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
     function timeAgo(ts) {
         const diff = Math.floor((Date.now() - ts) / 1000);
         if (diff < 30) return 'just now';
         if (diff < 60) return `${diff}s ago`;
         if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
         return Math.floor(diff / 3600) + 'h ago';
-    }
-
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
     }
 
     function renderAvatarElement(username, avatarFile, extraClass = '') {
@@ -154,97 +161,181 @@
     }
 
     // ============================================================
-    //  FLOATING REACTIONS ENGINE
+    //  3. GLOBAL FLOATING NOTIFICATION SYSTEM (ALL ROUTES)
     // ============================================================
-    function spawnFloatingReaction(emoji = '💖') {
-        const targetContainer = wtFloatingReactions || playerContainer || document.body;
-        if (!targetContainer) return;
-
-        const particle = document.createElement('div');
-        particle.className = 'wt-floating-emoji';
-        particle.textContent = emoji;
-
-        // Randomized trajectories for organic feel
-        const randomX = Math.floor(Math.random() * 80) + 10; // 10% to 90%
-        const randomScale = (0.9 + Math.random() * 0.5).toFixed(2);
-        const randomRotate = Math.floor(Math.random() * 40) - 20; // -20deg to 20deg
-        const swayDuration = (2.2 + Math.random() * 0.8).toFixed(2);
-
-        particle.style.left = `${randomX}%`;
-        particle.style.setProperty('--target-scale', randomScale);
-        particle.style.setProperty('--target-rotate', `${randomRotate}deg`);
-        particle.style.animationDuration = `${swayDuration}s`;
-
-        targetContainer.appendChild(particle);
-
-        // Remove element when animation completes
-        setTimeout(() => {
-            if (particle.parentNode) {
-                particle.parentNode.removeChild(particle);
-            }
-        }, parseFloat(swayDuration) * 1000 + 100);
+    function isInviteDismissed(rId) {
+        if (!rId) return false;
+        try {
+            return sessionStorage.getItem('wt_dismissed_' + rId) === '1';
+        } catch {
+            return false;
+        }
     }
 
-    function sendLiveReaction(emoji) {
-        if (!roomId) return;
-        spawnFloatingReaction(emoji);
-        playChime('reaction');
-
-        postJSON(`/watch-together/reaction/${roomId}`, { emoji }).catch(err => {
-            console.error('[WT] Reaction send error:', err);
-        });
+    function markInviteDismissed(rId) {
+        if (!rId) return;
+        try {
+            sessionStorage.setItem('wt_dismissed_' + rId, '1');
+        } catch {}
     }
 
-    // ============================================================
-    //  IN-PLAYER FLOATING CHAT TOAST
-    // ============================================================
-    function showInPlayerChatToast(msg) {
-        if (chatOpen || !wtPlayerChatToast) return;
+    function showGlobalToast(data, playAudio = false) {
+        if (!globalWtToast || !data || !data.roomId) return;
+        if (isInviteDismissed(data.roomId)) return;
 
-        const senderName = msg.user === 'muaj' ? 'Muaj' : 'Hajera';
-        if (wtToastSender) wtToastSender.textContent = senderName;
-        if (wtToastMsg) wtToastMsg.textContent = msg.text || '';
-
-        if (wtToastAvatar) {
-            const avatarFile = msg.avatar || userAvatars[msg.user];
-            if (avatarFile) {
-                wtToastAvatar.innerHTML = `<img src="/avatars/${escapeHtml(avatarFile)}" alt="${escapeHtml(senderName)}" class="wt-toast-avatar-img">`;
-            } else {
-                wtToastAvatar.textContent = msg.user === 'muaj' ? '👑' : '🌸';
-            }
+        // If currently on the watch page for this video and already in session, skip toast
+        if (isWatchPage && data.videoId === currentVideoId && syncActive) {
+            hideInvites();
+            return;
         }
 
-        wtPlayerChatToast.style.display = 'flex';
-        // Force reflow
-        void wtPlayerChatToast.offsetWidth;
-        wtPlayerChatToast.classList.add('visible');
+        roomId = data.roomId;
 
-        if (toastTimer) clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => {
-            if (wtPlayerChatToast) {
-                wtPlayerChatToast.classList.remove('visible');
-                setTimeout(() => {
-                    if (wtPlayerChatToast && !wtPlayerChatToast.classList.contains('visible')) {
-                        wtPlayerChatToast.style.display = 'none';
-                    }
-                }, 300);
-            }
-        }, 4500);
+        const videoTitle = data.videoTitle || 'a video';
+        const hostName = data.host === 'muaj' ? 'Muaj' : 'Hajera';
+
+        if (globalWtToastTitle) {
+            globalWtToastTitle.textContent = `${hostName} invited you to watch "${videoTitle}" together!`;
+        }
+
+        if (globalWtToastJoin) {
+            globalWtToastJoin.href = `/watch/${encodeURIComponent(data.videoId)}?join=1`;
+        }
+
+        globalWtToast.style.display = 'flex';
+        void globalWtToast.offsetWidth; // Force reflow
+        globalWtToast.classList.add('visible');
+
+        if (playAudio) {
+            playChime('invite');
+        }
     }
 
-    if (wtPlayerChatToast) {
-        wtPlayerChatToast.addEventListener('click', () => {
-            toggleChat(true);
-            wtPlayerChatToast.classList.remove('visible');
-            wtPlayerChatToast.style.display = 'none';
+    function showInPageInvite(data) {
+        if (!wtInviteBanner || !data) return;
+        if (isInviteDismissed(data.roomId)) return;
+
+        const titleEl = wtInviteBanner.querySelector('.wt-invite-video-title');
+        if (titleEl) titleEl.textContent = data.videoTitle || 'this video';
+        wtInviteBanner.classList.add('visible');
+    }
+
+    function hideInvites() {
+        if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
+        if (globalWtToast) {
+            globalWtToast.classList.remove('visible');
+            setTimeout(() => {
+                if (!globalWtToast.classList.contains('visible')) {
+                    globalWtToast.style.display = 'none';
+                }
+            }, 300);
+        }
+    }
+
+    // Dismiss Listeners
+    if (globalWtToastClose) {
+        globalWtToastClose.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (roomId) markInviteDismissed(roomId);
+            hideInvites();
+        });
+    }
+
+    if (wtDismissBtn) {
+        wtDismissBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (roomId) markInviteDismissed(roomId);
+            if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
+        });
+    }
+
+    if (wtJoinBtn) {
+        wtJoinBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            joinRoom();
         });
     }
 
     // ============================================================
-    //  CHECK ACTIVE ROOM (POLLING EVERY 2.5s)
+    //  4. REAL-TIME EVENT BUS HANDLERS (Dispatched via SSE)
     // ============================================================
+    window.addEventListener('wt:invite', (e) => {
+        const data = e.detail;
+        if (!data) return;
+
+        if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
+
+        if (isGuest || (!isHost && data.host !== currentUser)) {
+            roomId = data.roomId;
+            if (isWatchPage && data.videoId === currentVideoId) {
+                showInPageInvite(data);
+                showGlobalToast(data, true);
+            } else {
+                showGlobalToast(data, true);
+            }
+        }
+    });
+
+    window.addEventListener('wt:active-room', (e) => {
+        const data = e.detail;
+        if (!data) {
+            hideInvites();
+            return;
+        }
+
+        if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
+
+        // Host reconnecting on watch page
+        if (isHost && isWatchPage && data.role === 'host' && data.videoId === currentVideoId) {
+            if (!roomId || !syncActive) {
+                roomId = data.roomId;
+                startSSE();
+                showSyncActive();
+            }
+            return;
+        }
+
+        // Guest invited / active room present
+        if (isGuest || (!isHost && data.host !== currentUser)) {
+            roomId = data.roomId;
+            if (isWatchPage && data.videoId === currentVideoId) {
+                if (syncActive) {
+                    hideInvites();
+                } else {
+                    showInPageInvite(data);
+                    showGlobalToast(data, false);
+                }
+            } else {
+                showGlobalToast(data, false);
+            }
+        }
+    });
+
+    window.addEventListener('wt:ended', (e) => {
+        const data = e.detail;
+        if (roomId && data && data.roomId && data.roomId !== roomId) return;
+
+        hideInvites();
+
+        if (syncActive) {
+            appendSystemMessage(`Watch Together session ended${data && data.reason ? ': ' + data.reason : ''}`);
+            cleanup();
+        }
+    });
+
+    window.addEventListener('wt:status', (e) => {
+        const data = e.detail;
+        if (!data || !roomId || data.roomId !== roomId) return;
+
+        if (syncActive) {
+            updateStatusBar('connected', data.guest ? 2 : 1);
+        }
+    });
+
+    // Fallback Initial Check via API
     async function checkActiveRoom() {
-        if (syncActive && roomId) return; // Already connected in an active session
+        if (syncActive && roomId) return;
 
         try {
             const data = await fetch('/watch-together/active', { credentials: 'same-origin' }).then(r => r.json());
@@ -253,13 +344,10 @@
                 return;
             }
 
-            if (data.avatars) {
-                userAvatars = Object.assign({}, userAvatars, data.avatars);
-            }
+            if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
 
-            // Host reconnecting on watch page
             if (isHost && isWatchPage && data.role === 'host' && data.videoId === currentVideoId) {
-                if (!roomId) {
+                if (!roomId || !syncActive) {
                     roomId = data.roomId;
                     startSSE();
                     showSyncActive();
@@ -267,91 +355,25 @@
                 return;
             }
 
-            // Guest (Hajera) invited
             if (isGuest || (!isHost && data.host !== currentUser)) {
-                // Check if user temporarily dismissed this room
-                if (dismissedRoomId === data.roomId && Date.now() < dismissExpiry) {
-                    return;
-                }
-
                 roomId = data.roomId;
-
                 if (isWatchPage && data.videoId === currentVideoId) {
-                    // Hajera is on the same video watch page
-                    showInPageInvite(data);
-
-                    // Auto-join if URL param ?join=1 was passed
                     const urlParams = new URLSearchParams(window.location.search);
                     if (urlParams.get('join') === '1' || urlParams.get('join') === 'true') {
                         joinRoom();
+                    } else if (!syncActive) {
+                        showInPageInvite(data);
+                        showGlobalToast(data, false);
                     }
                 } else {
-                    // Hajera is on dashboard or another video page
-                    showGlobalToast(data);
+                    showGlobalToast(data, false);
                 }
             }
-        } catch (err) {
-            // Ignore polling errors
-        }
+        } catch {}
     }
-
-    function showInPageInvite(data) {
-        if (!wtInviteBanner) return;
-        const titleEl = wtInviteBanner.querySelector('.wt-invite-video-title');
-        if (titleEl) titleEl.textContent = data.videoTitle || 'this video';
-        wtInviteBanner.classList.add('visible');
-    }
-
-    function showGlobalToast(data) {
-        if (!globalWtToast) return;
-        if (globalWtToastTitle) {
-            globalWtToastTitle.textContent = `Muaj invited you to watch "${data.videoTitle || 'a video'}" together!`;
-        }
-        if (globalWtToastJoin) {
-            globalWtToastJoin.href = `/watch/${encodeURIComponent(data.videoId)}?join=1`;
-        }
-        globalWtToast.style.display = 'flex';
-        globalWtToast.classList.add('visible');
-    }
-
-    function hideInvites() {
-        if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
-        if (globalWtToast) {
-            globalWtToast.classList.remove('visible');
-            globalWtToast.style.display = 'none';
-        }
-    }
-
-    // Dismiss buttons
-    if (wtDismissBtn) {
-        wtDismissBtn.addEventListener('click', () => {
-            if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
-            dismissedRoomId = roomId;
-            dismissExpiry = Date.now() + (60 * 1000); // 1 minute dismiss
-        });
-    }
-
-    if (globalWtToastClose) {
-        globalWtToastClose.addEventListener('click', () => {
-            hideInvites();
-            dismissedRoomId = roomId;
-            dismissExpiry = Date.now() + (60 * 1000);
-        });
-    }
-
-    // Join button on in-page banner
-    if (wtJoinBtn) {
-        wtJoinBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            joinRoom();
-        });
-    }
-
-    // Polling timer every 2.5 seconds
-    setInterval(checkActiveRoom, 2500);
 
     // ============================================================
-    //  HOST: CREATE ROOM (MUAJ)
+    //  5. WATCH PAGE: HOST CREATE ROOM
     // ============================================================
     if (wtStartBtn && isWatchPage && isHost) {
         wtStartBtn.addEventListener('click', async () => {
@@ -360,49 +382,34 @@
                 const titleEl = document.getElementById('videoTitleText');
                 const videoTitle = titleEl ? titleEl.textContent.trim() : '';
 
-                const data = await postJSON('/watch-together/create', { videoId: currentVideoId, videoTitle });
-                if (data.roomId) {
+                const initialCurrentTime = video ? video.currentTime : 0;
+                const initialPlaying = video ? !video.paused : false;
+                const initialPlaybackRate = video ? video.playbackRate : 1;
+
+                const data = await postJSON('/watch-together/create', {
+                    videoId: currentVideoId,
+                    videoTitle,
+                    currentTime: initialCurrentTime,
+                    playing: initialPlaying,
+                    playbackRate: initialPlaybackRate
+                });
+
+                if (data && data.roomId) {
                     roomId = data.roomId;
                     startSSE();
                     showSyncActive();
+                    triggerSyncBadge('Session Live • Waiting for Hajera');
                 }
             } catch (err) {
                 console.error('[WT] Create error:', err);
+            } finally {
                 wtStartBtn.disabled = false;
             }
         });
     }
 
     // ============================================================
-    //  STOP / LEAVE SESSION (HOST OR GUEST)
-    // ============================================================
-    async function endOrLeaveSession() {
-        if (!roomId) {
-            cleanup();
-            return;
-        }
-
-        const confirmMsg = isHost ?
-            'Watch Together সেশনটি বন্ধ করতে চাও? (উভয়ের জন্য সেশন শেষ হবে)' :
-            'Watch Together সেশন থেকে বের হতে চাও?';
-
-        if (window.confirm(confirmMsg)) {
-            try {
-                await postJSON(`/watch-together/leave/${roomId}`);
-            } catch {}
-            cleanup();
-        }
-    }
-
-    document.querySelectorAll('.wt-stop-session-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            endOrLeaveSession();
-        });
-    });
-
-    // ============================================================
-    //  GUEST: JOIN ROOM (HAJERA)
+    //  6. WATCH PAGE: GUEST JOIN ROOM
     // ============================================================
     async function joinRoom() {
         if (!roomId) {
@@ -423,7 +430,7 @@
 
                 if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
 
-                // If not on the right watch page, redirect
+                // If not currently on the session's video page, navigate directly
                 if (data.videoId && data.videoId !== currentVideoId) {
                     window.location.href = `/watch/${encodeURIComponent(data.videoId)}?join=1`;
                     return;
@@ -432,49 +439,69 @@
                 startSSE();
                 showSyncActive();
 
-                // Apply initial video state
-                if (data.videoState && video) {
-                    applyVideoState(data.videoState);
+                // Clean URL ?join=1 query param without reload
+                if (window.history && window.history.replaceState) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('join');
+                    window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
                 }
 
-                // Load chat history
+                // Apply initial playback state from Host
+                if (data.videoState && video) {
+                    applyVideoState(data.videoState, true);
+                }
+
+                // Ingest chat history
                 if (data.chatHistory && wtChatMessages) {
                     wtChatMessages.innerHTML = '';
                     data.chatHistory.forEach(msg => appendChatMessage(msg, false));
                 }
+
+                triggerSyncBadge('Connected with Host ⚡');
             }
         } catch (err) {
             console.error('[WT] Join error:', err);
         }
     }
 
-    // Guest manual re-sync button
-    if (wtResyncBtn) {
-        wtResyncBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            if (!roomId || isHost) return;
+    // ============================================================
+    //  7. STOP / LEAVE SESSION
+    // ============================================================
+    async function endOrLeaveSession() {
+        if (!roomId) {
+            cleanup();
+            return;
+        }
 
-            wtResyncBtn.classList.add('syncing');
+        const confirmMsg = isHost ?
+            'Watch Together সেশনটি বন্ধ করতে চাও? (উভয়ের জন্য সেশন শেষ হবে)' :
+            'Watch Together সেশন থেকে বের হতে চাও?';
+
+        if (window.confirm(confirmMsg)) {
+            const currentRoomId = roomId;
             try {
-                const data = await fetch(`/watch-together/sync-state/${roomId}`, { credentials: 'same-origin' }).then(r => r.json());
-                if (data && data.videoState) {
-                    applyVideoState(data.videoState, true);
-                    triggerSyncBadge('Re-synced with Host ⚡');
-                }
-            } catch (err) {
-                console.error('[WT] Manual re-sync error:', err);
-            } finally {
-                setTimeout(() => wtResyncBtn.classList.remove('syncing'), 800);
-            }
-        });
+                await postJSON(`/watch-together/leave/${currentRoomId}`);
+            } catch {}
+            cleanup();
+        }
     }
 
+    document.querySelectorAll('.wt-stop-session-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            endOrLeaveSession();
+        });
+    });
+
     // ============================================================
-    //  SSE CONNECTION
+    //  8. SSE ROOM CONNECTION & REAL-TIME DISPATCH
     // ============================================================
     function startSSE() {
         if (!roomId) return;
-        if (eventSource) eventSource.close();
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
 
         eventSource = new EventSource(`/watch-together/stream/${roomId}`);
 
@@ -493,7 +520,7 @@
         });
 
         eventSource.addEventListener('sync', (e) => {
-            if (isHost) return; // Host doesn't sync from server
+            if (isHost) return; // Host has master playback control
             try {
                 const data = JSON.parse(e.data);
                 applyVideoState(data);
@@ -527,9 +554,9 @@
                 if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
                 updateStatusBar('connected', 2);
                 appendSystemMessage(`${data.user === 'hajera' ? 'Hajera' : 'Muaj'} joined the session 🎉`);
-                playChime('reaction');
+                playChime('invite');
 
-                // Re-sync current video state for the new guest
+                // Host syncs current state for the newly joined guest
                 if (isHost && video) {
                     sendSync('join-sync');
                 }
@@ -554,18 +581,20 @@
         eventSource.addEventListener('room-closed', (e) => {
             try {
                 const data = JSON.parse(e.data);
-                appendSystemMessage(`Session ended: ${data.reason || 'Closed'}`);
+                appendSystemMessage(`Session ended: ${data.reason || 'Closed by host'}`);
                 cleanup();
             } catch {}
         });
 
         eventSource.onerror = () => {
-            updateStatusBar('reconnecting', 0);
+            if (syncActive) {
+                updateStatusBar('reconnecting', 0);
+            }
         };
     }
 
     // ============================================================
-    //  VIDEO SYNC LOGIC
+    //  9. VIDEO SYNC ENGINE (SUB-SECOND PRECISION & LATENCY COMPENSATION)
     // ============================================================
     function triggerSyncBadge(customText) {
         if (!wtSyncOverlay) return;
@@ -580,26 +609,36 @@
     function applyVideoState(state, force = false) {
         if (!state || isHost || !video) return;
 
-        const timeDiff = Math.abs(video.currentTime - state.currentTime);
+        // Latency offset compensation
+        const now = Date.now();
+        const latencySec = (state.timestamp && now > state.timestamp) ? Math.min(2.0, (now - state.timestamp) / 1000) : 0;
+        const targetTime = state.currentTime + (state.playing ? latencySec * (state.playbackRate || 1) : 0);
+        const timeDiff = Math.abs(video.currentTime - targetTime);
 
-        // Seek if time drift exceeds tolerance or forced
+        // Seek if drift exceeds tolerance threshold or forced
         if (force || timeDiff > SYNC_TOLERANCE_SEC) {
             ignoreNextSeek = true;
-            video.currentTime = state.currentTime;
+            video.currentTime = targetTime;
             triggerSyncBadge('Synced with Host ⚡');
         }
 
-        // Sync play / pause
+        // Play / Pause Sync
         if (state.playing && video.paused) {
             ignoreNextPlay = true;
-            video.play().catch(() => {});
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(() => {
+                    // Browser autoplay blocked -> show mute reminder
+                    triggerSyncBadge('Tap video to unmute & play 🎬');
+                });
+            }
         } else if (!state.playing && !video.paused) {
             ignoreNextPause = true;
             video.pause();
         }
 
-        // Sync speed
-        if (state.playbackRate && video.playbackRate !== state.playbackRate) {
+        // Playback Rate Sync
+        if (state.playbackRate && Math.abs(video.playbackRate - state.playbackRate) > 0.01) {
             video.playbackRate = state.playbackRate;
         }
     }
@@ -619,7 +658,7 @@
         }).catch(() => {});
     }
 
-    // Host Video Event Listeners
+    // Host Playback Listeners
     if (isHost && video) {
         video.addEventListener('play', () => {
             if (ignoreNextPlay) { ignoreNextPlay = false; return; }
@@ -640,7 +679,7 @@
             sendSync('ratechange');
         });
 
-        // Periodic sync every 2.5s while playing
+        // Periodic alignment every 2.5s while playing
         setInterval(() => {
             if (!video.paused && syncActive) {
                 sendSync('update');
@@ -648,11 +687,106 @@
         }, 2500);
     }
 
+    // Guest Manual Re-sync Button
+    if (wtResyncBtn) {
+        wtResyncBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            if (!roomId || isHost) return;
+
+            wtResyncBtn.classList.add('syncing');
+            try {
+                const data = await fetch(`/watch-together/sync-state/${roomId}`, { credentials: 'same-origin' }).then(r => r.json());
+                if (data && data.videoState) {
+                    applyVideoState(data.videoState, true);
+                    triggerSyncBadge('Re-synced with Host ⚡');
+                }
+            } catch (err) {
+                console.error('[WT] Re-sync error:', err);
+            } finally {
+                setTimeout(() => wtResyncBtn.classList.remove('syncing'), 800);
+            }
+        });
+    }
+
+    // Reconcile on Tab Focus & Network Online
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && syncActive && roomId && !isHost) {
+            fetch(`/watch-together/sync-state/${roomId}`, { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.videoState) applyVideoState(data.videoState, true);
+                })
+                .catch(() => {});
+        }
+    });
+
+    window.addEventListener('online', () => {
+        if (syncActive && roomId) {
+            startSSE();
+        }
+    });
+
     // ============================================================
-    //  LIVE CHAT
+    //  10. FLOATING LIVE REACTIONS
+    // ============================================================
+    function spawnFloatingReaction(emoji = '💖') {
+        const targetContainer = wtFloatingReactions || playerContainer || document.body;
+        if (!targetContainer) return;
+
+        const particle = document.createElement('div');
+        particle.className = 'wt-floating-emoji';
+        particle.textContent = emoji;
+
+        const randomX = Math.floor(Math.random() * 80) + 10;
+        const randomScale = (0.9 + Math.random() * 0.5).toFixed(2);
+        const randomRotate = Math.floor(Math.random() * 40) - 20;
+        const swayDuration = (2.2 + Math.random() * 0.8).toFixed(2);
+
+        particle.style.left = `${randomX}%`;
+        particle.style.setProperty('--target-scale', randomScale);
+        particle.style.setProperty('--target-rotate', `${randomRotate}deg`);
+        particle.style.animationDuration = `${swayDuration}s`;
+
+        targetContainer.appendChild(particle);
+
+        setTimeout(() => {
+            if (particle.parentNode) {
+                particle.parentNode.removeChild(particle);
+            }
+        }, parseFloat(swayDuration) * 1000 + 100);
+    }
+
+    function sendLiveReaction(emoji) {
+        if (!roomId) return;
+        spawnFloatingReaction(emoji);
+        playChime('reaction');
+
+        postJSON(`/watch-together/reaction/${roomId}`, { emoji }).catch(err => {
+            console.error('[WT] Reaction error:', err);
+        });
+    }
+
+    if (emojiBar) {
+        emojiBar.addEventListener('click', (e) => {
+            const btn = e.target.closest('.wt-emoji-btn');
+            if (!btn) return;
+
+            const emoji = btn.dataset.reaction || btn.textContent.trim();
+            if (emoji) {
+                sendLiveReaction(emoji);
+                if (wtChatInput && (document.activeElement === wtChatInput || wtChatInput.value.length > 0)) {
+                    wtChatInput.value += emoji;
+                    wtChatInput.focus();
+                }
+            }
+        });
+    }
+
+    // ============================================================
+    //  11. LIVE CINEMA CHAT
     // ============================================================
     function appendChatMessage(msg, animate = true) {
-        if (!wtChatMessages) return;
+        if (!wtChatMessages || !msg) return;
 
         const isMine = msg.user === currentUser;
         const displayName = msg.user === 'muaj' ? 'Muaj' : 'Hajera';
@@ -666,16 +800,15 @@
             <div class="wt-msg-bubble">
                 <div class="wt-msg-header">
                     <span class="wt-msg-author">${escapeHtml(displayName)}</span>
-                    <span class="wt-msg-time">${timeAgo(msg.timestamp)}</span>
+                    <span class="wt-msg-time">${timeAgo(msg.timestamp || Date.now())}</span>
                 </div>
-                <div class="wt-msg-text">${escapeHtml(msg.text)}</div>
+                <div class="wt-msg-text">${escapeHtml(msg.text || '')}</div>
             </div>
         `;
 
         wtChatMessages.appendChild(msgEl);
         wtChatMessages.scrollTop = wtChatMessages.scrollHeight;
 
-        // Unread Badge
         if (!chatOpen && !isMine) {
             unreadCount++;
             updateUnreadBadge();
@@ -717,7 +850,6 @@
         });
     }
 
-    // Chat Drawer Toggle
     function toggleChat(forceState) {
         chatOpen = typeof forceState === 'boolean' ? forceState : !chatOpen;
         if (wtChatPanel) wtChatPanel.classList.toggle('open', chatOpen);
@@ -760,29 +892,49 @@
         }
     }
 
-    // Emoji Bar: Instant live floating reaction + text input append
-    const emojiBar = document.getElementById('wtEmojiBar');
-    if (emojiBar) {
-        emojiBar.addEventListener('click', (e) => {
-            const btn = e.target.closest('.wt-emoji-btn');
-            if (!btn) return;
+    function showInPlayerChatToast(msg) {
+        if (chatOpen || !wtPlayerChatToast || !msg) return;
 
-            const emoji = btn.dataset.reaction || btn.textContent.trim();
-            if (emoji) {
-                // Send live floating reaction
-                sendLiveReaction(emoji);
+        const senderName = msg.user === 'muaj' ? 'Muaj' : 'Hajera';
+        if (wtToastSender) wtToastSender.textContent = senderName;
+        if (wtToastMsg) wtToastMsg.textContent = msg.text || '';
 
-                // If user is focused on chat input, append it there too
-                if (wtChatInput && (document.activeElement === wtChatInput || wtChatInput.value.length > 0)) {
-                    wtChatInput.value += emoji;
-                    wtChatInput.focus();
-                }
+        if (wtToastAvatar) {
+            const avatarFile = msg.avatar || userAvatars[msg.user];
+            if (avatarFile) {
+                wtToastAvatar.innerHTML = `<img src="/avatars/${escapeHtml(avatarFile)}" alt="${escapeHtml(senderName)}" class="wt-toast-avatar-img">`;
+            } else {
+                wtToastAvatar.textContent = msg.user === 'muaj' ? '👑' : '🌸';
             }
+        }
+
+        wtPlayerChatToast.style.display = 'flex';
+        void wtPlayerChatToast.offsetWidth;
+        wtPlayerChatToast.classList.add('visible');
+
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+            if (wtPlayerChatToast) {
+                wtPlayerChatToast.classList.remove('visible');
+                setTimeout(() => {
+                    if (wtPlayerChatToast && !wtPlayerChatToast.classList.contains('visible')) {
+                        wtPlayerChatToast.style.display = 'none';
+                    }
+                }, 300);
+            }
+        }, 4500);
+    }
+
+    if (wtPlayerChatToast) {
+        wtPlayerChatToast.addEventListener('click', () => {
+            toggleChat(true);
+            wtPlayerChatToast.classList.remove('visible');
+            wtPlayerChatToast.style.display = 'none';
         });
     }
 
     // ============================================================
-    //  UI STATE MANAGEMENT
+    //  12. UI STATE MANAGEMENT & CLEANUP
     // ============================================================
     function showSyncActive() {
         syncActive = true;
@@ -859,24 +1011,16 @@
     }
 
     // ============================================================
-    //  INITIAL TRIGGER
+    //  13. INITIALIZATION & RECOVERY
     // ============================================================
     checkActiveRoom();
 
-    // Auto-join check on watch page load
+    // Auto-join check on watch page load with query param
     if (isWatchPage) {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('join') === '1' || urlParams.get('join') === 'true') {
             joinRoom();
         }
     }
-
-    // Best-effort cleanup on window close
-    window.addEventListener('beforeunload', () => {
-        if (roomId && eventSource && isHost) {
-            navigator.sendBeacon(`/watch-together/leave/${roomId}`,
-                new Blob([JSON.stringify({})], { type: 'application/json' }));
-        }
-    });
 
 })();

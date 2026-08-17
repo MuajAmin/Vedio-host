@@ -1,23 +1,21 @@
 // ============================================================
 //  MESSAGES SYSTEM — ULTRA-LUXE REAL-TIME CLIENT CONTROLLER
-//  Handles SSE stream, audio chime, interactive waveform player,
-//  reactions, speed controls, in-chat search & particle effects
+//  Unified State Store, SSE Real-Time Sync, Catch-up Sync,
+//  Voice Audio Waveforms, Dynamic Stats & Micro-Interactions
 // ============================================================
 
 (function () {
-    let sseSource = null;
-    let currentUser = document.body.getAttribute('data-user') || '';
+    'use strict';
+
+    const currentUser = document.body.getAttribute('data-user') || '';
     if (!currentUser) return; // Not logged in
 
     const partnerUser = currentUser === 'muaj' ? 'hajera' : 'muaj';
-    let typingTimeout = null;
-    let isCurrentlyTyping = false;
-    let mediaRecorder = null;
-    let audioChunks = [];
-    let recordInterval = null;
-    let recordSeconds = 0;
+    const isMessagesPage = document.body.getAttribute('data-page') === 'messages' || !!document.getElementById('msgFullpageList');
 
-    // Web Audio Context for synthesized notification sound
+    // ------------------------------------------------------------
+    //  1. SYNTHESIZED NOTIFICATION AUDIO CHIME (Web Audio API)
+    // ------------------------------------------------------------
     let audioCtx = null;
     function playNotificationChime() {
         try {
@@ -56,328 +54,67 @@
     }
 
     // ------------------------------------------------------------
-    //  1. DOM ELEMENTS
+    //  2. UNIFIED STATE STORE
     // ------------------------------------------------------------
-    const launcher = document.getElementById('msgFloatingLauncher');
-    const drawer = document.getElementById('msgDrawerWidget');
-    const closeBtn = document.getElementById('msgDrawerCloseBtn');
-    const unreadPill = document.getElementById('msgLauncherUnreadBadge');
-    const navMsgBadges = document.querySelectorAll('.nav-msg-badge');
-    const fullPageMessagesList = document.getElementById('msgFullpageList');
-    const drawerMessagesList = document.getElementById('msgDrawerList');
-    const floatingToast = document.getElementById('msgFloatingToast');
-    const floatingToastText = document.getElementById('msgFloatingToastText');
-    const floatingToastReply = document.getElementById('msgFloatingToastReply');
-    const floatingToastClose = document.getElementById('msgFloatingToastClose');
+    const State = {
+        currentUser,
+        partnerUser,
+        isMessagesPage,
+        messages: new Map(), // id -> msgObj
+        lastKnownId: 0,
+        unreadCount: 0,
+        partnerPresence: null,
+        stats: { totalMessages: 0, sharedVideos: 0, voiceMessages: 0 },
+        activeMediaTab: 'all',
+        searchKeyword: '',
+        replyToMessage: null,
+        isSyncing: false,
+        isInitialSyncDone: false,
+        sseConnected: false
+    };
+
+    // ------------------------------------------------------------
+    //  3. DOM ELEMENT REFERENCES
+    // ------------------------------------------------------------
+    const DOM = {
+        launcher: document.getElementById('msgFloatingLauncher'),
+        drawer: document.getElementById('msgDrawerWidget'),
+        drawerCloseBtn: document.getElementById('msgDrawerCloseBtn'),
+        unreadPill: document.getElementById('msgLauncherUnreadBadge'),
+        fullPageList: document.getElementById('msgFullpageList'),
+        drawerList: document.getElementById('msgDrawerList'),
+        floatingToast: document.getElementById('msgFloatingToast'),
+        floatingToastText: document.getElementById('msgFloatingToastText'),
+        floatingToastReply: document.getElementById('msgFloatingToastReply'),
+        floatingToastClose: document.getElementById('msgFloatingToastClose'),
+        // Sidebar Stats
+        statTotalMessages: document.getElementById('msgStatTotalMessages'),
+        statSharedVideos: document.getElementById('msgStatSharedVideos'),
+        statVoiceMessages: document.getElementById('msgStatVoiceMessages'),
+        tabCountVideos: document.getElementById('msgTabCountVideos'),
+        tabCountVoice: document.getElementById('msgTabCountVoice'),
+        sidebarWatchingBanner: document.getElementById('msgSidebarWatchingBanner'),
+        // In-chat Search
+        searchToggleBtn: document.getElementById('msgSearchToggleBtn'),
+        inChatSearchBar: document.getElementById('msgInChatSearchBar'),
+        inChatSearchInput: document.getElementById('msgInChatSearchInput'),
+        inChatSearchClose: document.getElementById('msgInChatSearchClose')
+    };
 
     let toastDismissTimeout = null;
-    let isDrawerLoaded = false;
-    let isDrawerLoading = false;
-    let currentUnreadCount = 0;
-
-    // Initialize currentUnreadCount from DOM if present
-    if (unreadPill && unreadPill.textContent) {
-        currentUnreadCount = Math.max(0, parseInt(unreadPill.textContent, 10) || 0);
-    } else {
-        const initialNavBadge = document.querySelector('.nav-msg-badge');
-        if (initialNavBadge && initialNavBadge.textContent) {
-            currentUnreadCount = Math.max(0, parseInt(initialNavBadge.textContent, 10) || 0);
-        }
-    }
+    let typingTimeout = null;
+    let isCurrentlyTyping = false;
+    let sseSource = null;
 
     function getActiveContainers() {
         const list = [];
-        if (drawerMessagesList) list.push(drawerMessagesList);
-        if (fullPageMessagesList) list.push(fullPageMessagesList);
+        if (DOM.drawerList) list.push(DOM.drawerList);
+        if (DOM.fullPageList) list.push(DOM.fullPageList);
         return list;
     }
 
     // ------------------------------------------------------------
-    //  2. UNREAD BADGE & TOAST SYNCHRONIZER
-    // ------------------------------------------------------------
-    function updateUnreadBadges(count) {
-        currentUnreadCount = Math.max(0, parseInt(count, 10) || 0);
-        const text = currentUnreadCount > 99 ? '99+' : String(currentUnreadCount);
-
-        const currentLauncher = document.getElementById('msgFloatingLauncher') || launcher;
-        const currentPill = document.getElementById('msgLauncherUnreadBadge') || unreadPill;
-        const currentDrawer = document.getElementById('msgDrawerWidget') || drawer;
-        const allNavBadges = document.querySelectorAll('.nav-msg-badge');
-
-        if (currentPill) {
-            currentPill.textContent = text;
-            if (currentUnreadCount > 0) {
-                currentPill.style.display = 'flex';
-            } else {
-                currentPill.style.display = 'none';
-            }
-        }
-
-        // Show launcher when there is an unread message or the drawer is open
-        if (currentLauncher) {
-            const isDrawerOpen = currentDrawer && currentDrawer.classList.contains('is-open');
-            if (currentUnreadCount > 0) {
-                currentLauncher.classList.add('has-unread');
-                currentLauncher.style.display = 'flex';
-            } else {
-                currentLauncher.classList.remove('has-unread');
-                if (isDrawerOpen) {
-                    currentLauncher.style.display = 'flex';
-                } else {
-                    currentLauncher.style.display = 'none';
-                }
-            }
-        }
-
-        allNavBadges.forEach(badge => {
-            badge.textContent = text;
-            if (currentUnreadCount > 0) {
-                badge.style.display = 'flex';
-            } else {
-                badge.style.display = 'none';
-            }
-        });
-
-        if (currentUnreadCount === 0) {
-            hideFloatingMessageToast();
-        }
-    }
-
-    function showFloatingMessageToast(msg) {
-        if (!floatingToast || !msg) return;
-        const isDrawerOpen = drawer && drawer.classList.contains('is-open');
-        const isFullPage = !!fullPageMessagesList;
-        if (isDrawerOpen || isFullPage) return;
-
-        let previewText = 'New message';
-        if (msg.text) {
-            previewText = msg.text.length > 55 ? msg.text.slice(0, 55) + '…' : msg.text;
-        } else if (msg.voiceUrl) {
-            previewText = '🎤 Voice note';
-        } else if (msg.video) {
-            previewText = `🎬 Shared video: ${msg.video.title || 'video'}`;
-        }
-
-        if (floatingToastText) {
-            floatingToastText.textContent = previewText;
-        }
-
-        floatingToast.style.display = 'block';
-        void floatingToast.offsetWidth; // Force reflow
-        floatingToast.classList.add('is-visible');
-
-        clearTimeout(toastDismissTimeout);
-        toastDismissTimeout = setTimeout(() => {
-            hideFloatingMessageToast();
-        }, 6000);
-    }
-
-    function hideFloatingMessageToast() {
-        if (!floatingToast) return;
-        floatingToast.classList.remove('is-visible');
-        clearTimeout(toastDismissTimeout);
-        setTimeout(() => {
-            if (!floatingToast.classList.contains('is-visible')) {
-                floatingToast.style.display = 'none';
-            }
-        }, 350);
-    }
-
-    function loadDrawerHistory() {
-        if (isDrawerLoaded || isDrawerLoading || !drawerMessagesList) return;
-        isDrawerLoading = true;
-
-        fetch('/api/messages?limit=40')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && Array.isArray(data.messages)) {
-                    const emptyState = drawerMessagesList.querySelector('.msg-empty-state');
-                    if (emptyState && data.messages.length > 0) emptyState.remove();
-
-                    data.messages.forEach(msg => {
-                        if (!drawerMessagesList.querySelector(`[data-msg-id="${msg.id}"]`)) {
-                            drawerMessagesList.insertAdjacentHTML('beforeend', renderMessageHTML(msg));
-                        }
-                    });
-                    isDrawerLoaded = true;
-                    scrollToBottom(drawerMessagesList);
-                }
-            })
-            .catch(err => console.error('[messages] Error loading drawer history:', err))
-            .finally(() => {
-                isDrawerLoading = false;
-            });
-    }
-
-    // ------------------------------------------------------------
-    //  3. SSE REAL-TIME CONNECTION
-    // ------------------------------------------------------------
-    function initSSE() {
-        if (sseSource) {
-            sseSource.close();
-        }
-
-        sseSource = new EventSource('/messages/stream');
-
-        sseSource.addEventListener('connected', (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                if (typeof data.unreadCount === 'number') {
-                    updateUnreadBadges(data.unreadCount);
-                }
-                if (data.partnerPresence) {
-                    updatePartnerPresenceUI(data.partnerPresence);
-                }
-            } catch {}
-        });
-
-        sseSource.addEventListener('new-message', (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                const msg = data.message;
-                if (!msg) return;
-
-                getActiveContainers().forEach(container => {
-                    appendMessageToDOM(container, msg);
-                });
-
-                if (msg.sender === partnerUser) {
-                    playNotificationChime();
-
-                    const isDrawerOpen = drawer && drawer.classList.contains('is-open');
-                    const isFullPage = !!fullPageMessagesList;
-
-                    if (isDrawerOpen || isFullPage) {
-                        markMessagesAsRead();
-                    } else {
-                        showFloatingMessageToast(msg);
-                        if (typeof data.unreadCount === 'number') {
-                            updateUnreadBadges(data.unreadCount);
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('[messages] SSE error parsing new-message:', err);
-            }
-        });
-
-        sseSource.addEventListener('unread-count', (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                if (typeof data.unreadCount === 'number') {
-                    updateUnreadBadges(data.unreadCount);
-                }
-            } catch {}
-        });
-
-        sseSource.addEventListener('messages-read', () => {
-            try {
-                document.querySelectorAll('.msg-seen-check').forEach(el => {
-                    el.classList.add('is-seen');
-                    el.innerHTML = '✓✓';
-                    el.title = 'Seen';
-                });
-            } catch {}
-        });
-
-        sseSource.addEventListener('user-typing', (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                if (data.user === partnerUser) {
-                    showTypingIndicator(data.isTyping);
-                }
-            } catch {}
-        });
-
-        sseSource.addEventListener('message-deleted', (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                const rows = document.querySelectorAll(`[data-msg-id="${data.messageId}"]`);
-                rows.forEach(row => {
-                    row.style.opacity = '0';
-                    row.style.transform = 'scale(0.9)';
-                    setTimeout(() => row.remove(), 250);
-                });
-            } catch {}
-        });
-
-        sseSource.addEventListener('message-reaction', (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                updateMessageReactionsDOM(data.messageId, data.reactions);
-            } catch {}
-        });
-
-        sseSource.onerror = () => {};
-    }
-
-    // ------------------------------------------------------------
-    //  4. PRESENCE & TYPING UI
-    // ------------------------------------------------------------
-    function updatePartnerPresenceUI(presence) {
-        if (!presence) return;
-        const status = presence.status || 'offline';
-        const isOnline = presence.isOnline || presence.isWatching;
-        const isWatching = presence.isWatching;
-
-        document.querySelectorAll('.msg-partner-status-dot').forEach(dot => {
-            dot.className = `msg-status-dot msg-partner-status-dot dot-${status}`;
-        });
-
-        document.querySelectorAll('.msg-partner-presence-text').forEach(el => {
-            if (isWatching && presence.videoTitle) {
-                el.innerHTML = `<span class="watching-highlight">🎬 Watching:</span> ${escapeHtml(presence.videoTitle)}`;
-            } else if (isOnline) {
-                el.textContent = '🟢 Active Now';
-            } else if (presence.isIdle) {
-                el.textContent = '🟡 Away';
-            } else {
-                el.textContent = '⚫ Offline';
-            }
-        });
-
-        // Update live watching banner in sidebar if exists
-        const watchingBanner = document.getElementById('msgSidebarWatchingBanner');
-        if (watchingBanner) {
-            if (isWatching && presence.videoTitle) {
-                watchingBanner.style.display = 'flex';
-                const titleEl = watchingBanner.querySelector('.msg-sidebar-watching-title');
-                if (titleEl) titleEl.textContent = presence.videoTitle;
-                const joinBtn = watchingBanner.querySelector('.msg-sidebar-watching-join');
-                if (joinBtn && presence.currentVideoId) {
-                    joinBtn.href = `/watch/${encodeURIComponent(presence.currentVideoId)}`;
-                }
-            } else {
-                watchingBanner.style.display = 'none';
-            }
-        }
-    }
-
-    function showTypingIndicator(show) {
-        getActiveContainers().forEach(container => {
-            let typingRow = container.querySelector('.msg-typing-row');
-            if (show) {
-                if (!typingRow) {
-                    typingRow = document.createElement('div');
-                    typingRow.className = 'msg-typing-row';
-                    typingRow.innerHTML = `
-                        <div class="msg-typing-bubble">
-                            <span class="msg-typing-dot"></span>
-                            <span class="msg-typing-dot"></span>
-                            <span class="msg-typing-dot"></span>
-                        </div>
-                    `;
-                    container.appendChild(typingRow);
-                    scrollToBottom(container);
-                }
-            } else {
-                if (typingRow) typingRow.remove();
-            }
-        });
-    }
-
-    // ------------------------------------------------------------
-    //  5. MESSAGE RENDERING HELPER
+    //  4. FORMATTING & HTML HELPERS
     // ------------------------------------------------------------
     function escapeHtml(str) {
         return String(str || '')
@@ -404,6 +141,24 @@
         }
     }
 
+    function formatDateHeader(isoStr) {
+        if (!isoStr) return '';
+        try {
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return '';
+            const options = { timeZone: 'Asia/Dhaka', year: 'numeric', month: 'numeric', day: 'numeric' };
+            const msgDateStr = d.toLocaleDateString('en-US', options);
+            const todayDateStr = new Date().toLocaleDateString('en-US', options);
+            const yesterday = new Date(Date.now() - 86400000);
+            const yesterdayDateStr = yesterday.toLocaleDateString('en-US', options);
+            if (msgDateStr === todayDateStr) return 'Today';
+            if (msgDateStr === yesterdayDateStr) return 'Yesterday';
+            return d.toLocaleDateString('en-US', { timeZone: 'Asia/Dhaka', month: 'short', day: 'numeric' });
+        } catch {
+            return '';
+        }
+    }
+
     function renderReactionsHtml(reactions, currentU) {
         if (!reactions || !Array.isArray(reactions) || reactions.length === 0) return '';
         const grouped = {};
@@ -424,6 +179,47 @@
         }).join('');
 
         return `<div class="msg-reactions-row">${badges}</div>`;
+    }
+
+    function renderReplyQuoteHtml(replyTo, currentU) {
+        if (!replyTo) return '';
+        const isReplyToMe = replyTo.sender === currentU;
+        const authorName = isReplyToMe ? 'You' : (replyTo.sender === 'muaj' ? 'Muaj' : (replyTo.sender === 'hajera' ? 'Hajera' : (replyTo.sender || 'Unknown')));
+
+        let snippet = '';
+        let thumbHtml = '';
+
+        if (replyTo.isDeleted) {
+            snippet = '<span class="msg-quote-deleted">⚠️ Original message was deleted</span>';
+        } else {
+            if (replyTo.text) {
+                snippet = `<span class="msg-quote-text">${escapeHtml(replyTo.text)}</span>`;
+            }
+            if (replyTo.videoTitle || replyTo.videoId) {
+                const vTitle = replyTo.videoTitle || 'Shared Video';
+                const thumbUrl = replyTo.videoThumbnail ? `/thumbnails/${encodeURIComponent(replyTo.videoThumbnail)}` : '';
+                snippet = `<span class="msg-quote-media-indicator">🎬 ${escapeHtml(vTitle)}</span>` + (snippet ? ` — ${snippet}` : '');
+                if (thumbUrl) {
+                    thumbHtml = `<img src="${thumbUrl}" class="msg-quote-thumb" alt="" />`;
+                }
+            } else if (replyTo.voiceUrl) {
+                snippet = `<span class="msg-quote-media-indicator">🎙️ Voice Note</span>` + (snippet ? ` — ${snippet}` : '');
+            }
+        }
+
+        return `
+            <div class="msg-quote-card ${isReplyToMe ? 'is-reply-to-me' : 'is-reply-to-partner'}" data-reply-id="${replyTo.id || ''}" title="Click to jump to original message">
+                <div class="msg-quote-bar"></div>
+                <div class="msg-quote-content">
+                    <div class="msg-quote-author">
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                        <span>${escapeHtml(authorName)}</span>
+                    </div>
+                    <div class="msg-quote-snippet">${snippet}</div>
+                </div>
+                ${thumbHtml}
+            </div>
+        `;
     }
 
     function renderMessageHTML(msg) {
@@ -511,6 +307,9 @@
                         <button type="button" class="msg-react-emoji-btn" data-emoji="😂">😂</button>
                         <button type="button" class="msg-react-emoji-btn" data-emoji="🍿">🍿</button>
                     </div>
+                    <button type="button" class="msg-action-btn btn-reply" title="Reply to Message" data-reply-id="${msg.id}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                    </button>
                     ${msg.text ? `<button type="button" class="msg-action-btn btn-copy" title="Copy Text">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>` : ''}
@@ -520,6 +319,7 @@
                 </div>
                 <div class="msg-bubble-wrap">
                     <div class="msg-bubble">
+                        ${renderReplyQuoteHtml(msg.replyTo, currentUser)}
                         ${contentHtml}
                     </div>
                     ${reactionsHtml}
@@ -532,88 +332,281 @@
         `;
     }
 
-    function appendMessageToDOM(container, msg) {
+    function scrollToBottom(container) {
         if (!container) return;
-        if (container.querySelector(`[data-msg-id="${msg.id}"]`)) return;
-
-        // Remove empty state if present
-        const emptyState = container.querySelector('.msg-empty-state');
-        if (emptyState) emptyState.remove();
-
-        // Remove typing indicator if present
-        const typingRow = container.querySelector('.msg-typing-row');
-        if (typingRow) typingRow.remove();
-
-        container.insertAdjacentHTML('beforeend', renderMessageHTML(msg));
-        scrollToBottom(container);
-    }
-
-    function updateMessageReactionsDOM(messageId, reactions) {
-        document.querySelectorAll(`[data-msg-id="${messageId}"]`).forEach(row => {
-            const bubbleWrap = row.querySelector('.msg-bubble-wrap');
-            if (!bubbleWrap) return;
-            let reactionsRow = bubbleWrap.querySelector('.msg-reactions-row');
-            const newHtml = renderReactionsHtml(reactions, currentUser);
-            if (reactionsRow) {
-                if (newHtml) {
-                    reactionsRow.outerHTML = newHtml;
-                } else {
-                    reactionsRow.remove();
-                }
-            } else if (newHtml) {
-                const metaRow = bubbleWrap.querySelector('.msg-meta-row');
-                if (metaRow) {
-                    metaRow.insertAdjacentHTML('beforebegin', newHtml);
-                } else {
-                    bubbleWrap.insertAdjacentHTML('beforeend', newHtml);
-                }
-            }
+        requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
         });
     }
 
-    function scrollToBottom(container) {
-        if (container) {
-            requestAnimationFrame(() => {
-                container.scrollTop = container.scrollHeight;
-            });
+    // ------------------------------------------------------------
+    //  5. UNREAD BADGES & TOAST SYNCHRONIZER
+    // ------------------------------------------------------------
+    function updateUnreadBadges(count) {
+        State.unreadCount = Math.max(0, parseInt(count, 10) || 0);
+        const text = State.unreadCount > 99 ? '99+' : String(State.unreadCount);
+
+        const currentLauncher = document.getElementById('msgFloatingLauncher') || DOM.launcher;
+        const currentPill = document.getElementById('msgLauncherUnreadBadge') || DOM.unreadPill;
+        const currentDrawer = document.getElementById('msgDrawerWidget') || DOM.drawer;
+        const allNavBadges = document.querySelectorAll('.nav-msg-badge');
+
+        if (currentPill) {
+            currentPill.textContent = text;
+            currentPill.style.display = State.unreadCount > 0 ? 'flex' : 'none';
+        }
+
+        if (currentLauncher) {
+            const isDrawerOpen = currentDrawer && currentDrawer.classList.contains('is-open');
+            if (State.unreadCount > 0) {
+                currentLauncher.classList.add('has-unread');
+                currentLauncher.style.display = 'flex';
+            } else {
+                currentLauncher.classList.remove('has-unread');
+                if (isDrawerOpen) {
+                    currentLauncher.style.display = 'flex';
+                } else {
+                    currentLauncher.style.display = 'none';
+                }
+            }
+        }
+
+        allNavBadges.forEach(badge => {
+            badge.textContent = text;
+            badge.style.display = State.unreadCount > 0 ? 'flex' : 'none';
+        });
+
+        if (State.unreadCount === 0) {
+            hideFloatingMessageToast();
+        }
+    }
+
+    function showFloatingMessageToast(msg) {
+        if (!DOM.floatingToast || !msg) return;
+        const isDrawerOpen = DOM.drawer && DOM.drawer.classList.contains('is-open');
+        if (isDrawerOpen || State.isMessagesPage) return;
+
+        let previewText = 'New message';
+        if (msg.text) {
+            previewText = msg.text.length > 55 ? msg.text.slice(0, 55) + '…' : msg.text;
+        } else if (msg.voiceUrl) {
+            previewText = '🎤 Voice note';
+        } else if (msg.video) {
+            previewText = `🎬 Shared video: ${msg.video.title || 'video'}`;
+        }
+
+        if (DOM.floatingToastText) {
+            DOM.floatingToastText.textContent = previewText;
+        }
+
+        DOM.floatingToast.style.display = 'block';
+        void DOM.floatingToast.offsetWidth; // Force reflow
+        DOM.floatingToast.classList.add('is-visible');
+
+        clearTimeout(toastDismissTimeout);
+        toastDismissTimeout = setTimeout(() => {
+            hideFloatingMessageToast();
+        }, 6000);
+    }
+
+    function hideFloatingMessageToast() {
+        if (!DOM.floatingToast) return;
+        DOM.floatingToast.classList.remove('is-visible');
+        clearTimeout(toastDismissTimeout);
+        setTimeout(() => {
+            if (!DOM.floatingToast.classList.contains('is-visible')) {
+                DOM.floatingToast.style.display = 'none';
+            }
+        }, 350);
+    }
+
+    // ------------------------------------------------------------
+    //  6. SIDEBAR STATS & PRESENCE UI
+    // ------------------------------------------------------------
+    function updateStatsUI(stats) {
+        if (!stats) return;
+        State.stats = { ...State.stats, ...stats };
+
+        if (DOM.statTotalMessages) DOM.statTotalMessages.textContent = State.stats.totalMessages || 0;
+        if (DOM.statSharedVideos) DOM.statSharedVideos.textContent = State.stats.sharedVideos || 0;
+        if (DOM.statVoiceMessages) DOM.statVoiceMessages.textContent = State.stats.voiceMessages || 0;
+        if (DOM.tabCountVideos) DOM.tabCountVideos.textContent = State.stats.sharedVideos || 0;
+        if (DOM.tabCountVoice) DOM.tabCountVoice.textContent = State.stats.voiceMessages || 0;
+    }
+
+    function updatePartnerPresenceUI(presence) {
+        if (!presence) return;
+        State.partnerPresence = presence;
+
+        const status = presence.status || 'offline';
+        const isOnline = presence.isOnline || presence.isWatching;
+        const isWatching = presence.isWatching;
+        const statusClass = isWatching ? 'dot-watching' : (isOnline ? 'dot-online' : (presence.isIdle ? 'dot-idle' : 'dot-offline'));
+
+        document.querySelectorAll('.msg-partner-status-dot').forEach(dot => {
+            dot.className = `msg-status-dot msg-partner-status-dot ${statusClass}`;
+        });
+
+        document.querySelectorAll('.msg-partner-presence-text').forEach(el => {
+            if (isWatching && presence.videoTitle) {
+                el.innerHTML = `<span class="watching-highlight">🎬 Watching:</span> ${escapeHtml(presence.videoTitle)}`;
+            } else if (isOnline) {
+                el.textContent = '🟢 Active Now';
+            } else if (presence.isIdle) {
+                el.textContent = '🟡 Away';
+            } else {
+                el.textContent = '⚫ Offline';
+            }
+        });
+
+        const watchingBanner = document.getElementById('msgSidebarWatchingBanner') || DOM.sidebarWatchingBanner;
+        if (watchingBanner) {
+            if (isWatching && presence.videoTitle) {
+                watchingBanner.style.display = 'flex';
+                const titleEl = watchingBanner.querySelector('.msg-sidebar-watching-title');
+                if (titleEl) titleEl.textContent = presence.videoTitle;
+                const joinBtn = watchingBanner.querySelector('.msg-sidebar-watching-join');
+                if (joinBtn && presence.currentVideoId) {
+                    joinBtn.href = `/watch/${encodeURIComponent(presence.currentVideoId)}`;
+                }
+            } else {
+                watchingBanner.style.display = 'none';
+            }
         }
     }
 
     // ------------------------------------------------------------
-    //  6. FLOATING EMOJI BURST PARTICLE EFFECT
+    //  7. DOM MESSAGE INSERTION & DEDUPLICATION
     // ------------------------------------------------------------
-    function spawnEmojiParticle(x, y, emoji) {
-        const p = document.createElement('div');
-        p.className = 'msg-emoji-burst-particle';
-        p.textContent = emoji;
-        p.style.left = `${x}px`;
-        p.style.top = `${y}px`;
-        p.style.setProperty('--dx', `${(Math.random() - 0.5) * 60}px`);
-        p.style.setProperty('--rot', `${(Math.random() - 0.5) * 45}deg`);
-        document.body.appendChild(p);
-        setTimeout(() => p.remove(), 1200);
+    function appendOrUpdateMessage(msg) {
+        if (!msg || !msg.id) return;
+
+        State.messages.set(msg.id, msg);
+        if (msg.id > State.lastKnownId) {
+            State.lastKnownId = msg.id;
+        }
+
+        getActiveContainers().forEach(container => {
+            // Remove empty state if present
+            const emptyState = container.querySelector('.msg-empty-state');
+            if (emptyState) emptyState.remove();
+
+            // Check if element already exists in container
+            const existingRow = container.querySelector(`[data-msg-id="${msg.id}"]`);
+            if (existingRow) {
+                // Update read status if changed
+                if (msg.isRead) {
+                    const checkEl = existingRow.querySelector('.msg-seen-check');
+                    if (checkEl) {
+                        checkEl.classList.add('is-seen');
+                        checkEl.textContent = '✓✓';
+                        checkEl.title = 'Seen';
+                    }
+                }
+                // Update reactions
+                const bubbleWrap = existingRow.querySelector('.msg-bubble-wrap');
+                if (bubbleWrap) {
+                    const reactionsRow = bubbleWrap.querySelector('.msg-reactions-row');
+                    const newHtml = renderReactionsHtml(msg.reactions, currentUser);
+                    if (reactionsRow) {
+                        if (newHtml) reactionsRow.outerHTML = newHtml;
+                        else reactionsRow.remove();
+                    } else if (newHtml) {
+                        const metaRow = bubbleWrap.querySelector('.msg-meta-row');
+                        if (metaRow) metaRow.insertAdjacentHTML('beforebegin', newHtml);
+                        else bubbleWrap.insertAdjacentHTML('beforeend', newHtml);
+                    }
+                }
+                return;
+            }
+
+            // Remove typing indicator if present
+            const typingRow = container.querySelector('.msg-typing-row');
+            if (typingRow) typingRow.remove();
+
+            // Insert new message row at end
+            container.insertAdjacentHTML('beforeend', renderMessageHTML(msg));
+            applyActiveFiltersToRow(container.lastElementChild);
+            scrollToBottom(container);
+        });
+    }
+
+    function applyActiveFiltersToRow(row) {
+        if (!row || !row.classList.contains('msg-row')) return;
+
+        let visible = true;
+
+        // Media tab filter
+        if (State.activeMediaTab === 'videos') {
+            visible = !!row.querySelector('.msg-video-card');
+        } else if (State.activeMediaTab === 'voice') {
+            visible = !!row.querySelector('.msg-voice-player');
+        }
+
+        // Search keyword filter
+        if (visible && State.searchKeyword) {
+            const text = (row.querySelector('.msg-text-content')?.textContent || '').toLowerCase();
+            const videoTitle = (row.querySelector('.msg-video-card-title')?.textContent || '').toLowerCase();
+            visible = text.includes(State.searchKeyword) || videoTitle.includes(State.searchKeyword);
+        }
+
+        row.style.display = visible ? 'flex' : 'none';
+    }
+
+    function applyFiltersToAll() {
+        const container = DOM.fullPageList || DOM.drawerList;
+        if (!container) return;
+
+        container.querySelectorAll('.msg-row').forEach(row => {
+            applyActiveFiltersToRow(row);
+        });
     }
 
     // ------------------------------------------------------------
-    //  7. SENDING MESSAGES & ACTIONS
+    //  8. STATE RECONCILIATION & SYNC
     // ------------------------------------------------------------
-    function sendMessage(text, videoId = null) {
-        const cleanText = (text || '').trim();
-        if (!cleanText && !videoId) return;
+    function syncState(options = {}) {
+        if (State.isSyncing) return Promise.resolve();
+        State.isSyncing = true;
 
-        fetch('/api/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: cleanText, videoId })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success && data.message) {
-                getActiveContainers().forEach(c => appendMessageToDOM(c, data.message));
-                sendTypingState(false);
-            }
-        })
-        .catch(err => console.error('[messages] Send failed:', err));
+        const params = new URLSearchParams();
+        if (options.afterId) {
+            params.set('afterId', String(options.afterId));
+        } else if (options.full) {
+            params.set('limit', '80');
+        } else if (State.lastKnownId > 0 && State.isInitialSyncDone) {
+            params.set('afterId', String(State.lastKnownId));
+        } else {
+            params.set('limit', '80');
+        }
+
+        return fetch(`/api/messages?${params.toString()}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (Array.isArray(data.messages)) {
+                        data.messages.forEach(msg => appendOrUpdateMessage(msg));
+                    }
+                    if (data.stats) updateStatsUI(data.stats);
+                    if (data.partnerPresence) updatePartnerPresenceUI(data.partnerPresence);
+                    if (typeof data.unreadCount === 'number') updateUnreadBadges(data.unreadCount);
+
+                    State.isInitialSyncDone = true;
+
+                    // If active on messages page, ensure messages are marked as read
+                    if (State.isMessagesPage || (DOM.drawer && DOM.drawer.classList.contains('is-open'))) {
+                        if (State.unreadCount > 0 || (data.messages && data.messages.some(m => m.sender === partnerUser && !m.isRead))) {
+                            markMessagesAsRead();
+                        }
+                    }
+                }
+            })
+            .catch(err => {
+                console.warn('[messages] Sync error:', err.message);
+            })
+            .finally(() => {
+                State.isSyncing = false;
+            });
     }
 
     function markMessagesAsRead() {
@@ -628,7 +621,589 @@
                 updateUnreadBadges(remaining);
             }
         })
-        .catch(err => console.error('[messages] Error marking messages as read:', err));
+        .catch(() => {});
+    }
+
+    // Ingest initial SSR rendered messages from DOM on page load
+    function ingestSSRMessages() {
+        const container = DOM.fullPageList || DOM.drawerList;
+        if (!container) return;
+
+        container.querySelectorAll('.msg-row[data-msg-id]').forEach(row => {
+            const id = parseInt(row.getAttribute('data-msg-id'), 10);
+            if (id) {
+                if (id > State.lastKnownId) State.lastKnownId = id;
+                const isOut = row.classList.contains('msg-row-outgoing');
+                const textEl = row.querySelector('.msg-text-content');
+                const videoCard = row.querySelector('.msg-video-card');
+                const voicePlayer = row.querySelector('.msg-voice-player');
+                const quoteCard = row.querySelector('.msg-quote-card');
+
+                let video = null;
+                if (videoCard) {
+                    video = {
+                        id: videoCard.getAttribute('data-video-id'),
+                        title: videoCard.querySelector('.msg-video-card-title')?.textContent || 'Video',
+                        thumbnail: videoCard.querySelector('.msg-video-card-thumb-img')?.getAttribute('src')?.replace('/thumbnails/', '') || null
+                    };
+                }
+
+                let replyTo = null;
+                if (quoteCard) {
+                    const rId = parseInt(quoteCard.getAttribute('data-reply-id'), 10);
+                    if (rId) {
+                        replyTo = {
+                            id: rId,
+                            sender: quoteCard.classList.contains('is-reply-to-me') ? currentUser : partnerUser,
+                            text: quoteCard.querySelector('.msg-quote-text')?.textContent || null,
+                            isDeleted: !!quoteCard.querySelector('.msg-quote-deleted')
+                        };
+                    }
+                }
+
+                State.messages.set(id, {
+                    id,
+                    sender: isOut ? currentUser : partnerUser,
+                    recipient: isOut ? partnerUser : currentUser,
+                    text: textEl ? textEl.innerText : null,
+                    video,
+                    videoId: video ? video.id : null,
+                    voiceUrl: voicePlayer ? voicePlayer.getAttribute('data-audio-src') : null,
+                    replyTo,
+                    replyToId: replyTo ? replyTo.id : null
+                });
+            }
+        });
+    }
+
+    // ------------------------------------------------------------
+    //  9. SERVER-SENT EVENTS (SSE) REAL-TIME LISTENER
+    // ------------------------------------------------------------
+    function initSSE() {
+        if (sseSource) {
+            sseSource.close();
+            sseSource = null;
+        }
+
+        sseSource = new EventSource('/messages/stream');
+
+        sseSource.addEventListener('connected', (e) => {
+            State.sseConnected = true;
+            try {
+                const data = JSON.parse(e.data);
+                if (typeof data.unreadCount === 'number') updateUnreadBadges(data.unreadCount);
+                if (data.partnerPresence) updatePartnerPresenceUI(data.partnerPresence);
+                if (data.stats) updateStatsUI(data.stats);
+                if (data.activeWatchTogether) {
+                    window.dispatchEvent(new CustomEvent('wt:active-room', { detail: data.activeWatchTogether }));
+                }
+
+                // Incremental sync on connect/reconnect to catch any missed messages
+                syncState();
+            } catch {}
+        });
+
+        // Watch Together Real-Time Global Notification Listeners
+        sseSource.addEventListener('watch-together-invite', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                window.dispatchEvent(new CustomEvent('wt:invite', { detail: data }));
+            } catch {}
+        });
+
+        sseSource.addEventListener('watch-together-ended', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                window.dispatchEvent(new CustomEvent('wt:ended', { detail: data }));
+            } catch {}
+        });
+
+        sseSource.addEventListener('watch-together-status', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                window.dispatchEvent(new CustomEvent('wt:status', { detail: data }));
+            } catch {}
+        });
+
+        sseSource.addEventListener('new-message', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                const msg = data.message;
+                if (!msg) return;
+
+                appendOrUpdateMessage(msg);
+
+                if (data.stats) {
+                    updateStatsUI(data.stats);
+                } else {
+                    State.stats.totalMessages = (State.stats.totalMessages || 0) + 1;
+                    if (msg.video) State.stats.sharedVideos = (State.stats.sharedVideos || 0) + 1;
+                    if (msg.voiceUrl) State.stats.voiceMessages = (State.stats.voiceMessages || 0) + 1;
+                    updateStatsUI(State.stats);
+                }
+
+                if (msg.sender === partnerUser) {
+                    playNotificationChime();
+
+                    const isDrawerOpen = DOM.drawer && DOM.drawer.classList.contains('is-open');
+                    if (State.isMessagesPage || isDrawerOpen) {
+                        markMessagesAsRead();
+                    } else {
+                        showFloatingMessageToast(msg);
+                        if (typeof data.unreadCount === 'number') {
+                            updateUnreadBadges(data.unreadCount);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('[messages] SSE new-message error:', err);
+            }
+        });
+
+        sseSource.addEventListener('unread-count', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (typeof data.unreadCount === 'number') {
+                    updateUnreadBadges(data.unreadCount);
+                }
+            } catch {}
+        });
+
+        sseSource.addEventListener('messages-read', () => {
+            try {
+                document.querySelectorAll('.msg-seen-check').forEach(el => {
+                    el.classList.add('is-seen');
+                    el.textContent = '✓✓';
+                    el.title = 'Seen';
+                });
+            } catch {}
+        });
+
+        sseSource.addEventListener('user-typing', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.user === partnerUser) {
+                    showTypingIndicator(data.isTyping);
+                }
+            } catch {}
+        });
+
+        sseSource.addEventListener('message-deleted', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                const messageId = data.messageId;
+                if (messageId) {
+                    State.messages.delete(messageId);
+                    document.querySelectorAll(`[data-msg-id="${messageId}"]`).forEach(row => {
+                        row.style.opacity = '0';
+                        row.style.transform = 'scale(0.9)';
+                        setTimeout(() => row.remove(), 250);
+                    });
+                }
+                if (data.stats) updateStatsUI(data.stats);
+            } catch {}
+        });
+
+        sseSource.addEventListener('message-reaction', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                const msgObj = State.messages.get(data.messageId);
+                if (msgObj) msgObj.reactions = data.reactions;
+                updateMessageReactionsDOM(data.messageId, data.reactions);
+            } catch {}
+        });
+
+        sseSource.onerror = () => {
+            State.sseConnected = false;
+        };
+    }
+
+    function showTypingIndicator(show) {
+        getActiveContainers().forEach(container => {
+            let typingRow = container.querySelector('.msg-typing-row');
+            if (show) {
+                if (!typingRow) {
+                    typingRow = document.createElement('div');
+                    typingRow.className = 'msg-typing-row';
+                    typingRow.innerHTML = `
+                        <div class="msg-typing-bubble">
+                            <span class="msg-typing-dot"></span>
+                            <span class="msg-typing-dot"></span>
+                            <span class="msg-typing-dot"></span>
+                        </div>
+                    `;
+                    container.appendChild(typingRow);
+                    scrollToBottom(container);
+                }
+            } else {
+                if (typingRow) typingRow.remove();
+            }
+        });
+    }
+
+    function updateMessageReactionsDOM(messageId, reactions) {
+        document.querySelectorAll(`[data-msg-id="${messageId}"]`).forEach(row => {
+            const bubbleWrap = row.querySelector('.msg-bubble-wrap');
+            if (!bubbleWrap) return;
+            let reactionsRow = bubbleWrap.querySelector('.msg-reactions-row');
+            const newHtml = renderReactionsHtml(reactions, currentUser);
+            if (reactionsRow) {
+                if (newHtml) reactionsRow.outerHTML = newHtml;
+                else reactionsRow.remove();
+            } else if (newHtml) {
+                const metaRow = bubbleWrap.querySelector('.msg-meta-row');
+                if (metaRow) metaRow.insertAdjacentHTML('beforebegin', newHtml);
+                else bubbleWrap.insertAdjacentHTML('beforeend', newHtml);
+            }
+        });
+    }
+
+    // ------------------------------------------------------------
+    //  10. FLOATING EMOJI BURST PARTICLES
+    // ------------------------------------------------------------
+    function spawnEmojiParticle(x, y, emoji) {
+        const p = document.createElement('div');
+        p.className = 'msg-emoji-burst-particle';
+        p.textContent = emoji;
+        p.style.left = `${x}px`;
+        p.style.top = `${y}px`;
+        p.style.setProperty('--dx', `${(Math.random() - 0.5) * 60}px`);
+        p.style.setProperty('--rot', `${(Math.random() - 0.5) * 45}deg`);
+        document.body.appendChild(p);
+        setTimeout(() => p.remove(), 1200);
+    }
+
+    // ------------------------------------------------------------
+    //  10.5. WHATSAPP-STYLE REPLY CONTROLLER & CLICK-TO-JUMP
+    // ------------------------------------------------------------
+    function setReplyMessage(msgObj) {
+        if (!msgObj || !msgObj.id) return;
+        State.replyToMessage = msgObj;
+
+        const isReplyToMe = msgObj.sender === currentUser;
+        const authorName = isReplyToMe ? 'Yourself' : (msgObj.sender === 'muaj' ? 'Muaj' : (msgObj.sender === 'hajera' ? 'Hajera' : (msgObj.sender || 'Partner')));
+
+        let snippet = '';
+        if (msgObj.text) {
+            snippet = msgObj.text.length > 90 ? msgObj.text.slice(0, 90) + '…' : msgObj.text;
+        } else if (msgObj.video) {
+            snippet = `🎬 Shared Video: ${msgObj.video.title || 'Video'}`;
+        } else if (msgObj.voiceUrl) {
+            snippet = '🎙️ Voice Note';
+        } else {
+            snippet = 'Message';
+        }
+
+        const thumbUrl = msgObj.video && msgObj.video.thumbnail ? `/thumbnails/${encodeURIComponent(msgObj.video.thumbnail)}` : '';
+
+        document.querySelectorAll('.msg-reply-bar').forEach(replyBar => {
+            const nameEl = replyBar.querySelector('.msg-reply-bar-name');
+            const snippetEl = replyBar.querySelector('.msg-reply-bar-snippet');
+            const thumbEl = replyBar.querySelector('.msg-reply-bar-thumb');
+
+            if (nameEl) nameEl.textContent = `Replying to ${authorName}`;
+            if (snippetEl) snippetEl.textContent = snippet;
+            if (thumbEl) {
+                if (thumbUrl) {
+                    thumbEl.innerHTML = `<img src="${thumbUrl}" alt="" />`;
+                    thumbEl.style.display = 'block';
+                } else {
+                    thumbEl.innerHTML = '';
+                    thumbEl.style.display = 'none';
+                }
+            }
+
+            replyBar.style.display = 'flex';
+            replyBar.classList.add('is-active');
+        });
+
+        // Focus composer textarea
+        const activeTextarea = document.querySelector('.msg-fullpage-main .msg-textarea') || document.querySelector('.msg-drawer-widget .msg-textarea') || document.querySelector('.msg-textarea');
+        if (activeTextarea) {
+            activeTextarea.focus();
+            if (window.innerWidth <= 900) {
+                try {
+                    activeTextarea.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                } catch {}
+            }
+        }
+    }
+
+    function cancelReply() {
+        State.replyToMessage = null;
+        document.querySelectorAll('.msg-reply-bar').forEach(replyBar => {
+            replyBar.classList.remove('is-active');
+            replyBar.style.display = 'none';
+        });
+    }
+
+    function jumpToMessage(targetId) {
+        if (!targetId) return;
+        const numId = parseInt(targetId, 10);
+        if (!numId) return;
+
+        let targetEl = document.querySelector(`.msg-row[data-msg-id="${numId}"]`);
+        if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetEl.classList.remove('msg-row-target-highlight');
+            void targetEl.offsetWidth; // Trigger reflow for animation
+            targetEl.classList.add('msg-row-target-highlight');
+            setTimeout(() => {
+                targetEl.classList.remove('msg-row-target-highlight');
+            }, 2200);
+            return;
+        }
+
+        // Target not in DOM (older message), load older history
+        const allMsgRows = document.querySelectorAll('.msg-row[data-msg-id]');
+        let oldestId = null;
+        allMsgRows.forEach(row => {
+            const id = parseInt(row.getAttribute('data-msg-id'), 10);
+            if (id && (oldestId === null || id < oldestId)) oldestId = id;
+        });
+
+        if (oldestId && oldestId > numId) {
+            fetch(`/api/messages?limit=80&beforeId=${oldestId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && Array.isArray(data.messages) && data.messages.length > 0) {
+                        getActiveContainers().forEach(container => {
+                            const fragment = document.createDocumentFragment();
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = data.messages.map(m => {
+                                State.messages.set(m.id, m);
+                                return renderMessageHTML(m);
+                            }).join('');
+
+                            const firstChild = container.firstElementChild;
+                            while (tempDiv.firstChild) {
+                                fragment.appendChild(tempDiv.firstChild);
+                            }
+                            if (firstChild) {
+                                container.insertBefore(fragment, firstChild);
+                            } else {
+                                container.appendChild(fragment);
+                            }
+                        });
+
+                        targetEl = document.querySelector(`.msg-row[data-msg-id="${numId}"]`);
+                        if (targetEl) {
+                            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            targetEl.classList.add('msg-row-target-highlight');
+                            setTimeout(() => targetEl.classList.remove('msg-row-target-highlight'), 2200);
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+    }
+
+    // ------------------------------------------------------------
+    //  10.6. MOBILE LONG-PRESS ACTION SHEET & SWIPE-TO-REPLY
+    // ------------------------------------------------------------
+    let touchTimer = null;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let swipedRow = null;
+    let selectedMobileMsg = null;
+
+    const mobileBackdrop = document.getElementById('msgMobileActionsBackdrop');
+    const mobileSheet = document.getElementById('msgMobileActionsSheet');
+
+    function openMobileActionSheet(msgObj) {
+        if (!msgObj || !mobileBackdrop || !mobileSheet) return;
+        selectedMobileMsg = msgObj;
+
+        const deleteItem = mobileSheet.querySelector('.btn-mobile-delete');
+        const copyItem = mobileSheet.querySelector('.btn-mobile-copy');
+
+        if (deleteItem) {
+            const canDelete = msgObj.sender === currentUser || currentUser === 'muaj';
+            deleteItem.style.display = canDelete ? 'flex' : 'none';
+        }
+        if (copyItem) {
+            copyItem.style.display = msgObj.text ? 'flex' : 'none';
+        }
+
+        mobileBackdrop.style.display = 'block';
+        void mobileBackdrop.offsetWidth;
+        mobileBackdrop.classList.add('is-open');
+    }
+
+    function closeMobileActionSheet() {
+        if (!mobileBackdrop) return;
+        mobileBackdrop.classList.remove('is-open');
+        setTimeout(() => {
+            if (!mobileBackdrop.classList.contains('is-open')) {
+                mobileBackdrop.style.display = 'none';
+            }
+        }, 250);
+    }
+
+    if (mobileBackdrop) {
+        mobileBackdrop.addEventListener('click', (e) => {
+            if (e.target === mobileBackdrop) {
+                closeMobileActionSheet();
+                return;
+            }
+
+            const reactBtn = e.target.closest('.msg-mobile-react-btn');
+            if (reactBtn && selectedMobileMsg) {
+                const emoji = reactBtn.getAttribute('data-emoji') || reactBtn.textContent.trim();
+                toggleReaction(selectedMobileMsg.id, emoji, e.clientX, e.clientY);
+                closeMobileActionSheet();
+                return;
+            }
+
+            const replyBtn = e.target.closest('.btn-mobile-reply');
+            if (replyBtn && selectedMobileMsg) {
+                setReplyMessage(selectedMobileMsg);
+                closeMobileActionSheet();
+                return;
+            }
+
+            const copyBtn = e.target.closest('.btn-mobile-copy');
+            if (copyBtn && selectedMobileMsg && selectedMobileMsg.text) {
+                navigator.clipboard.writeText(selectedMobileMsg.text).then(() => {
+                    closeMobileActionSheet();
+                });
+                return;
+            }
+
+            const deleteBtn = e.target.closest('.btn-mobile-delete');
+            if (deleteBtn && selectedMobileMsg) {
+                const targetMsgId = selectedMobileMsg.id;
+                closeMobileActionSheet();
+                if (confirm('Delete this message permanently?')) {
+                    fetch(`/api/messages/delete/${targetMsgId}`, { method: 'POST' })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                State.messages.delete(targetMsgId);
+                                document.querySelectorAll(`[data-msg-id="${targetMsgId}"]`).forEach(row => {
+                                    row.style.opacity = '0';
+                                    row.style.transform = 'scale(0.85)';
+                                    setTimeout(() => row.remove(), 250);
+                                });
+                                if (data.stats) updateStatsUI(data.stats);
+                            }
+                        });
+                }
+                return;
+            }
+        });
+    }
+
+    // Touch events on messages for Long-Press and Swipe-to-Reply
+    document.addEventListener('touchstart', (e) => {
+        const row = e.target.closest('.msg-row');
+        if (!row) return;
+
+        // Skip if touching interactive items inside message like buttons or links
+        if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.msg-quote-card')) return;
+
+        const touch = e.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        swipedRow = row;
+
+        const msgId = parseInt(row.getAttribute('data-msg-id'), 10);
+        const msgObj = State.messages.get(msgId) || {
+            id: msgId,
+            sender: row.classList.contains('msg-row-outgoing') ? currentUser : partnerUser,
+            text: row.querySelector('.msg-text-content')?.innerText || null
+        };
+
+        touchTimer = setTimeout(() => {
+            if (navigator.vibrate) {
+                try { navigator.vibrate(35); } catch {}
+            }
+            openMobileActionSheet(msgObj);
+            touchTimer = null;
+            swipedRow = null;
+        }, 450);
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!swipedRow || e.touches.length > 1) {
+            clearTimeout(touchTimer);
+            touchTimer = null;
+            return;
+        }
+
+        const touch = e.touches[0];
+        const dx = touch.clientX - touchStartX;
+        const dy = touch.clientY - touchStartY;
+
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+            clearTimeout(touchTimer);
+            touchTimer = null;
+        }
+
+        // Swipe right to reply
+        if (dx > 15 && Math.abs(dy) < 30) {
+            const dragDistance = Math.min(dx * 0.45, 65);
+            swipedRow.style.transform = `translateX(${dragDistance}px)`;
+            swipedRow.style.transition = 'none';
+            if (dragDistance > 45) {
+                swipedRow.classList.add('is-swipe-ready');
+            } else {
+                swipedRow.classList.remove('is-swipe-ready');
+            }
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+        clearTimeout(touchTimer);
+        touchTimer = null;
+
+        if (swipedRow) {
+            const wasReady = swipedRow.classList.contains('is-swipe-ready');
+            const msgId = parseInt(swipedRow.getAttribute('data-msg-id'), 10);
+            const msgObj = State.messages.get(msgId) || {
+                id: msgId,
+                sender: swipedRow.classList.contains('msg-row-outgoing') ? currentUser : partnerUser,
+                text: swipedRow.querySelector('.msg-text-content')?.innerText || null
+            };
+
+            swipedRow.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+            swipedRow.style.transform = '';
+            swipedRow.classList.remove('is-swipe-ready');
+
+            if (wasReady && msgObj) {
+                if (navigator.vibrate) {
+                    try { navigator.vibrate(30); } catch {}
+                }
+                setReplyMessage(msgObj);
+            }
+            swipedRow = null;
+        }
+    }, { passive: true });
+
+    // ------------------------------------------------------------
+    //  11. SENDING MESSAGES & INTERACTIONS
+    // ------------------------------------------------------------
+    function sendMessage(text, videoId = null) {
+        const cleanText = (text || '').trim();
+        if (!cleanText && !videoId) return;
+
+        const replyToId = State.replyToMessage ? State.replyToMessage.id : null;
+        cancelReply();
+
+        fetch('/api/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: cleanText, videoId, replyToId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.message) {
+                appendOrUpdateMessage(data.message);
+                if (data.stats) updateStatsUI(data.stats);
+                sendTypingState(false);
+            }
+        })
+        .catch(err => console.error('[messages] Send failed:', err));
     }
 
     function sendTypingState(isTyping) {
@@ -661,8 +1236,13 @@
     }
 
     // ------------------------------------------------------------
-    //  8. VOICE RECORDING (MediaRecorder API)
+    //  12. VOICE RECORDING (MediaRecorder API)
     // ------------------------------------------------------------
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recordInterval = null;
+    let recordSeconds = 0;
+
     function setupVoiceRecording(recordBtn, recordingBar, cancelBtn, sendVoiceBtn) {
         if (!recordBtn || !recordingBar) return;
 
@@ -719,8 +1299,12 @@
                     const blob = new Blob(audioChunks, { type: 'audio/webm' });
                     if (blob.size < 800) return; // Too short
 
+                    const replyToId = State.replyToMessage ? State.replyToMessage.id : null;
+                    cancelReply();
+
                     const formData = new FormData();
                     formData.append('audio', blob, 'voice.webm');
+                    if (replyToId) formData.append('replyToId', replyToId);
 
                     fetch('/api/messages/voice', {
                         method: 'POST',
@@ -729,7 +1313,8 @@
                     .then(res => res.json())
                     .then(data => {
                         if (data.success && data.message) {
-                            getActiveContainers().forEach(c => appendMessageToDOM(c, data.message));
+                            appendOrUpdateMessage(data.message);
+                            if (data.stats) updateStatsUI(data.stats);
                         }
                     })
                     .catch(err => console.error('[messages] Voice send failed:', err));
@@ -741,7 +1326,7 @@
     }
 
     // ------------------------------------------------------------
-    //  9. INTERACTIVE AUDIO PLAYER WITH SCRUBBER & SPEED
+    //  13. INTERACTIVE AUDIO PLAYER WITH SCRUBBER & SPEED
     // ------------------------------------------------------------
     let activeAudio = null;
     let activePlayer = null;
@@ -873,7 +1458,7 @@
     });
 
     // ------------------------------------------------------------
-    //  10. MESSAGE ACTIONS: REACTIONS, COPY, DELETE
+    //  14. ACTIONS: REACTIONS, COPY, DELETE, EMPTY STARTERS
     // ------------------------------------------------------------
     document.addEventListener('click', (e) => {
         // 1. Emoji Reaction Click from Toolbar or Badge
@@ -886,6 +1471,39 @@
             if (messageId && emoji) {
                 toggleReaction(messageId, emoji, e.clientX, e.clientY);
             }
+            return;
+        }
+
+        // 1.5. Reply Button Click from Toolbar
+        const replyBtn = e.target.closest('.btn-reply');
+        if (replyBtn) {
+            const row = replyBtn.closest('.msg-row');
+            if (row) {
+                const msgId = parseInt(row.getAttribute('data-msg-id'), 10);
+                const msgObj = State.messages.get(msgId) || {
+                    id: msgId,
+                    sender: row.classList.contains('msg-row-outgoing') ? currentUser : partnerUser,
+                    text: row.querySelector('.msg-text-content')?.innerText || null
+                };
+                setReplyMessage(msgObj);
+            }
+            return;
+        }
+
+        // 1.6. Click-to-Jump Quoted Message Card Click
+        const quoteCard = e.target.closest('.msg-quote-card');
+        if (quoteCard) {
+            const replyId = quoteCard.getAttribute('data-reply-id');
+            if (replyId) {
+                jumpToMessage(replyId);
+            }
+            return;
+        }
+
+        // 1.7. Cancel Reply Button in Composer
+        const cancelReplyBtn = e.target.closest('.msg-reply-bar-cancel');
+        if (cancelReplyBtn) {
+            cancelReply();
             return;
         }
 
@@ -919,9 +1537,11 @@
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
+                            State.messages.delete(messageId);
                             row.style.opacity = '0';
                             row.style.transform = 'scale(0.85)';
                             setTimeout(() => row.remove(), 250);
+                            if (data.stats) updateStatsUI(data.stats);
                         }
                     });
             }
@@ -949,7 +1569,7 @@
     });
 
     // ------------------------------------------------------------
-    //  11. COMPOSER SETUP (Drawer & Full Page)
+    //  15. COMPOSER SETUP
     // ------------------------------------------------------------
     function setupComposer(formOrWrap) {
         if (!formOrWrap) return;
@@ -1070,113 +1690,32 @@
     }
 
     // ------------------------------------------------------------
-    //  12. FLOATING LAUNCHER & DRAWER INTERACTION
+    //  16. IN-CHAT SEARCH & SHARED MEDIA TABS
     // ------------------------------------------------------------
-    function openDrawer() {
-        if (!drawer || !launcher) return;
-        drawer.classList.add('is-open');
-        launcher.classList.add('is-open');
-        launcher.classList.remove('has-unread');
-        hideFloatingMessageToast();
-        loadDrawerHistory();
-        markMessagesAsRead();
-        if (drawerMessagesList) {
-            scrollToBottom(drawerMessagesList);
-        }
-        const input = drawer.querySelector('.msg-textarea');
-        if (input) input.focus();
-    }
-
-    function closeDrawer() {
-        if (!drawer || !launcher) return;
-        drawer.classList.remove('is-open');
-        launcher.classList.remove('is-open');
-        if (currentUnreadCount <= 0) {
-            launcher.classList.remove('has-unread');
-            launcher.style.display = 'none';
-        } else {
-            launcher.classList.add('has-unread');
-            launcher.style.display = 'flex';
-        }
-    }
-
-    if (launcher && drawer) {
-        launcher.addEventListener('click', () => {
-            if (drawer.classList.contains('is-open')) {
-                closeDrawer();
-            } else {
-                openDrawer();
-            }
-        });
-
-        if (closeBtn) {
-            closeBtn.addEventListener('click', closeDrawer);
-        }
-    }
-
-    if (floatingToast) {
-        floatingToast.addEventListener('click', (e) => {
-            if (e.target.closest('#msgFloatingToastClose') || e.target.closest('.msg-floating-toast-close-btn')) {
-                hideFloatingMessageToast();
-                return;
-            }
-            hideFloatingMessageToast();
-            if (drawer && launcher) {
-                openDrawer();
-            } else {
-                window.location.href = '/messages';
-            }
-        });
-    }
-
-    // ------------------------------------------------------------
-    //  13. IN-CHAT SEARCH & SHARED MEDIA TABS (/messages)
-    // ------------------------------------------------------------
-    const searchToggleBtn = document.getElementById('msgSearchToggleBtn');
-    const inChatSearchBar = document.getElementById('msgInChatSearchBar');
-    const inChatSearchInput = document.getElementById('msgInChatSearchInput');
-    const inChatSearchClose = document.getElementById('msgInChatSearchClose');
-
-    if (searchToggleBtn && inChatSearchBar && inChatSearchInput) {
-        searchToggleBtn.addEventListener('click', () => {
-            const isOpen = inChatSearchBar.classList.toggle('is-open');
+    if (DOM.searchToggleBtn && DOM.inChatSearchBar && DOM.inChatSearchInput) {
+        DOM.searchToggleBtn.addEventListener('click', () => {
+            const isOpen = DOM.inChatSearchBar.classList.toggle('is-open');
             if (isOpen) {
-                inChatSearchInput.value = '';
-                inChatSearchInput.focus();
+                DOM.inChatSearchInput.value = '';
+                DOM.inChatSearchInput.focus();
             } else {
-                filterMessagesByKeyword('');
+                State.searchKeyword = '';
+                applyFiltersToAll();
             }
         });
 
-        if (inChatSearchClose) {
-            inChatSearchClose.addEventListener('click', () => {
-                inChatSearchBar.classList.remove('is-open');
-                inChatSearchInput.value = '';
-                filterMessagesByKeyword('');
+        if (DOM.inChatSearchClose) {
+            DOM.inChatSearchClose.addEventListener('click', () => {
+                DOM.inChatSearchBar.classList.remove('is-open');
+                DOM.inChatSearchInput.value = '';
+                State.searchKeyword = '';
+                applyFiltersToAll();
             });
         }
 
-        inChatSearchInput.addEventListener('input', () => {
-            filterMessagesByKeyword(inChatSearchInput.value.toLowerCase().trim());
-        });
-    }
-
-    function filterMessagesByKeyword(keyword) {
-        const container = fullPageMessagesList || drawerMessagesList;
-        if (!container) return;
-
-        container.querySelectorAll('.msg-row').forEach(row => {
-            if (!keyword) {
-                row.style.display = 'flex';
-                return;
-            }
-            const text = (row.querySelector('.msg-text-content')?.textContent || '').toLowerCase();
-            const videoTitle = (row.querySelector('.msg-video-card-title')?.textContent || '').toLowerCase();
-            if (text.includes(keyword) || videoTitle.includes(keyword)) {
-                row.style.display = 'flex';
-            } else {
-                row.style.display = 'none';
-            }
+        DOM.inChatSearchInput.addEventListener('input', () => {
+            State.searchKeyword = DOM.inChatSearchInput.value.toLowerCase().trim();
+            applyFiltersToAll();
         });
     }
 
@@ -1185,63 +1724,27 @@
         btn.addEventListener('click', () => {
             document.querySelectorAll('.msg-media-tab-btn').forEach(b => b.classList.remove('is-active'));
             btn.classList.add('is-active');
-            const tab = btn.getAttribute('data-tab');
-            const container = fullPageMessagesList;
-            if (!container) return;
-
-            container.querySelectorAll('.msg-row').forEach(row => {
-                if (tab === 'all') {
-                    row.style.display = 'flex';
-                } else if (tab === 'videos') {
-                    row.style.display = row.querySelector('.msg-video-card') ? 'flex' : 'none';
-                } else if (tab === 'voice') {
-                    row.style.display = row.querySelector('.msg-voice-player') ? 'flex' : 'none';
-                }
-            });
+            State.activeMediaTab = btn.getAttribute('data-tab') || 'all';
+            applyFiltersToAll();
         });
     });
 
-    // Initialize Composers
-    document.querySelectorAll('.msg-composer-wrap').forEach(setupComposer);
-
-    // Initial Auto-scroll
-    getActiveContainers().forEach(scrollToBottom);
-
-    // If on full-page messages view, mark messages as read on load
-    if (fullPageMessagesList) {
-        markMessagesAsRead();
+    // ------------------------------------------------------------
+    //  17. FLOATING TOAST & LAUNCHER INTERACTIONS
+    // ------------------------------------------------------------
+    if (DOM.floatingToast) {
+        DOM.floatingToast.addEventListener('click', (e) => {
+            if (e.target.closest('#msgFloatingToastClose') || e.target.closest('.msg-floating-toast-close-btn')) {
+                hideFloatingMessageToast();
+                return;
+            }
+            hideFloatingMessageToast();
+            window.location.href = '/messages';
+        });
     }
 
-    // Auto mark as read when window gains focus or becomes visible while viewing chat
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            const isDrawerOpen = drawer && drawer.classList.contains('is-open');
-            if (isDrawerOpen || fullPageMessagesList) {
-                markMessagesAsRead();
-            }
-        }
-    });
-
-    window.addEventListener('focus', () => {
-        const isDrawerOpen = drawer && drawer.classList.contains('is-open');
-        if (isDrawerOpen || fullPageMessagesList) {
-            markMessagesAsRead();
-        }
-    });
-
-    // Cleanup SSE on page unload to prevent connection overlap during navigation
-    window.addEventListener('beforeunload', () => {
-        if (sseSource) {
-            sseSource.close();
-            sseSource = null;
-        }
-    });
-
-    // Start SSE listener
-    initSSE();
-
     // ------------------------------------------------------------
-    //  14. GLOBAL VIDEO SHARE BUTTON ("Share to Chat" on /watch/:id)
+    //  18. GLOBAL VIDEO SHARE BUTTON ("Share to Chat" on /watch/:id)
     // ------------------------------------------------------------
     const shareToChatBtn = document.getElementById('btnShareToChat');
     if (shareToChatBtn) {
@@ -1250,12 +1753,6 @@
             if (!videoId) return;
 
             sendMessage('', videoId);
-
-            if (drawer && launcher) {
-                drawer.classList.add('is-open');
-                launcher.classList.add('is-open');
-                if (drawerMessagesList) scrollToBottom(drawerMessagesList);
-            }
 
             const originalHtml = shareToChatBtn.innerHTML;
             shareToChatBtn.innerHTML = `
@@ -1270,12 +1767,100 @@
         });
     }
 
+    // Right-click context menu handler on desktop
+    document.addEventListener('contextmenu', (e) => {
+        const row = e.target.closest('.msg-row');
+        if (!row) return;
+
+        if (e.target.closest('input') || e.target.closest('textarea') || e.target.closest('a') || e.target.closest('.msg-voice-player') || e.target.closest('.msg-video-card')) {
+            return;
+        }
+
+        e.preventDefault();
+        const msgId = parseInt(row.getAttribute('data-msg-id'), 10);
+        const msgObj = State.messages.get(msgId) || {
+            id: msgId,
+            sender: row.classList.contains('msg-row-outgoing') ? currentUser : partnerUser,
+            text: row.querySelector('.msg-text-content')?.innerText || null
+        };
+        openMobileActionSheet(msgObj);
+    });
+
+    // Escape key listener to close action sheets / cancel reply
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (mobileBackdrop && mobileBackdrop.classList.contains('is-open')) {
+                closeMobileActionSheet();
+                return;
+            }
+            if (State.replyToMessage) {
+                cancelReply();
+                return;
+            }
+        }
+    });
+
     // ------------------------------------------------------------
-    //  15. MOBILE VIRTUAL KEYBOARD / VIEWPORT ADAPTER
+    //  19. LIFECYCLE, BFCACHE & NAVIGATION LISTENERS
     // ------------------------------------------------------------
+    // Initialize Composers
+    document.querySelectorAll('.msg-composer-wrap').forEach(setupComposer);
+
+    // Ingest SSR messages
+    ingestSSRMessages();
+
+    // Initial Auto-scroll
+    getActiveContainers().forEach(scrollToBottom);
+
+    // Initial Unread Count Sync from DOM
+    if (DOM.unreadPill && DOM.unreadPill.textContent) {
+        updateUnreadBadges(parseInt(DOM.unreadPill.textContent, 10) || 0);
+    } else {
+        const initialNavBadge = document.querySelector('.nav-msg-badge');
+        if (initialNavBadge && initialNavBadge.textContent) {
+            updateUnreadBadges(parseInt(initialNavBadge.textContent, 10) || 0);
+        }
+    }
+
+    // Start Real-Time SSE Stream
+    initSSE();
+
+    // Initial background reconciliation sync
+    syncState();
+
+    // Reconcile and reconnect on page restoration from bfcache
+    window.addEventListener('pageshow', (event) => {
+        if (event.persisted || !State.sseConnected) {
+            initSSE();
+            syncState();
+        }
+    });
+
+    // Reconcile and mark as read on window focus / visibility change
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            if (!State.sseConnected) initSSE();
+            syncState();
+        }
+    });
+
+    window.addEventListener('focus', () => {
+        if (!State.sseConnected) initSSE();
+        syncState();
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        if (sseSource) {
+            sseSource.close();
+            sseSource = null;
+        }
+    });
+
+    // Mobile Virtual Keyboard Scroll Adjuster
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', () => {
-            if (fullPageMessagesList || (drawer && drawer.classList.contains('is-open'))) {
+            if (State.isMessagesPage) {
                 setTimeout(() => {
                     getActiveContainers().forEach(scrollToBottom);
                 }, 100);

@@ -14,7 +14,7 @@
     <link rel="manifest" href="/manifest.json">
     <script src="/js/theme-init.js?v=6.7"></script>
     <link rel="stylesheet" href="/css/style.css?v=6.7">
-    <link rel="stylesheet" href="/css/messages.css?v=2.8">
+    <link rel="stylesheet" href="/css/messages.css?v=3.0">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -26,7 +26,7 @@
             <% const partnerUsername = user === 'muaj' ? 'hajera' : 'muaj'; %>
 
             <% const hasUnread = typeof unreadCount !== 'undefined' && unreadCount > 0; %>
-            <button type="button" class="msg-floating-launcher <%= hasUnread ? 'has-unread' : '' %>" id="msgFloatingLauncher" aria-label="Open Direct Messages" title="Chat with <%= partnerName %>" style="<%= hasUnread ? 'display:flex;' : 'display:none;' %>">
+            <a href="/messages" class="msg-floating-launcher <%= hasUnread ? 'has-unread' : '' %>" id="msgFloatingLauncher" aria-label="Open Direct Messages" title="Chat with <%= partnerName %>" style="<%= hasUnread ? 'display:flex;' : 'display:none;' %>">
                 <div class="msg-launcher-icon-wrap">
                     <svg class="msg-launcher-icon" viewBox="0 0 28 28" fill="none" width="28" height="28">
                         <path d="M19.5 4.5C14.8 4.5 11 7.8 11 11.8C11 13 11.4 14.1 12.1 15.1C11.5 16.3 10.3 17.5 9.2 18.1C10.8 18.2 12.5 17.7 13.7 16.8C15.3 17.9 17.3 18.6 19.5 18.6C24.2 18.6 28 15.3 28 11.3C28 7.3 24.2 4.5 19.5 4.5Z" fill="#08090f" opacity="0.32"/>
@@ -41,7 +41,7 @@
                     </svg>
                 </div>
                 <span class="msg-unread-badge-pill" id="msgLauncherUnreadBadge" style="<%= hasUnread ? 'display:flex;' : 'display:none;' %>"><%= typeof unreadCount !== 'undefined' ? unreadCount : 0 %></span>
-            </button>
+            </a>
 
             <div class="msg-drawer-widget" id="msgDrawerWidget">
                 <!-- Header -->
@@ -105,6 +105,24 @@
                         </div>
                     </div>
 
+                    <!-- Quoted Reply Preview Bar (WhatsApp-style) -->
+                    <div class="msg-reply-bar" style="display:none;">
+                        <div class="msg-reply-bar-left">
+                            <div class="msg-reply-bar-indicator"></div>
+                            <div class="msg-reply-bar-details">
+                                <div class="msg-reply-bar-header">
+                                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                    <span class="msg-reply-bar-name">Replying to <%= partnerName %></span>
+                                </div>
+                                <div class="msg-reply-bar-snippet">...</div>
+                            </div>
+                        </div>
+                        <div class="msg-reply-bar-right">
+                            <div class="msg-reply-bar-thumb" style="display:none;"></div>
+                            <button type="button" class="msg-reply-bar-cancel" title="Cancel reply" aria-label="Cancel reply">&times;</button>
+                        </div>
+                    </div>
+
                     <!-- Input Row -->
                     <div class="msg-input-row">
                         <div class="msg-input-wrap">
@@ -143,7 +161,7 @@
                         <p class="msg-floating-toast-text" id="msgFloatingToastText">New message</p>
                     </div>
                     <div class="msg-floating-toast-actions">
-                        <button type="button" class="msg-floating-toast-reply-btn" id="msgFloatingToastReply">Reply</button>
+                        <a href="/messages" class="msg-floating-toast-reply-btn" id="msgFloatingToastReply">Reply</a>
                         <button type="button" class="msg-floating-toast-close-btn" id="msgFloatingToastClose" title="Dismiss">&times;</button>
                     </div>
                 </div>
@@ -290,7 +308,8 @@
             </div>
 
             <script src="/js/app.js?v=6.6"></script>
-            <script src="/js/messages.js?v=2.8"></script>
+            <script src="/js/messages.js?v=3.0"></script>
+            <script src="/js/watchTogether.js?v=3.0"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').catch(function() {});

@@ -78,6 +78,47 @@ function renderReactionsHtml(reactions, currentU) {
     return `<div class="msg-reactions-row">${badges}</div>`;
 }
 
+function renderReplyQuoteHtml(replyTo, currentU) {
+    if (!replyTo) return '';
+    const isReplyToMe = replyTo.sender === currentU;
+    const authorName = isReplyToMe ? 'You' : (replyTo.sender === 'muaj' ? 'Muaj' : (replyTo.sender === 'hajera' ? 'Hajera' : (replyTo.sender || 'Unknown')));
+
+    let contentSnippet = '';
+    let mediaThumbHtml = '';
+
+    if (replyTo.isDeleted) {
+        contentSnippet = '<span class="msg-quote-deleted">⚠️ Original message was deleted</span>';
+    } else {
+        if (replyTo.text) {
+            contentSnippet = `<span class="msg-quote-text">${h(replyTo.text)}</span>`;
+        }
+        if (replyTo.videoTitle || replyTo.videoId) {
+            const vTitle = replyTo.videoTitle || 'Shared Video';
+            const thumbUrl = replyTo.videoThumbnail ? `/thumbnails/${encodeURIComponent(replyTo.videoThumbnail)}` : '';
+            contentSnippet = `<span class="msg-quote-media-indicator">🎬 ${h(vTitle)}</span>` + (contentSnippet ? ` — ${contentSnippet}` : '');
+            if (thumbUrl) {
+                mediaThumbHtml = `<img src="${thumbUrl}" class="msg-quote-thumb" alt="" />`;
+            }
+        } else if (replyTo.voiceUrl) {
+            contentSnippet = `<span class="msg-quote-media-indicator">🎙️ Voice Note</span>` + (contentSnippet ? ` — ${contentSnippet}` : '');
+        }
+    }
+
+    return `
+        <div class="msg-quote-card ${isReplyToMe ? 'is-reply-to-me' : 'is-reply-to-partner'}" data-reply-id="${replyTo.id || ''}" title="Click to jump to original message">
+            <div class="msg-quote-bar"></div>
+            <div class="msg-quote-content">
+                <div class="msg-quote-author">
+                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                    <span>${h(authorName)}</span>
+                </div>
+                <div class="msg-quote-snippet">${contentSnippet}</div>
+            </div>
+            ${mediaThumbHtml}
+        </div>
+    `;
+}
+
 const currentUser = typeof user !== 'undefined' && user ? user : 'user';
 
 let lastDate = '';
@@ -188,6 +229,9 @@ if (msgList.length === 0) {
                         <button type="button" class="msg-react-emoji-btn" data-emoji="😂">😂</button>
                         <button type="button" class="msg-react-emoji-btn" data-emoji="🍿">🍿</button>
                     </div>
+                    <button type="button" class="msg-action-btn btn-reply" title="Reply to Message" data-reply-id="${msg.id}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                    </button>
                     ${msg.text ? `<button type="button" class="msg-action-btn btn-copy" title="Copy Text">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>` : ''}
@@ -197,6 +241,7 @@ if (msgList.length === 0) {
                 </div>
                 <div class="msg-bubble-wrap">
                     <div class="msg-bubble">
+                        ${renderReplyQuoteHtml(msg.replyTo, currentUser)}
                         ${videoCardHtml}
                         ${voicePlayerHtml}
                         ${textContentHtml}
@@ -306,15 +351,15 @@ const videoOptionsHtml = videoList.map(v => `
             <!-- Stats Grid -->
             <div class="msg-sidebar-stats-grid">
                 <div class="msg-stat-card">
-                    <div class="msg-stat-value">${h(msgStats.totalMessages || 0)}</div>
+                    <div class="msg-stat-value" id="msgStatTotalMessages">${h(msgStats.totalMessages || 0)}</div>
                     <div class="msg-stat-label">Messages</div>
                 </div>
                 <div class="msg-stat-card">
-                    <div class="msg-stat-value">${h(msgStats.sharedVideos || 0)}</div>
+                    <div class="msg-stat-value" id="msgStatSharedVideos">${h(msgStats.sharedVideos || 0)}</div>
                     <div class="msg-stat-label">Shared Clips</div>
                 </div>
                 <div class="msg-stat-card">
-                    <div class="msg-stat-value">${h(msgStats.voiceMessages || 0)}</div>
+                    <div class="msg-stat-value" id="msgStatVoiceMessages">${h(msgStats.voiceMessages || 0)}</div>
                     <div class="msg-stat-label">Voice Notes</div>
                 </div>
                 <div class="msg-stat-card">
@@ -330,11 +375,11 @@ const videoOptionsHtml = videoList.map(v => `
                 </button>
                 <button type="button" class="msg-media-tab-btn" data-tab="videos">
                     <span>🎬 Shared Videos</span>
-                    <span class="tab-count">${h(msgStats.sharedVideos || 0)}</span>
+                    <span class="tab-count" id="msgTabCountVideos">${h(msgStats.sharedVideos || 0)}</span>
                 </button>
                 <button type="button" class="msg-media-tab-btn" data-tab="voice">
                     <span>🎙️ Voice Notes</span>
-                    <span class="tab-count">${h(msgStats.voiceMessages || 0)}</span>
+                    <span class="tab-count" id="msgTabCountVoice">${h(msgStats.voiceMessages || 0)}</span>
                 </button>
             </div>
         </aside>
@@ -426,6 +471,24 @@ const videoOptionsHtml = videoList.map(v => `
                     </div>
                 </div>
 
+                <!-- Quoted Reply Preview Bar (WhatsApp-style) -->
+                <div class="msg-reply-bar" id="msgReplyBar" style="display:none;">
+                    <div class="msg-reply-bar-left">
+                        <div class="msg-reply-bar-indicator"></div>
+                        <div class="msg-reply-bar-details">
+                            <div class="msg-reply-bar-header">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                <span class="msg-reply-bar-name">Replying to ${h(partnerName)}</span>
+                            </div>
+                            <div class="msg-reply-bar-snippet">...</div>
+                        </div>
+                    </div>
+                    <div class="msg-reply-bar-right">
+                        <div class="msg-reply-bar-thumb" style="display:none;"></div>
+                        <button type="button" class="msg-reply-bar-cancel" title="Cancel reply" aria-label="Cancel reply">&times;</button>
+                    </div>
+                </div>
+
                 <!-- Input Row -->
                 <div class="msg-input-row">
                     <button type="button" class="msg-composer-btn msg-attach-btn" title="Share a Video">
@@ -457,5 +520,34 @@ const videoOptionsHtml = videoList.map(v => `
             </div>
         </section>
     </main>
+
+    <!-- Mobile Message Long-Press Action Sheet -->
+    <div class="msg-mobile-actions-backdrop" id="msgMobileActionsBackdrop" style="display:none;">
+        <div class="msg-mobile-actions-sheet" id="msgMobileActionsSheet">
+            <div class="msg-mobile-actions-pill"></div>
+            <div class="msg-mobile-reactions-row">
+                <button type="button" class="msg-mobile-react-btn" data-emoji="❤️">❤️</button>
+                <button type="button" class="msg-mobile-react-btn" data-emoji="🔥">🔥</button>
+                <button type="button" class="msg-mobile-react-btn" data-emoji="😂">😂</button>
+                <button type="button" class="msg-mobile-react-btn" data-emoji="🍿">🍿</button>
+                <button type="button" class="msg-mobile-react-btn" data-emoji="🥺">🥺</button>
+                <button type="button" class="msg-mobile-react-btn" data-emoji="👍">👍</button>
+            </div>
+            <div class="msg-mobile-actions-list">
+                <button type="button" class="msg-mobile-action-item btn-mobile-reply">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                    <span>Reply</span>
+                </button>
+                <button type="button" class="msg-mobile-action-item btn-mobile-copy">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copy Text</span>
+                </button>
+                <button type="button" class="msg-mobile-action-item btn-mobile-delete" style="display:none; color:#ef4444;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    <span>Delete Message</span>
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 ` }) %>

@@ -38,47 +38,8 @@ const voiceUpload = multer({
     }
 });
 
-// ============================================================
-//  SSE REAL-TIME CLIENT STORE
-// ============================================================
-const sseClients = new Map(); // username -> Set of res objects
-
-function addSseClient(username, res) {
-    if (!sseClients.has(username)) {
-        sseClients.set(username, new Set());
-    }
-    sseClients.get(username).add(res);
-}
-
-function removeSseClient(username, res) {
-    if (sseClients.has(username)) {
-        const clientSet = sseClients.get(username);
-        clientSet.delete(res);
-        if (clientSet.size === 0) {
-            sseClients.delete(username);
-        }
-    }
-}
-
-function broadcastToUser(username, event, data) {
-    if (!sseClients.has(username)) return;
-    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const client of sseClients.get(username)) {
-        try {
-            client.write(payload);
-            if (typeof client.flush === 'function') client.flush();
-        } catch {
-            // client disconnected
-        }
-    }
-}
-
-function broadcastToBoth(user1, user2, event, data) {
-    broadcastToUser(user1, event, data);
-    if (user1 !== user2) {
-        broadcastToUser(user2, event, data);
-    }
-}
+const { addSseClient, removeSseClient, broadcastToUser, broadcastToBoth } = require('../utils/realtime');
+const { getActiveRoomForUser } = require('./watchTogether');
 
 function getPartner(currentUser) {
     return currentUser === 'muaj' ? 'hajera' : 'muaj';
@@ -92,11 +53,8 @@ function getPartner(currentUser) {
 router.get('/messages', isAuthenticated, (req, res) => {
     const user = req.session.user;
     const partner = getPartner(user);
-    const partnerPresence = db.getUserPresence(partner);
-    const stats = db.getMessageStats(user, partner);
-    const initialMessages = db.getConversationMessages(user, partner, 60);
 
-    // Auto mark partner's messages as read when opening page
+    // Auto mark partner's messages as read BEFORE fetching conversation messages & stats
     const readCount = db.markMessagesAsRead(partner, user);
     if (readCount > 0) {
         invalidateUnreadCache();
@@ -106,6 +64,10 @@ router.get('/messages', isAuthenticated, (req, res) => {
             count: readCount
         });
     }
+
+    const partnerPresence = db.getUserPresence(partner);
+    const stats = db.getMessageStats(user, partner);
+    const initialMessages = db.getConversationMessages(user, partner, 80);
 
     const currentUnread = db.getUnreadMessageCount(user);
     invalidateUnreadCache(user);
@@ -145,13 +107,20 @@ router.get('/messages/stream', isAuthenticated, (req, res) => {
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no'
     });
+    if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+    }
+
+    const activeWatchTogether = typeof getActiveRoomForUser === 'function' ? getActiveRoomForUser(user) : null;
 
     // Send initial connected state
     res.write(`event: connected\ndata: ${JSON.stringify({
         user,
         partner,
         unreadCount: db.getUnreadMessageCount(user),
-        partnerPresence: db.getUserPresence(partner)
+        partnerPresence: db.getUserPresence(partner),
+        stats: db.getMessageStats(user, partner),
+        activeWatchTogether
     })}\n\n`);
 
     addSseClient(user, res);
@@ -163,6 +132,7 @@ router.get('/messages/stream', isAuthenticated, (req, res) => {
             if (typeof res.flush === 'function') res.flush();
         } catch {
             clearInterval(keepalive);
+            removeSseClient(user, res);
         }
     }, 15000);
 
@@ -172,15 +142,28 @@ router.get('/messages/stream', isAuthenticated, (req, res) => {
     });
 });
 
-// GET /api/messages — Fetch conversation history (pagination)
+// GET /api/messages — Fetch conversation history & metadata (pagination & catch-up sync)
 router.get('/api/messages', isAuthenticated, (req, res) => {
     const user = req.session.user;
     const partner = getPartner(user);
-    const limit = parseInt(req.query.limit, 10) || 50;
+    const limit = parseInt(req.query.limit, 10) || 60;
     const beforeId = req.query.beforeId ? parseInt(req.query.beforeId, 10) : null;
+    const afterId = req.query.afterId ? parseInt(req.query.afterId, 10) : null;
 
-    const messages = db.getConversationMessages(user, partner, limit, beforeId);
-    res.json({ success: true, messages });
+    const messages = db.getConversationMessages(user, partner, limit, beforeId, afterId);
+    const stats = db.getMessageStats(user, partner);
+    const partnerPresence = db.getUserPresence(partner);
+    const unreadCount = db.getUnreadMessageCount(user);
+
+    res.json({
+        success: true,
+        messages,
+        stats,
+        partnerPresence,
+        unreadCount,
+        user,
+        partner
+    });
 });
 
 // POST /api/messages — Send text message or attached video
@@ -189,6 +172,7 @@ router.post('/api/messages', isAuthenticated, (req, res) => {
     const partner = getPartner(user);
     const text = req.body.text ? String(req.body.text).trim().slice(0, 4000) : null;
     const videoId = req.body.videoId ? String(req.body.videoId).trim() : null;
+    const replyToId = req.body.replyToId || req.body.reply_to_id || null;
 
     if (!text && !videoId) {
         return res.status(400).json({ error: 'Message cannot be empty.' });
@@ -204,7 +188,8 @@ router.post('/api/messages', isAuthenticated, (req, res) => {
         sender: user,
         recipient: partner,
         text,
-        videoId
+        videoId,
+        replyToId
     });
 
     if (!saved) {
@@ -214,17 +199,20 @@ router.post('/api/messages', isAuthenticated, (req, res) => {
     // Invalidate in-memory unread cache
     invalidateUnreadCache();
 
-    // Broadcast new message per user with accurate unread counts
+    // Broadcast new message per user with accurate unread counts and stats
     const partnerUnread = db.getUnreadMessageCount(partner);
     const senderUnread = db.getUnreadMessageCount(user);
+    const updatedStats = db.getMessageStats(user, partner);
 
     broadcastToUser(partner, 'new-message', {
         message: saved,
-        unreadCount: partnerUnread
+        unreadCount: partnerUnread,
+        stats: updatedStats
     });
     broadcastToUser(user, 'new-message', {
         message: saved,
-        unreadCount: senderUnread
+        unreadCount: senderUnread,
+        stats: updatedStats
     });
 
     // Log activity
@@ -236,7 +224,7 @@ router.post('/api/messages', isAuthenticated, (req, res) => {
         ipAddress
     });
 
-    res.json({ success: true, message: saved });
+    res.json({ success: true, message: saved, stats: updatedStats });
 });
 
 // POST /api/messages/voice — Upload and send voice audio note
@@ -254,12 +242,14 @@ router.post('/api/messages/voice', isAuthenticated, (req, res) => {
         const partner = getPartner(user);
         const voiceUrl = `/voice/${req.file.filename}`;
         const text = req.body.caption ? String(req.body.caption).trim().slice(0, 500) : null;
+        const replyToId = req.body.replyToId || req.body.reply_to_id || null;
 
         const saved = db.saveMessage({
             sender: user,
             recipient: partner,
             text,
-            voiceUrl
+            voiceUrl,
+            replyToId
         });
 
         if (!saved) {
@@ -272,17 +262,20 @@ router.post('/api/messages/voice', isAuthenticated, (req, res) => {
 
         const partnerUnread = db.getUnreadMessageCount(partner);
         const senderUnread = db.getUnreadMessageCount(user);
+        const updatedStats = db.getMessageStats(user, partner);
 
         broadcastToUser(partner, 'new-message', {
             message: saved,
-            unreadCount: partnerUnread
+            unreadCount: partnerUnread,
+            stats: updatedStats
         });
         broadcastToUser(user, 'new-message', {
             message: saved,
-            unreadCount: senderUnread
+            unreadCount: senderUnread,
+            stats: updatedStats
         });
 
-        res.json({ success: true, message: saved });
+        res.json({ success: true, message: saved, stats: updatedStats });
     });
 });
 
@@ -388,11 +381,14 @@ router.post('/api/messages/delete/:id', isAuthenticated, (req, res) => {
         }
     }
 
+    const updatedStats = db.getMessageStats(user, partner);
+
     broadcastToBoth(user, partner, 'message-deleted', {
-        messageId
+        messageId,
+        stats: updatedStats
     });
 
-    res.json({ success: true, messageId });
+    res.json({ success: true, messageId, stats: updatedStats });
 });
 
 // GET /api/messages/unread-count — Unread message count badge

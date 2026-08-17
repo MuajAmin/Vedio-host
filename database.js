@@ -126,10 +126,12 @@ db.exec(`
         text TEXT,
         video_id TEXT,
         voice_url TEXT,
+        reply_to_id INTEGER,
         is_read INTEGER DEFAULT 0,
         read_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE SET NULL
+        FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE SET NULL,
+        FOREIGN KEY (reply_to_id) REFERENCES messages(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS message_reactions (
@@ -181,6 +183,14 @@ try {
         db.exec('ALTER TABLE watch_progress ADD COLUMN duration_seconds REAL DEFAULT 0');
         console.log('[db] Migrated watch_progress table: added duration_seconds column.');
     }
+
+    const msgInfo = db.prepare("PRAGMA table_info(messages)").all();
+    const hasReplyToId = msgInfo.some(col => col.name === 'reply_to_id');
+    if (!hasReplyToId) {
+        db.exec('ALTER TABLE messages ADD COLUMN reply_to_id INTEGER REFERENCES messages(id) ON DELETE SET NULL');
+        console.log('[db] Migrated messages table: added reply_to_id column.');
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to_id)');
 } catch (err) {
     console.error('[db] Migration check error:', err.message);
 }
@@ -773,6 +783,36 @@ function toggleMessageReaction(messageId, user, reaction) {
 function formatMessageRow(r, reactions = null) {
     if (!r) return null;
     const msgReactions = reactions !== null ? reactions : getReactionsForMessage(r.id);
+
+    let replyTo = null;
+    if (r.reply_to_id) {
+        if (r.reply_sender) {
+            replyTo = {
+                id: r.reply_to_id,
+                sender: r.reply_sender,
+                text: r.reply_text || null,
+                videoId: r.reply_video_id || null,
+                videoTitle: r.reply_video_title || null,
+                videoThumbnail: r.reply_video_thumbnail || null,
+                voiceUrl: r.reply_voice_url || null,
+                senderAvatar: r.reply_sender_avatar || null,
+                isDeleted: false
+            };
+        } else {
+            replyTo = {
+                id: r.reply_to_id,
+                sender: null,
+                text: 'Original message deleted',
+                videoId: null,
+                videoTitle: null,
+                videoThumbnail: null,
+                voiceUrl: null,
+                senderAvatar: null,
+                isDeleted: true
+            };
+        }
+    }
+
     return {
         id: r.id,
         sender: r.sender,
@@ -780,6 +820,8 @@ function formatMessageRow(r, reactions = null) {
         text: r.text || null,
         videoId: r.video_id || null,
         voiceUrl: r.voice_url || null,
+        replyToId: r.reply_to_id || null,
+        replyTo,
         isRead: r.is_read === 1,
         readAt: r.read_at ? normalizeIsoDate(r.read_at) : null,
         createdAt: normalizeIsoDate(r.created_at),
@@ -796,14 +838,29 @@ function formatMessageRow(r, reactions = null) {
     };
 }
 
-function saveMessage({ sender, recipient, text = null, videoId = null, voiceUrl = null }) {
+function saveMessage({ sender, recipient, text = null, videoId = null, voiceUrl = null, replyToId = null }) {
     if (!sender || !recipient) return null;
     try {
+        let validReplyToId = null;
+        if (replyToId) {
+            const parsedId = parseInt(replyToId, 10);
+            if (!isNaN(parsedId) && parsedId > 0) {
+                // Ensure referenced message belongs to the conversation
+                const refMsg = db.prepare(`
+                    SELECT id FROM messages
+                    WHERE id = ? AND ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
+                `).get(parsedId, sender, recipient, recipient, sender);
+                if (refMsg) {
+                    validReplyToId = parsedId;
+                }
+            }
+        }
+
         const nowIso = new Date().toISOString();
         const info = db.prepare(`
-            INSERT INTO messages (sender, recipient, text, video_id, voice_url, is_read, created_at)
-            VALUES (?, ?, ?, ?, ?, 0, ?)
-        `).run(sender, recipient, text ? String(text).trim() : null, videoId || null, voiceUrl || null, nowIso);
+            INSERT INTO messages (sender, recipient, text, video_id, voice_url, reply_to_id, is_read, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+        `).run(sender, recipient, text ? String(text).trim() : null, videoId || null, voiceUrl || null, validReplyToId, nowIso);
 
         return getMessageById(info.lastInsertRowid);
     } catch (err) {
@@ -822,10 +879,20 @@ function getMessageById(id) {
                    v.duration AS video_duration,
                    v.size AS video_size,
                    v.uploaded_by AS video_uploaded_by,
-                   p.avatar AS sender_avatar
+                   p.avatar AS sender_avatar,
+                   rm.sender AS reply_sender,
+                   rm.text AS reply_text,
+                   rm.video_id AS reply_video_id,
+                   rm.voice_url AS reply_voice_url,
+                   rv.title AS reply_video_title,
+                   rv.thumbnail AS reply_video_thumbnail,
+                   rp.avatar AS reply_sender_avatar
             FROM messages m
             LEFT JOIN videos v ON v.id = m.video_id
             LEFT JOIN user_profiles p ON p.username = m.sender
+            LEFT JOIN messages rm ON rm.id = m.reply_to_id
+            LEFT JOIN videos rv ON rv.id = rm.video_id
+            LEFT JOIN user_profiles rp ON rp.username = rm.sender
             WHERE m.id = ?
         `).get(id);
         return formatMessageRow(row);
@@ -835,7 +902,7 @@ function getMessageById(id) {
     }
 }
 
-function getConversationMessages(user1, user2, limit = 80, beforeId = null) {
+function getConversationMessages(user1, user2, limit = 80, beforeId = null, afterId = null) {
     if (!user1 || !user2) return [];
     try {
         let query = `
@@ -845,13 +912,32 @@ function getConversationMessages(user1, user2, limit = 80, beforeId = null) {
                    v.duration AS video_duration,
                    v.size AS video_size,
                    v.uploaded_by AS video_uploaded_by,
-                   p.avatar AS sender_avatar
+                   p.avatar AS sender_avatar,
+                   rm.sender AS reply_sender,
+                   rm.text AS reply_text,
+                   rm.video_id AS reply_video_id,
+                   rm.voice_url AS reply_voice_url,
+                   rv.title AS reply_video_title,
+                   rv.thumbnail AS reply_video_thumbnail,
+                   rp.avatar AS reply_sender_avatar
             FROM messages m
             LEFT JOIN videos v ON v.id = m.video_id
             LEFT JOIN user_profiles p ON p.username = m.sender
+            LEFT JOIN messages rm ON rm.id = m.reply_to_id
+            LEFT JOIN videos rv ON rv.id = rm.video_id
+            LEFT JOIN user_profiles rp ON rp.username = rm.sender
             WHERE ((m.sender = ? AND m.recipient = ?) OR (m.sender = ? AND m.recipient = ?))
         `;
         const params = [user1, user2, user2, user1];
+
+        if (afterId) {
+            query += ` AND m.id > ? ORDER BY m.created_at ASC, m.id ASC LIMIT ?`;
+            params.push(afterId, Math.min(limit, 200));
+            const rows = db.prepare(query).all(...params);
+            const msgIds = rows.map(r => r.id);
+            const reactionsMap = getReactionsForMessages(msgIds);
+            return rows.map(r => formatMessageRow(r, reactionsMap[r.id] || []));
+        }
 
         if (beforeId) {
             query += ` AND m.id < ?`;
