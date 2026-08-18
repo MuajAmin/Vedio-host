@@ -306,7 +306,7 @@ const videoGrid = videos.length === 0
             </div>
             <span class="bottom-nav-label">Admin</span>
         </a>
-        ` : ''}
+        ` : `
         <button type="button" class="bottom-nav-item" id="themeSwitcherBottomBtn" aria-label="Settings & Appearance" title="Settings & Appearance">
             <div class="bottom-nav-icon-wrap">
                 <svg class="nav-icon-outline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" width="24" height="24" stroke-linecap="round" stroke-linejoin="round">
@@ -320,6 +320,7 @@ const videoGrid = videos.length === 0
             </div>
             <span class="bottom-nav-label">Settings</span>
         </button>
+        `}
         <form action="/logout" method="POST" class="bottom-nav-form">
             <input type="hidden" name="_csrf" value="${h(csrfToken)}">
             <button type="submit" class="bottom-nav-item" aria-label="Logout" title="Logout">
