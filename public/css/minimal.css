@@ -458,78 +458,89 @@ html[data-ui-mode="minimal"] .card-meta {
 /* --------------------------------------------------------------------------
    6. Video Player Page (/watch/:id)
    -------------------------------------------------------------------------- */
-html[data-ui-mode="minimal"] .watch-container {
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 10px 12px 60px 12px !important;
+html[data-ui-mode="minimal"] .watch-page {
+    padding: 8px 10px 48px 10px !important;
 }
 
-html[data-ui-mode="minimal"] .video-stage-card {
+html[data-ui-mode="minimal"] .watch-layout-grid {
+    gap: 14px !important;
+}
+
+html[data-ui-mode="minimal"] .vp-cinema {
     background: #000 !important;
     border: 1px solid var(--min-border) !important;
     border-radius: var(--min-radius-md) !important;
-    box-shadow: none !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
     overflow: hidden;
     margin-bottom: 12px !important;
 }
 
-html[data-ui-mode="minimal"] .video-wrapper {
-    aspect-ratio: 16 / 9;
-    width: 100%;
+html[data-ui-mode="minimal"] .vp-controls {
+    background: linear-gradient(to top, rgba(10, 11, 16, 0.95), transparent) !important;
 }
 
-html[data-ui-mode="minimal"] .watch-details-card {
+html[data-ui-mode="minimal"] .video-info-section {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border) !important;
     border-radius: var(--min-radius-md) !important;
-    box-shadow: none !important;
     padding: 14px 16px !important;
-    margin-bottom: 16px !important;
+    margin-bottom: 14px !important;
+    box-shadow: none !important;
 }
 
-html[data-ui-mode="minimal"] .watch-title {
-    font-size: 18px !important;
+html[data-ui-mode="minimal"] .video-title {
+    font-size: 17px !important;
     font-weight: 700 !important;
-    line-height: 1.3 !important;
+    line-height: 1.35 !important;
+    color: var(--min-text-primary) !important;
 }
 
-html[data-ui-mode="minimal"] .watch-actions-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--min-border);
+html[data-ui-mode="minimal"] .video-uploader-bar {
+    border-top: 1px solid var(--min-border) !important;
+    padding-top: 12px !important;
+    margin-top: 12px !important;
+    gap: 12px !important;
 }
 
-html[data-ui-mode="minimal"] .watch-actions-bar .btn {
+html[data-ui-mode="minimal"] .video-action-buttons .btn {
     min-height: 38px !important;
     padding: 6px 12px !important;
     border-radius: var(--min-radius-md) !important;
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
     font-size: 13px !important;
     box-shadow: none !important;
 }
 
-/* Suggested Videos List (Row-based for Android efficiency) */
-html[data-ui-mode="minimal"] .suggestions-section {
+html[data-ui-mode="minimal"] .video-action-buttons .btn:active {
+    background: var(--min-bg-surface-active) !important;
+}
+
+/* Suggested Videos Panel */
+html[data-ui-mode="minimal"] .suggestions-panel {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border) !important;
     border-radius: var(--min-radius-md) !important;
-    padding: 14px !important;
+    padding: 12px !important;
     box-shadow: none !important;
-    margin-bottom: 16px;
+}
+
+html[data-ui-mode="minimal"] .suggestions-heading {
+    font-size: 14px !important;
+    font-weight: 600 !important;
 }
 
 html[data-ui-mode="minimal"] .suggestion-card {
     display: flex !important;
     flex-direction: row !important;
     gap: 10px !important;
-    padding: 8px !important;
+    padding: 6px !important;
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--min-border-subtle) !important;
     border-radius: var(--min-radius-sm) !important;
     box-shadow: none !important;
-    margin-bottom: 8px;
+    margin-bottom: 8px !important;
+    transition: background 0.12s ease;
 }
 
 html[data-ui-mode="minimal"] .suggestion-card:active {
@@ -537,41 +548,46 @@ html[data-ui-mode="minimal"] .suggestion-card:active {
 }
 
 html[data-ui-mode="minimal"] .suggestion-thumb-wrap {
-    flex: 0 0 110px !important;
-    width: 110px !important;
+    flex: 0 0 100px !important;
+    width: 100px !important;
     aspect-ratio: 16 / 9 !important;
     border-radius: var(--min-radius-xs) !important;
     overflow: hidden;
-}
-
-html[data-ui-mode="minimal"] .suggestion-details {
-    flex: 1;
-    min-width: 0;
+    background: #000 !important;
 }
 
 html[data-ui-mode="minimal"] .suggestion-title {
     font-size: 13px !important;
     font-weight: 600 !important;
     line-height: 1.3 !important;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    color: var(--min-text-primary) !important;
 }
 
 html[data-ui-mode="minimal"] .suggestion-meta {
     font-size: 11px !important;
     color: var(--min-text-muted) !important;
-    margin-top: 4px;
 }
 
-/* Comments in Minimal Mode */
-html[data-ui-mode="minimal"] .comments-card {
+/* Comments Section */
+html[data-ui-mode="minimal"] .comments-section {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border) !important;
     border-radius: var(--min-radius-md) !important;
     padding: 14px 16px !important;
     box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .comments-title {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+}
+
+html[data-ui-mode="minimal"] .comment-input {
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-md) !important;
+    font-size: 14px !important;
+    color: var(--min-text-primary) !important;
 }
 
 html[data-ui-mode="minimal"] .comment-item {

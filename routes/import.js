@@ -415,35 +415,63 @@ async function detectPythonCmd() {
 }
 
 /**
- * Find the best matching cookies file for a given URL.
+ * Domain clusters for flexible cookie matching (matches variants like xhplus.live -> xhamster).
  */
-const domainAliases = {
-    'youtu.be': 'www.youtube.com',
-    'm.youtube.com': 'www.youtube.com',
-    'music.youtube.com': 'www.youtube.com',
-    'm.pornhub.com': 'www.pornhub.com',
-    'm.xhamster.com': 'xhamster.com',
-    'xhamster2.com': 'xhamster.com',
-    'xhamster3.com': 'xhamster.com',
-    'xhamster.desi': 'xhamster.com',
-    'xhday.com': 'xhamster.com',
-    'xhvid.com': 'xhamster.com',
-    'xhplus.live': 'xhamster.com',
+const DOMAIN_FAMILIES = {
+    youtube: ['youtube.com', 'youtu.be', 'm.youtube.com', 'music.youtube.com', 'gaming.youtube.com'],
+    pornhub: ['pornhub.com', 'www.pornhub.com', 'm.pornhub.com', 'pornhubpremium.com', 'phncdn.com'],
+    xhamster: [
+        'xhamster.com', 'm.xhamster.com', 'xhamster2.com', 'xhamster3.com',
+        'xhamster.desi', 'xhday.com', 'xhvid.com', 'xhplus.live', 'xh.live',
+        'xhamster.one', 'xhamster.link'
+    ]
 };
+
+function cleanHost(h) {
+    return String(h || '').trim().toLowerCase().replace(/^www\./, '').replace(/^m\./, '');
+}
 
 function findCookiesFileForUrl(url) {
     try {
-        let hostname = new URL(String(url || '')).hostname.toLowerCase();
-        hostname = domainAliases[hostname] || hostname;
         if (!fs.existsSync(cookiesDir)) return null;
-
+        const hostname = new URL(String(url || '')).hostname.toLowerCase();
+        const hostClean = cleanHost(hostname);
         const files = fs.readdirSync(cookiesDir).filter(f => f.endsWith('_cookies.txt'));
+
+        // 1. Direct or base match
         for (const file of files) {
             const fileDomain = file.replace('_cookies.txt', '').toLowerCase();
-            if (hostname === fileDomain || hostname.endsWith('.' + fileDomain) || fileDomain.endsWith('.' + hostname)) {
+            const fileClean = cleanHost(fileDomain);
+
+            if (
+                hostname === fileDomain ||
+                hostClean === fileClean ||
+                hostname.endsWith('.' + fileDomain) ||
+                fileDomain.endsWith('.' + hostname) ||
+                hostClean.endsWith('.' + fileClean) ||
+                fileClean.endsWith('.' + hostClean)
+            ) {
                 const fullPath = path.join(cookiesDir, file);
                 if (fs.existsSync(fullPath) && fs.statSync(fullPath).size > 50) {
                     return fullPath;
+                }
+            }
+        }
+
+        // 2. Family match (e.g. xhplus.live_cookies.txt for xhamster.com or vice-versa)
+        for (const [family, domains] of Object.entries(DOMAIN_FAMILIES)) {
+            const isUrlInFamily = domains.some(d => hostClean === cleanHost(d) || hostClean.endsWith('.' + cleanHost(d)));
+            if (isUrlInFamily) {
+                for (const file of files) {
+                    const fileDomain = file.replace('_cookies.txt', '').toLowerCase();
+                    const fileClean = cleanHost(fileDomain);
+                    const isFileInFamily = domains.some(d => fileClean === cleanHost(d) || fileClean.endsWith('.' + cleanHost(d)));
+                    if (isFileInFamily) {
+                        const fullPath = path.join(cookiesDir, file);
+                        if (fs.existsSync(fullPath) && fs.statSync(fullPath).size > 50) {
+                            return fullPath;
+                        }
+                    }
                 }
             }
         }
@@ -455,7 +483,13 @@ function getYtdlpBaseArgs(url) {
     const args = [
         '--no-check-certificates',
         '--no-playlist',
-        '--socket-timeout', '20'
+        '--socket-timeout', '20',
+        '--geo-bypass',
+        '--age-limit', '99',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        '--add-header', 'Accept-Language: en-US,en;q=0.9',
+        '--add-header', 'Sec-Fetch-Mode: navigate',
+        '--extractor-args', 'youtube:player_client=android,web;player_skip=webpage,configs'
     ];
 
     const matchedCookies = url ? findCookiesFileForUrl(url) : null;
@@ -464,8 +498,10 @@ function getYtdlpBaseArgs(url) {
 
     if (matchedCookies) {
         args.push('--cookies', matchedCookies);
+        console.log(`[import] Using cookies: ${path.basename(matchedCookies)} for ${url}`);
     } else if (fallbackFile && fs.existsSync(fallbackFile)) {
         args.push('--cookies', fallbackFile);
+        console.log(`[import] Using fallback cookies: ${path.basename(fallbackFile)}`);
     } else if (cookiesBrowser) {
         args.push('--cookies-from-browser', cookiesBrowser);
     }
@@ -651,9 +687,16 @@ function parseProgressLine(job, line) {
 }
 
 function classifyErrorMessage(stderrBuffer) {
-    const text = (stderrBuffer || '').toLowerCase();
+    const raw = String(stderrBuffer || '').trim();
+    const text = raw.toLowerCase();
     let isPermanent = false;
     let message = 'Download failed.';
+
+    // Extract exact yt-dlp error line if available
+    const errorMatch = raw.match(/ERROR:\s*(.+?)(?:\r?\n|$)/);
+    if (errorMatch && errorMatch[1]) {
+        message = errorMatch[1].trim().slice(0, 200);
+    }
 
     if (text.includes('unsupported url') || text.includes('no video formats found')) {
         isPermanent = true;
@@ -661,23 +704,24 @@ function classifyErrorMessage(stderrBuffer) {
     } else if (text.includes('http error 410')) {
         isPermanent = true;
         message = 'This video has been permanently removed (HTTP 410 Gone).';
-    } else if (text.includes('http error 404') || text.includes('not found')) {
+    } else if (text.includes('http error 404') || text.includes('video not found') || text.includes('does not exist')) {
         isPermanent = true;
         message = 'Video not found at this URL.';
-    } else if (text.includes('http error 403') || text.includes('http error 401') || text.includes('private video') || text.includes('sign in')) {
+    } else if (text.includes('private video') || text.includes('members-only')) {
         isPermanent = true;
-        message = 'Access denied: video is private, restricted, or requires authentication.';
+        message = 'Video is private or restricted to members.';
+    } else if (text.includes('sign in to confirm you’re not a bot') || text.includes('sign in to confirm you\'re not a bot')) {
+        isPermanent = false;
+        message = 'Site requested bot verification. Cookies may need to be updated.';
+    } else if (text.includes('http error 403') || text.includes('http error 401')) {
+        isPermanent = false;
+        message = message.includes('ERROR:') ? message : 'Access denied (HTTP 403/401). Cookies may be expired or refreshed.';
     } else if (text.includes('file is larger than max-filesize') || text.includes('max-filesize')) {
         isPermanent = true;
         message = `Video exceeds the maximum allowed file size (${MAX_IMPORT_FILE_SIZE}).`;
     } else if (text.includes('network') || text.includes('connection') || text.includes('timed out') || text.includes('timeout')) {
         isPermanent = false;
         message = 'Network timeout or connection reset. You can retry this download.';
-    } else {
-        const errorMatch = stderrBuffer.match(/ERROR:\s*(.+?)(?:\n|$)/);
-        if (errorMatch) {
-            message = errorMatch[1].trim().slice(0, 200);
-        }
     }
 
     return { message, isPermanent };

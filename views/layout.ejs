@@ -12,11 +12,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
-    <script src="/js/theme-init.js?v=8.0"></script>
-    <link rel="stylesheet" href="/css/style.css?v=8.0">
-    <link rel="stylesheet" href="/css/messages.css?v=8.0">
-    <link rel="stylesheet" href="/css/calling.css?v=8.0">
-    <link rel="stylesheet" href="/css/minimal.css?v=8.0">
+    <script src="/js/theme-init.js?v=9.5"></script>
+    <link rel="stylesheet" href="/css/style.css?v=9.5">
+    <link rel="stylesheet" href="/css/messages.css?v=9.5">
+    <link rel="stylesheet" href="/css/calling.css?v=9.5">
+    <link rel="stylesheet" href="/css/minimal.css?v=9.5">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -266,6 +266,30 @@
                                 </button>
                             </form>
                             <% } %>
+
+                        <!-- Quick UI Mode Toggle in Profile Modal -->
+                        <div class="profile-settings-quick-wrap" style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-subtle); width: 100%;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                                <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">📱 Interface Mode</span>
+                                <button type="button" class="btn btn-ghost btn-sm open-settings-trigger" style="font-size: 11px; padding: 3px 8px;">⚙️ All Settings</button>
+                            </div>
+                            <div class="ui-mode-options-grid" style="grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <button type="button" class="ui-mode-card-option" data-set-ui-mode="standard" style="min-height: auto; padding: 8px 10px;">
+                                    <div class="ui-mode-card-top">
+                                        <div class="ui-mode-radio-circle"><span class="ui-mode-radio-dot"></span></div>
+                                        <span class="ui-mode-pill pill-standard" style="font-size: 9px;">Standard</span>
+                                    </div>
+                                    <div class="ui-mode-name" style="font-size: 12px; margin-top: 4px;">Standard UI</div>
+                                </button>
+                                <button type="button" class="ui-mode-card-option" data-set-ui-mode="minimal" style="min-height: auto; padding: 8px 10px;">
+                                    <div class="ui-mode-card-top">
+                                        <div class="ui-mode-radio-circle"><span class="ui-mode-radio-dot"></span></div>
+                                        <span class="ui-mode-pill pill-minimal" style="font-size: 9px;">⚡ Fast</span>
+                                    </div>
+                                    <div class="ui-mode-name" style="font-size: 12px; margin-top: 4px;">Minimal UI</div>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -625,10 +649,10 @@
             <audio id="remoteAudioTrack" autoplay playsinline style="display:none;"></audio>
             <% } %>
 
-            <script src="/js/app.js?v=8.0"></script>
-            <script src="/js/messages.js?v=8.0"></script>
-            <script src="/js/watchTogether.js?v=8.0"></script>
-            <script src="/js/calling.js?v=8.0"></script>
+            <script src="/js/app.js?v=9.5"></script>
+            <script src="/js/messages.js?v=9.5"></script>
+            <script src="/js/watchTogether.js?v=9.5"></script>
+            <script src="/js/calling.js?v=9.5"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').catch(function() {});

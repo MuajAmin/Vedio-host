@@ -322,28 +322,51 @@ router.post('/rename/:id', isAuthenticated, (req, res) => {
 
 // POST /delete/:id — Delete video (any authenticated user)
 router.post('/delete/:id', isAuthenticated, (req, res) => {
-    const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(req.params.id);
+    try {
+        const videoId = String(req.params.id || '').trim();
+        const video = db.prepare('SELECT * FROM videos WHERE id = ? OR filename = ?').get(videoId, videoId);
 
-    if (video) {
-        // Invalidate stream cache
-        invalidateVideoCache(req.params.id);
-        invalidateVideoCache(video.filename);
-        // Delete video file
-        const filePath = getSafeVideoPath(video.filename);
-        if (filePath && fs.existsSync(filePath)) {
-            fs.promises.unlink(filePath).catch(() => {});
-        }
-        // Delete thumbnail file if exists
-        if (video.thumbnail) {
-            const thumbPath = getSafeThumbnailPath(video.thumbnail);
-            if (thumbPath) {
-                fs.promises.unlink(thumbPath).catch(() => {});
+        if (video) {
+            // Invalidate stream cache
+            invalidateVideoCache(video.id);
+            invalidateVideoCache(video.filename);
+
+            // Delete video file from disk
+            const filePath = getSafeVideoPath(video.filename);
+            if (filePath && fs.existsSync(filePath)) {
+                fs.promises.unlink(filePath).catch(() => {});
             }
-        }
-        db.prepare('DELETE FROM videos WHERE id = ?').run(req.params.id);
-    }
 
-    res.redirect('/dashboard');
+            // Delete thumbnail file if exists
+            if (video.thumbnail) {
+                const thumbPath = getSafeThumbnailPath(video.thumbnail);
+                if (thumbPath && fs.existsSync(thumbPath)) {
+                    fs.promises.unlink(thumbPath).catch(() => {});
+                }
+            }
+
+            // Delete from database (foreign keys handle comments & watch_progress)
+            db.prepare('DELETE FROM videos WHERE id = ?').run(video.id);
+            console.log(`[videos] Deleted video: ${video.id} (${video.title}) by ${req.session.user}`);
+        }
+
+        const isAjax = req.xhr || 
+            (req.headers.accept && req.headers.accept.includes('application/json')) ||
+            (req.headers['content-type'] && req.headers['content-type'].includes('application/json'));
+
+        if (isAjax) {
+            return res.json({ success: true, message: 'Video deleted successfully.' });
+        }
+
+        res.redirect('/dashboard');
+    } catch (err) {
+        console.error('[videos] Error deleting video:', err.message);
+        const isAjax = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));
+        if (isAjax) {
+            return res.status(500).json({ error: 'Could not delete video.' });
+        }
+        res.redirect('/dashboard');
+    }
 });
 
 // POST /api/presence/ping - Client heartbeat ping (every 10s or on user interaction)

@@ -1752,6 +1752,28 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ---- Delete Video Confirmation Modal ----
+    const deleteVideoBtn = document.getElementById('btnDeleteVideo');
+    const deleteVideoModal = document.getElementById('deleteVideoModal');
+    const deleteVideoCloseBtn = document.getElementById('deleteVideoCloseBtn');
+    const deleteVideoCancelBtn = document.getElementById('deleteVideoCancelBtn');
+
+    if (deleteVideoBtn && deleteVideoModal) {
+        const closeDeleteModal = () => deleteVideoModal.classList.remove('active');
+        deleteVideoBtn.addEventListener('click', () => deleteVideoModal.classList.add('active'));
+        if (deleteVideoCloseBtn) deleteVideoCloseBtn.addEventListener('click', closeDeleteModal);
+        if (deleteVideoCancelBtn) deleteVideoCancelBtn.addEventListener('click', closeDeleteModal);
+
+        deleteVideoModal.addEventListener('click', (e) => {
+            if (e.target === deleteVideoModal) closeDeleteModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && deleteVideoModal.classList.contains('active')) {
+                closeDeleteModal();
+            }
+        });
+    }
+
     // ---- Profile Picture Modal Controller ----
     const profileModal = document.getElementById('profileModal');
     const profileCloseBtn = document.getElementById('profileCloseBtn');
@@ -2245,28 +2267,27 @@ document.addEventListener('DOMContentLoaded', () => {
         if (themeModal) themeModal.classList.remove('active');
     }
 
-    if (themeBtn) themeBtn.addEventListener('click', openThemeModal);
-    if (themeNavBtn) themeNavBtn.addEventListener('click', openThemeModal);
-    if (themeBottomBtn) themeBottomBtn.addEventListener('click', openThemeModal);
-    if (themeCloseBtn) themeCloseBtn.addEventListener('click', closeThemeModal);
-
-    document.querySelectorAll('.open-settings-trigger, [data-open-settings]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+    document.addEventListener('click', (e) => {
+        // Open Settings Modal Trigger
+        const openBtn = e.target.closest('#themeSwitcherBtn, #themeSwitcherNavBtn, #themeSwitcherBottomBtn, .open-settings-trigger, [data-open-settings]');
+        if (openBtn) {
             e.preventDefault();
             openThemeModal();
-        });
-    });
+            return;
+        }
 
-    if (themeModal) {
-        themeModal.addEventListener('click', (e) => {
-            if (e.target === themeModal) closeThemeModal();
-        });
-    }
+        // Close Settings Modal
+        const closeBtn = e.target.closest('#themeCloseBtn');
+        if (closeBtn || e.target === themeModal) {
+            closeThemeModal();
+            return;
+        }
 
-    // Handle UI Mode switching
-    document.querySelectorAll('[data-set-ui-mode]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const mode = btn.getAttribute('data-set-ui-mode');
+        // UI Mode Option Clicked
+        const uiModeBtn = e.target.closest('[data-set-ui-mode]');
+        if (uiModeBtn) {
+            e.preventDefault();
+            const mode = uiModeBtn.getAttribute('data-set-ui-mode');
             if (mode === 'standard' || mode === 'minimal') {
                 document.documentElement.setAttribute('data-ui-mode', mode);
                 storage.setItem('videohosk_uimode', mode);
@@ -2289,13 +2310,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     showToast(mode === 'minimal' ? '⚡ Minimal UI enabled (Fast & Lightweight)' : '✨ Standard UI enabled (Full Design)');
                 }
             }
-        });
-    });
+            return;
+        }
 
-    // Handle Palette Theme switching
-    document.querySelectorAll('[data-set-theme]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const theme = btn.getAttribute('data-set-theme');
+        // Theme Option Clicked
+        const themeBtnOption = e.target.closest('[data-set-theme]');
+        if (themeBtnOption) {
+            e.preventDefault();
+            const theme = themeBtnOption.getAttribute('data-set-theme');
             if (theme) {
                 document.documentElement.setAttribute('data-theme', theme);
                 storage.setItem('videohosk_theme', theme);
@@ -2322,8 +2344,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ theme: theme })
                 }).catch(() => {});
+
+                if (typeof showToast === 'function') {
+                    showToast('🎨 Theme changed to ' + theme.charAt(0).toUpperCase() + theme.slice(1));
+                }
             }
-        });
+            return;
+        }
     });
 
     // ---- Upload Tabs ----
