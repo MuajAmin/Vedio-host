@@ -1,0 +1,983 @@
+/* ==========================================================================
+   VideoHost — Minimal UI Mode (Android-Optimized High-Performance Design)
+   Activated exclusively when html[data-ui-mode="minimal"]
+   Zero impact on Standard UI when data-ui-mode="standard"
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Design Tokens & Surface Variables (Minimal UI Mode)
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] {
+    /* Fast, solid, low-overhead dark theme surfaces */
+    --min-bg-root: #0a0b10;
+    --min-bg-surface: #12131c;
+    --min-bg-surface-raised: #181926;
+    --min-bg-surface-active: #222334;
+    --min-bg-input: #0e0f17;
+    --min-bg-overlay: rgba(10, 11, 16, 0.88);
+
+    --min-border: rgba(255, 255, 255, 0.08);
+    --min-border-strong: rgba(255, 255, 255, 0.16);
+    --min-border-subtle: rgba(255, 255, 255, 0.05);
+
+    --min-text-primary: #f2f3f7;
+    --min-text-secondary: #9ea2b3;
+    --min-text-muted: #65697d;
+
+    --min-radius-xs: 4px;
+    --min-radius-sm: 8px;
+    --min-radius-md: 12px;
+    --min-radius-lg: 16px;
+    --min-radius-xl: 24px;
+    --min-radius-full: 9999px;
+
+    --min-touch-target: 48px;
+    --min-header-height: 56px;
+    --min-bottom-nav-height: 60px;
+
+    /* Override base tokens with high-performance solid values */
+    --bg-deep: var(--min-bg-root);
+    --bg-primary: var(--min-bg-surface);
+    --bg-card: var(--min-bg-surface);
+    --bg-card-hover: var(--min-bg-surface-raised);
+    --bg-elevated: var(--min-bg-surface-raised);
+    --bg-input: var(--min-bg-input);
+
+    --border-subtle: var(--min-border);
+    --border-glass: var(--min-border);
+    --border-accent: rgba(229, 184, 90, 0.3);
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-glow: none;
+}
+
+/* Palette Overrides in Minimal Mode */
+html[data-ui-mode="minimal"][data-theme="cinematic"] {
+    --border-accent: rgba(229, 184, 90, 0.35);
+    --min-accent-primary: #e5b85a;
+    --min-accent-muted: rgba(229, 184, 90, 0.15);
+}
+
+html[data-ui-mode="minimal"][data-theme="cyberpunk"] {
+    --border-accent: rgba(0, 240, 255, 0.35);
+    --min-accent-primary: #00f0ff;
+    --min-accent-muted: rgba(0, 240, 255, 0.15);
+}
+
+html[data-ui-mode="minimal"][data-theme="emerald"] {
+    --border-accent: rgba(16, 185, 129, 0.35);
+    --min-accent-primary: #10b981;
+    --min-accent-muted: rgba(16, 185, 129, 0.15);
+}
+
+html[data-ui-mode="minimal"][data-theme="sunset"] {
+    --border-accent: rgba(244, 63, 94, 0.35);
+    --min-accent-primary: #f43f5e;
+    --min-accent-muted: rgba(244, 63, 94, 0.15);
+}
+
+/* --------------------------------------------------------------------------
+   2. Performance Optimization: Strip Expensive Filters & Heavy Animations
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] * {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    text-shadow: none !important;
+}
+
+/* Hide CPU/GPU-heavy ambient background orbs, particles & loop animations */
+html[data-ui-mode="minimal"] .ambient-background,
+html[data-ui-mode="minimal"] .ambient-orb,
+html[data-ui-mode="minimal"] .floating-hearts-container,
+html[data-ui-mode="minimal"] .sparkle-trail-container,
+html[data-ui-mode="minimal"] .love-banner-shimmer,
+html[data-ui-mode="minimal"] .love-banner-particles,
+html[data-ui-mode="minimal"] .logo-shine,
+html[data-ui-mode="minimal"] .incoming-call-ambient-glow,
+html[data-ui-mode="minimal"] .incoming-call-pulse-ring,
+html[data-ui-mode="minimal"] .incoming-call-shimmer-border,
+html[data-ui-mode="minimal"] .active-call-ambient-backdrop,
+html[data-ui-mode="minimal"] .active-call-avatar-glow-ring,
+html[data-ui-mode="minimal"] .badge-pulse-dot,
+html[data-ui-mode="minimal"] .bottom-nav-fab-ring {
+    display: none !important;
+    animation: none !important;
+}
+
+html[data-ui-mode="minimal"] body {
+    background: var(--min-bg-root) !important;
+    background-image: none !important;
+    color: var(--min-text-primary);
+    font-family: var(--font-body);
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+}
+
+/* --------------------------------------------------------------------------
+   3. Android Top App Bar & Navigation
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] .navbar {
+    height: var(--min-header-height) !important;
+    min-height: var(--min-header-height) !important;
+    background: var(--min-bg-surface) !important;
+    border-bottom: 1px solid var(--min-border) !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+    padding: 0 14px !important;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+html[data-ui-mode="minimal"] .nav-logo {
+    gap: 8px !important;
+}
+
+html[data-ui-mode="minimal"] .logo-icon-wrapper {
+    width: 34px !important;
+    height: 34px !important;
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-sm) !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .logo-text-group .logo-main-text {
+    font-size: 17px !important;
+    letter-spacing: -0.2px;
+}
+
+html[data-ui-mode="minimal"] .nav-brand-pill {
+    font-size: 9px !important;
+    padding: 1px 5px !important;
+    background: var(--min-bg-surface-active) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-xs) !important;
+}
+
+html[data-ui-mode="minimal"] .nav-right {
+    gap: 8px !important;
+}
+
+html[data-ui-mode="minimal"] .nav-right .btn,
+html[data-ui-mode="minimal"] .nav-theme-toggle {
+    min-height: 38px !important;
+    padding: 6px 10px !important;
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: none !important;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+html[data-ui-mode="minimal"] .nav-right .btn:active,
+html[data-ui-mode="minimal"] .nav-theme-toggle:active {
+    background: var(--min-bg-surface-active) !important;
+}
+
+html[data-ui-mode="minimal"] .user-badge {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-full) !important;
+    padding: 4px 10px 4px 4px !important;
+    box-shadow: none !important;
+    cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   4. Android Bottom Navigation Dock
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] .mobile-bottom-bar {
+    height: var(--min-bottom-nav-height) !important;
+    background: var(--min-bg-surface) !important;
+    border-top: 1px solid var(--min-border) !important;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.4) !important;
+    padding: 0 4px calc(env(safe-area-inset-bottom, 0px) / 2) 4px !important;
+    z-index: 100;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-item {
+    padding: 6px 4px !important;
+    border-radius: var(--min-radius-md) !important;
+    transition: background 0.12s ease;
+    color: var(--min-text-muted) !important;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-item.active {
+    color: var(--accent-gold) !important;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-item.active .bottom-nav-icon-wrap {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-radius: var(--min-radius-full) !important;
+    padding: 2px 12px !important;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-label {
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.1px;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill {
+    width: 40px !important;
+    height: 40px !important;
+    background: var(--accent-gold) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill svg {
+    stroke: #0a0b10 !important;
+    width: 20px !important;
+    height: 20px !important;
+}
+
+/* --------------------------------------------------------------------------
+   5. Dashboard & Library Layout
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] .app-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding-bottom: calc(var(--min-bottom-nav-height) + 24px) !important;
+}
+
+html[data-ui-mode="minimal"] .main-content {
+    padding: 12px 14px 24px 14px !important;
+}
+
+/* Minimal Love Banner (Hajera) */
+html[data-ui-mode="minimal"] .love-banner-card {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid rgba(244, 63, 94, 0.25) !important;
+    border-left: 4px solid var(--accent-gold) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: none !important;
+    padding: 14px 16px !important;
+    margin-bottom: 16px !important;
+}
+
+html[data-ui-mode="minimal"] .love-banner-inner {
+    gap: 12px !important;
+}
+
+html[data-ui-mode="minimal"] .love-banner-icon {
+    font-size: 24px !important;
+    animation: none !important;
+}
+
+html[data-ui-mode="minimal"] .love-main-title {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    margin-bottom: 2px !important;
+}
+
+html[data-ui-mode="minimal"] .love-quote {
+    font-size: 12px !important;
+    color: var(--min-text-secondary) !important;
+    margin-top: 4px !important;
+}
+
+/* Dashboard Header & Search */
+html[data-ui-mode="minimal"] .dashboard-header-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px !important;
+}
+
+html[data-ui-mode="minimal"] .header-titles .header-pill {
+    font-size: 10px !important;
+    padding: 2px 8px !important;
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-xs) !important;
+    color: var(--accent-gold) !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .header-titles h1 {
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.3px;
+    margin-top: 4px;
+}
+
+html[data-ui-mode="minimal"] .header-titles .subtitle {
+    font-size: 12px !important;
+    color: var(--min-text-secondary) !important;
+}
+
+html[data-ui-mode="minimal"] .search-box {
+    width: 100% !important;
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-md) !important;
+    padding: 2px 10px !important;
+    height: 44px !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .search-input {
+    font-size: 14px !important;
+    color: var(--min-text-primary) !important;
+}
+
+/* Continue Watching Rail */
+html[data-ui-mode="minimal"] .continue-section {
+    margin-bottom: 20px !important;
+}
+
+html[data-ui-mode="minimal"] .continue-section .section-heading-row h2 {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+}
+
+html[data-ui-mode="minimal"] .continue-rail {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+html[data-ui-mode="minimal"] .continue-rail::-webkit-scrollbar {
+    display: none;
+}
+
+html[data-ui-mode="minimal"] .continue-card {
+    flex: 0 0 220px !important;
+    min-width: 220px !important;
+}
+
+/* Video Grid & Cards */
+html[data-ui-mode="minimal"] .video-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+    gap: 14px !important;
+}
+
+html[data-ui-mode="minimal"] .video-card {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: none !important;
+    overflow: hidden;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+html[data-ui-mode="minimal"] .video-card:active {
+    transform: scale(0.985);
+    background: var(--min-bg-surface-raised) !important;
+    border-color: var(--min-border-strong) !important;
+}
+
+html[data-ui-mode="minimal"] .card-thumbnail {
+    aspect-ratio: 16 / 9 !important;
+    background: #000 !important;
+    position: relative;
+    overflow: hidden;
+}
+
+html[data-ui-mode="minimal"] .thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+html[data-ui-mode="minimal"] .card-duration {
+    background: rgba(0, 0, 0, 0.8) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: var(--min-radius-xs) !important;
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    padding: 2px 6px !important;
+    bottom: 6px !important;
+    right: 6px !important;
+}
+
+html[data-ui-mode="minimal"] .card-badge {
+    top: 6px !important;
+    left: 6px !important;
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    border-radius: var(--min-radius-xs) !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .card-badge.badge-new {
+    background: var(--accent-gold) !important;
+    color: #000 !important;
+}
+
+html[data-ui-mode="minimal"] .card-badge.badge-resume {
+    background: #2563eb !important;
+    color: #fff !important;
+}
+
+html[data-ui-mode="minimal"] .card-watch-progress {
+    height: 3px !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+}
+
+html[data-ui-mode="minimal"] .card-watch-progress span {
+    background: var(--accent-gold) !important;
+}
+
+html[data-ui-mode="minimal"] .play-overlay {
+    display: none !important; /* Remove heavy hover overlay */
+}
+
+html[data-ui-mode="minimal"] .card-info {
+    padding: 10px 12px !important;
+    gap: 10px !important;
+}
+
+html[data-ui-mode="minimal"] .card-title {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1.35 !important;
+    color: var(--min-text-primary) !important;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+html[data-ui-mode="minimal"] .card-meta {
+    font-size: 11px !important;
+    color: var(--min-text-secondary) !important;
+    margin-top: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   6. Video Player Page (/watch/:id)
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] .watch-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 10px 12px 60px 12px !important;
+}
+
+html[data-ui-mode="minimal"] .video-stage-card {
+    background: #000 !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: none !important;
+    overflow: hidden;
+    margin-bottom: 12px !important;
+}
+
+html[data-ui-mode="minimal"] .video-wrapper {
+    aspect-ratio: 16 / 9;
+    width: 100%;
+}
+
+html[data-ui-mode="minimal"] .watch-details-card {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: none !important;
+    padding: 14px 16px !important;
+    margin-bottom: 16px !important;
+}
+
+html[data-ui-mode="minimal"] .watch-title {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    line-height: 1.3 !important;
+}
+
+html[data-ui-mode="minimal"] .watch-actions-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--min-border);
+}
+
+html[data-ui-mode="minimal"] .watch-actions-bar .btn {
+    min-height: 38px !important;
+    padding: 6px 12px !important;
+    border-radius: var(--min-radius-md) !important;
+    font-size: 13px !important;
+    box-shadow: none !important;
+}
+
+/* Suggested Videos List (Row-based for Android efficiency) */
+html[data-ui-mode="minimal"] .suggestions-section {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    padding: 14px !important;
+    box-shadow: none !important;
+    margin-bottom: 16px;
+}
+
+html[data-ui-mode="minimal"] .suggestion-card {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 10px !important;
+    padding: 8px !important;
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border-subtle) !important;
+    border-radius: var(--min-radius-sm) !important;
+    box-shadow: none !important;
+    margin-bottom: 8px;
+}
+
+html[data-ui-mode="minimal"] .suggestion-card:active {
+    background: var(--min-bg-surface-active) !important;
+}
+
+html[data-ui-mode="minimal"] .suggestion-thumb-wrap {
+    flex: 0 0 110px !important;
+    width: 110px !important;
+    aspect-ratio: 16 / 9 !important;
+    border-radius: var(--min-radius-xs) !important;
+    overflow: hidden;
+}
+
+html[data-ui-mode="minimal"] .suggestion-details {
+    flex: 1;
+    min-width: 0;
+}
+
+html[data-ui-mode="minimal"] .suggestion-title {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    line-height: 1.3 !important;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+html[data-ui-mode="minimal"] .suggestion-meta {
+    font-size: 11px !important;
+    color: var(--min-text-muted) !important;
+    margin-top: 4px;
+}
+
+/* Comments in Minimal Mode */
+html[data-ui-mode="minimal"] .comments-card {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    padding: 14px 16px !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .comment-item {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border-subtle) !important;
+    border-radius: var(--min-radius-sm) !important;
+    padding: 10px 12px !important;
+    margin-bottom: 8px !important;
+    box-shadow: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. Direct Messages (/messages & Floating Chat Drawer)
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] .messages-page-wrapper {
+    height: 100dvh !important;
+    background: var(--min-bg-root) !important;
+    padding: 0 !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header {
+    background: var(--min-bg-surface) !important;
+    border-bottom: 1px solid var(--min-border) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+    padding: 8px 14px !important;
+    height: 56px !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-name {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-presence-sub {
+    font-size: 11px !important;
+    color: var(--min-text-secondary) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-body-container {
+    background: var(--min-bg-root) !important;
+    padding: 12px 14px !important;
+}
+
+/* Lightweight Chat Bubbles */
+html[data-ui-mode="minimal"] .msg-bubble {
+    border-radius: 16px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+    padding: 8px 12px !important;
+    max-width: 82% !important;
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+}
+
+html[data-ui-mode="minimal"] .msg-row-incoming .msg-bubble {
+    background: var(--min-bg-surface-raised) !important;
+    color: var(--min-text-primary) !important;
+    border: 1px solid var(--min-border) !important;
+    border-bottom-left-radius: 4px !important;
+}
+
+html[data-ui-mode="minimal"] .msg-row-outgoing .msg-bubble {
+    background: var(--accent-gold-dim) !important;
+    color: #fff !important;
+    border: none !important;
+    border-bottom-right-radius: 4px !important;
+}
+
+html[data-ui-mode="minimal"] .msg-time-stamp {
+    font-size: 10px !important;
+    opacity: 0.75;
+    margin-top: 4px;
+}
+
+html[data-ui-mode="minimal"] .msg-footer {
+    background: var(--min-bg-surface) !important;
+    border-top: 1px solid var(--min-border) !important;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)) 12px !important;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-textarea {
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-md) !important;
+    font-size: 14px !important;
+    padding: 8px 12px !important;
+    color: var(--min-text-primary) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-quick-emoji-btn {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 16px !important;
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-full) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-floating-launcher {
+    bottom: calc(var(--min-bottom-nav-height) + 16px) !important;
+    right: 14px !important;
+    width: 52px !important;
+    height: 52px !important;
+    background: var(--accent-gold) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45) !important;
+    border-radius: var(--min-radius-full) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-floating-toast {
+    bottom: calc(var(--min-bottom-nav-height) + 12px) !important;
+    left: 10px !important;
+    right: 10px !important;
+    max-width: calc(100vw - 20px) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-floating-toast-card {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--border-accent) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+    padding: 10px 12px !important;
+}
+
+/* --------------------------------------------------------------------------
+   8. WebRTC Calling UI in Minimal Mode
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] .incoming-call-card {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-lg) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important;
+    padding: 24px 20px !important;
+    max-width: 340px !important;
+}
+
+html[data-ui-mode="minimal"] .call-btn-circle {
+    width: 60px !important;
+    height: 60px !important;
+    border-radius: var(--min-radius-full) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+    transition: transform 0.1s ease;
+}
+
+html[data-ui-mode="minimal"] .call-btn-circle:active {
+    transform: scale(0.92);
+}
+
+html[data-ui-mode="minimal"] .active-call-modal {
+    background: var(--min-bg-root) !important;
+}
+
+html[data-ui-mode="minimal"] .active-call-header {
+    background: var(--min-bg-surface) !important;
+    border-bottom: 1px solid var(--min-border) !important;
+    padding: 10px 14px !important;
+}
+
+html[data-ui-mode="minimal"] .active-call-audio-card {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-lg) !important;
+    box-shadow: none !important;
+    padding: 24px 16px !important;
+    max-width: 340px !important;
+}
+
+html[data-ui-mode="minimal"] .active-call-control-dock {
+    background: var(--min-bg-surface) !important;
+    border-top: 1px solid var(--min-border) !important;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px)) 14px !important;
+    gap: 12px !important;
+}
+
+html[data-ui-mode="minimal"] .call-control-btn {
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: var(--min-radius-full) !important;
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .call-control-btn.btn-end-call {
+    background: #e05252 !important;
+    color: #fff !important;
+    border: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   9. Settings & Appearance Modal Styling
+   -------------------------------------------------------------------------- */
+.settings-modal-box {
+    max-width: 520px !important;
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-glass) !important;
+    border-radius: var(--radius-lg) !important;
+    padding: 0 !important;
+    overflow: hidden;
+}
+
+html[data-ui-mode="minimal"] .settings-modal-box {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-lg) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
+}
+
+.settings-modal-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.settings-modal-icon {
+    font-size: 24px;
+}
+
+.settings-modal-title {
+    font-size: 17px !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+    line-height: 1.2;
+}
+
+.settings-modal-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.settings-modal-scroll-body {
+    padding: 16px 20px 24px 20px;
+    max-height: 75vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.settings-section-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.settings-section-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: var(--accent-gold);
+}
+
+.settings-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.settings-section-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* UI Mode Choice Cards Grid */
+.ui-mode-options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.ui-mode-card-option {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--bg-elevated);
+    border: 2px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+    color: var(--text-primary);
+    min-height: 130px;
+}
+
+.ui-mode-card-option:hover {
+    border-color: var(--border-accent);
+    background: var(--bg-card-hover);
+}
+
+.ui-mode-card-option.is-active-ui-mode {
+    border-color: var(--accent-gold) !important;
+    background: var(--bg-card-hover) !important;
+}
+
+.ui-mode-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.ui-mode-radio-circle {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s ease;
+}
+
+.ui-mode-radio-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: transparent;
+    transition: background 0.15s ease;
+}
+
+.ui-mode-card-option.is-active-ui-mode .ui-mode-radio-circle,
+.ui-mode-radio-circle.checked {
+    border-color: var(--accent-gold) !important;
+}
+
+.ui-mode-card-option.is-active-ui-mode .ui-mode-radio-dot,
+.ui-mode-radio-circle.checked .ui-mode-radio-dot {
+    background: var(--accent-gold) !important;
+}
+
+.ui-mode-pill {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.pill-standard {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+}
+
+.pill-minimal {
+    background: rgba(52, 211, 153, 0.15);
+    color: #34d399;
+}
+
+.ui-mode-name {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+
+.ui-mode-info {
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--text-secondary);
+}
+
+.active-ui-badge {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--accent-gold);
+    background: rgba(229, 184, 90, 0.12);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
+/* --------------------------------------------------------------------------
+   10. Mobile Responsive Touch Adaptations (320px - 430px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 480px) {
+    .ui-mode-options-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .ui-mode-card-option {
+        min-height: auto !important;
+    }
+
+    html[data-ui-mode="minimal"] .video-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    html[data-ui-mode="minimal"] .card-thumbnail {
+        aspect-ratio: 16 / 9 !important;
+    }
+}
+
+@media (max-width: 360px) {
+    html[data-ui-mode="minimal"] .navbar {
+        padding: 0 8px !important;
+    }
+
+    html[data-ui-mode="minimal"] .main-content {
+        padding: 8px 10px 20px 10px !important;
+    }
+
+    html[data-ui-mode="minimal"] .bottom-nav-label {
+        font-size: 10px !important;
+    }
+}

@@ -89,6 +89,40 @@ const thumbnailUpload = multer({
 });
 const STREAM_HIGH_WATER_MARK = 256 * 1024;
 
+// Lightweight LRU cache for video filename lookups.
+// Prevents a DB query on every single 206 range request during playback.
+// Max 200 entries (~20KB memory) — more than enough for a private video host.
+const VIDEO_CACHE_MAX = 200;
+const videoFilenameCache = new Map();
+
+function getCachedVideoFilename(videoKey) {
+    if (videoFilenameCache.has(videoKey)) {
+        const value = videoFilenameCache.get(videoKey);
+        // Move to end (most-recently-used)
+        videoFilenameCache.delete(videoKey);
+        videoFilenameCache.set(videoKey, value);
+        return value;
+    }
+    return null;
+}
+
+function setCachedVideoFilename(videoKey, filename) {
+    if (videoFilenameCache.size >= VIDEO_CACHE_MAX) {
+        // Evict oldest entry (first in Map iteration order)
+        const oldest = videoFilenameCache.keys().next().value;
+        videoFilenameCache.delete(oldest);
+    }
+    videoFilenameCache.set(videoKey, filename);
+}
+
+function invalidateVideoCache(videoKey) {
+    videoFilenameCache.delete(videoKey);
+    // Also remove by filename if cached under a different key
+    for (const [key, val] of videoFilenameCache) {
+        if (val === videoKey) videoFilenameCache.delete(key);
+    }
+}
+
 const { generateVideoThumbnail, getVideoDuration } = require('../utils/thumbnail');
 
 // GET /dashboard — Video gallery
@@ -291,6 +325,9 @@ router.post('/delete/:id', isAuthenticated, (req, res) => {
     const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(req.params.id);
 
     if (video) {
+        // Invalidate stream cache
+        invalidateVideoCache(req.params.id);
+        invalidateVideoCache(video.filename);
         // Delete video file
         const filePath = getSafeVideoPath(video.filename);
         if (filePath && fs.existsSync(filePath)) {
@@ -306,7 +343,7 @@ router.post('/delete/:id', isAuthenticated, (req, res) => {
         db.prepare('DELETE FROM videos WHERE id = ?').run(req.params.id);
     }
 
-res.redirect('/dashboard');
+    res.redirect('/dashboard');
 });
 
 // POST /api/presence/ping - Client heartbeat ping (every 10s or on user interaction)
@@ -526,13 +563,14 @@ router.post('/thumbnail/:id/regenerate', isMuaj, async (req, res) => {
             thumbFilename = await new Promise((resolve) => {
                 const tempId = `refetch-${video.id}-${Date.now()}`;
                 const outputPath = path.join(uploadsDir, `${tempId}.mp4`);
-                const proc = spawn('python3', [
+                const proc = spawn(process.platform === 'win32' ? 'python' : 'python3', [
                     '-m', 'yt_dlp',
                     '--no-check-certificates',
                     '--no-playlist',
                     '--skip-download',
                     '--write-thumbnail',
                     '-o', outputPath,
+                    '--',
                     video.source_url
                 ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
 
@@ -540,7 +578,7 @@ router.post('/thumbnail/:id/regenerate', isMuaj, async (req, res) => {
                 const timer = setTimeout(() => {
                     if (!settled) {
                         settled = true;
-                        proc.kill();
+                        try { proc.kill('SIGTERM'); } catch {}
                         resolve(null);
                     }
                 }, 20000);
@@ -564,6 +602,13 @@ router.post('/thumbnail/:id/regenerate', isMuaj, async (req, res) => {
                             return resolve(targetFilename);
                         }
                     } catch {}
+                    resolve(null);
+                });
+
+                proc.on('error', () => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
                     resolve(null);
                 });
             });
@@ -763,13 +808,20 @@ function pipeFile(res, filePath, options) {
 const isProduction = process.env.NODE_ENV === 'production';
 
 async function handleStream(req, res) {
-    const video = db.prepare('SELECT filename FROM videos WHERE id = ? OR filename = ?').get(req.params.videoKey, req.params.videoKey);
+    const videoKey = req.params.videoKey;
 
-    if (!video) {
-        return res.status(404).send('File not found');
+    // Try LRU cache first (avoids DB query on every 206 range request)
+    let filename = getCachedVideoFilename(videoKey);
+    if (!filename) {
+        const video = db.prepare('SELECT filename FROM videos WHERE id = ? OR filename = ?').get(videoKey, videoKey);
+        if (!video) {
+            return res.status(404).send('File not found');
+        }
+        filename = video.filename;
+        setCachedVideoFilename(videoKey, filename);
     }
 
-    const filePath = getSafeVideoPath(video.filename);
+    const filePath = getSafeVideoPath(filename);
     if (!filePath) {
         return res.status(404).send('File not found');
     }
@@ -778,21 +830,37 @@ async function handleStream(req, res) {
     try {
         stat = await fs.promises.stat(filePath);
     } catch (err) {
+        // File missing from disk — remove from cache
+        invalidateVideoCache(videoKey);
         return res.status(404).send('File not found');
+    }
+
+    const mimeType = getMimeType(filename);
+    const etag = `"${stat.size.toString(16)}-${stat.mtime.getTime().toString(16)}"`;
+
+    // ETag-based caching — avoid re-sending data the browser already has
+    if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
     }
 
     // Production: Nginx serves video directly via X-Accel-Redirect (zero Node.js overhead)
     if (isProduction) {
-        res.setHeader('X-Accel-Redirect', `/internal-videos/${video.filename}`);
-        res.setHeader('Content-Type', getMimeType(video.filename));
-        res.setHeader('Content-Disposition', formatContentDisposition(video.filename, 'inline'));
+        res.setHeader('X-Accel-Redirect', `/internal-videos/${filename}`);
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Disposition', formatContentDisposition(filename, 'inline'));
+        // Headers that Nginx will pass through to the client
+        res.setHeader('Accept-Ranges', 'bytes');
         res.setHeader('Cache-Control', 'private, max-age=86400, no-transform');
+        res.setHeader('Last-Modified', stat.mtime.toUTCString());
+        res.setHeader('ETag', etag);
+        res.setHeader('Content-Length', stat.size);
+        res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Content-Type-Options', 'nosniff');
         return res.end();
     }
 
     // Dev: Node.js streams the file directly
-    return streamFile(req, res, filePath, video.filename, stat);
+    return streamFile(req, res, filePath, filename, stat);
 }
 
 // Stream video

@@ -158,6 +158,13 @@ db.exec(`
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS user_settings (
+        username TEXT PRIMARY KEY,
+        ui_mode TEXT DEFAULT 'standard',
+        theme TEXT DEFAULT 'cinematic',
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_at ON videos(uploaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_asc ON videos(uploaded_at ASC);
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
@@ -195,6 +202,7 @@ try {
     ensureColumn('uploaded_by', "uploaded_by TEXT DEFAULT 'muaj'");
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_videos_uploaded_by ON videos(uploaded_by)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_videos_source_url ON videos(source_url)');
 
     const progressInfo = db.prepare("PRAGMA table_info(watch_progress)").all();
     const hasDurationSeconds = progressInfo.some(col => col.name === 'duration_seconds');
@@ -1151,10 +1159,51 @@ function getRecentCallLogs(user1, user2, limit = 30) {
     }
 }
 
+function getUserSettings(username) {
+    if (!username) return { ui_mode: 'standard', theme: 'cinematic' };
+    try {
+        const row = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?').get(username);
+        const defaultTheme = (username === 'hajera') ? 'sunset' : 'cinematic';
+        if (!row) {
+            return { ui_mode: 'standard', theme: defaultTheme };
+        }
+        return {
+            ui_mode: row.ui_mode || 'standard',
+            theme: row.theme || defaultTheme
+        };
+    } catch (err) {
+        console.error('[db] Error getting user settings:', err.message);
+        return { ui_mode: 'standard', theme: (username === 'hajera') ? 'sunset' : 'cinematic' };
+    }
+}
+
+function setUserSetting(username, key, value) {
+    if (!username || !key) return false;
+    try {
+        const validKeys = { ui_mode: true, theme: true };
+        if (!validKeys[key]) return false;
+        const now = new Date().toISOString();
+        const existing = db.prepare('SELECT username FROM user_settings WHERE username = ?').get(username);
+        if (existing) {
+            db.prepare(`UPDATE user_settings SET ${key} = ?, updated_at = ? WHERE username = ?`).run(String(value), now, username);
+        } else {
+            const ui_mode = key === 'ui_mode' ? String(value) : 'standard';
+            const theme = key === 'theme' ? String(value) : ((username === 'hajera') ? 'sunset' : 'cinematic');
+            db.prepare('INSERT INTO user_settings (username, ui_mode, theme, updated_at) VALUES (?, ?, ?, ?)').run(username, ui_mode, theme, now);
+        }
+        return true;
+    } catch (err) {
+        console.error('[db] Error saving user setting:', err.message);
+        return false;
+    }
+}
+
 db.getUserAvatar = getUserAvatar;
 db.getAllUserAvatars = getAllUserAvatars;
 db.setUserAvatar = setUserAvatar;
 db.deleteUserAvatar = deleteUserAvatar;
+db.getUserSettings = getUserSettings;
+db.setUserSetting = setUserSetting;
 db.isUserBlocked = isUserBlocked;
 db.blockUser = blockUser;
 db.unblockUser = unblockUser;
@@ -1186,6 +1235,17 @@ db.createCallLog = createCallLog;
 db.updateCallLog = updateCallLog;
 db.getCallLog = getCallLog;
 db.getRecentCallLogs = getRecentCallLogs;
+
+function getVideoBySourceUrl(sourceUrl) {
+    if (!sourceUrl) return null;
+    try {
+        return db.prepare('SELECT id, title, filename, thumbnail, duration, size, source_url, uploaded_by, uploaded_at FROM videos WHERE source_url = ? LIMIT 1').get(sourceUrl) || null;
+    } catch {
+        return null;
+    }
+}
+
+db.getVideoBySourceUrl = getVideoBySourceUrl;
 
 module.exports = db;
 

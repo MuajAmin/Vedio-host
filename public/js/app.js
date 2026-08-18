@@ -736,6 +736,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function startSlowStartTimer() {
             clearSlowStartTimer();
+            // 5 seconds is generous — on mobile 4G, metadata typically loads in 1-3s.
+            // Only show a warning if it takes significantly longer than normal.
             slowStartTimer = window.setTimeout(() => {
                 if (vid.readyState >= 2 || vid.error) return;
 
@@ -755,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     connectionDetail('The connection is slow. Trying to buffer enough video before playback.'),
                     { showOverlay: true, canRetry: true, persistent: true }
                 );
-            }, 2000);
+            }, 5000);
         }
 
         function videoErrorMessage() {
@@ -778,6 +780,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function retryStream(autoRetry = false) {
+            // Guard: don't destroy an active stream that's working fine.
+            // vid.load() resets ALL buffered data — only call when truly needed.
+            if (autoRetry && !vid.error && vid.readyState >= 3 && getBufferedAhead() >= 2) {
+                clearPlayerStatus();
+                return;
+            }
+
             const resumeAt = Number.isFinite(vid.currentTime) ? vid.currentTime : 0;
             const shouldPlay = !vid.paused || autoRetry;
             let restored = false;
@@ -822,10 +831,24 @@ document.addEventListener('DOMContentLoaded', () => {
             clearRecoveryTimer();
             if (vid.paused || vid.ended || navigator.onLine === false) return;
 
-            recoveryTimer = window.setTimeout(() => {
-                if (vid.readyState >= 3 || getBufferedAhead() >= 1.5) return;
+            // Snapshot current buffer to detect growth
+            const bufferBefore = getBufferedAhead();
 
-                if (retryCount < 2) {
+            // Use connection-aware timeout: slower networks get more patience
+            const connType = (connection && connection.effectiveType) || '4g';
+            let timeout = 8000; // default 8s
+            if (connType === 'slow-2g' || connType === '2g') timeout = 15000;
+            else if (connType === '3g') timeout = 12000;
+
+            recoveryTimer = window.setTimeout(() => {
+                // Check if buffer grew since we started waiting
+                const bufferNow = getBufferedAhead();
+                if (vid.readyState >= 3 || bufferNow >= 1.5) return; // Recovered naturally
+
+                // If buffer is growing (even slowly), don't retry — let it continue
+                if (bufferNow > bufferBefore + 0.3) return;
+
+                if (retryCount < 1) {
                     retryCount += 1;
                     retryStream(true);
                     return;
@@ -837,7 +860,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'The connection is not stable enough right now. Retry when the signal improves.',
                     { showOverlay: true, canRetry: true, persistent: true }
                 );
-            }, 4000);
+            }, timeout);
         }
 
         // --- Play/Pause ---
@@ -972,10 +995,21 @@ document.addEventListener('DOMContentLoaded', () => {
             if (container && !vid.paused) container.classList.add('vp-buffering');
             queueRecovery();
         });
+        // Debounce buffering spinner during seeking to prevent rapid flicker.
+        // On fast connections, seeking fires seeking→seeked within <100ms —
+        // showing/hiding a spinner for that is distracting.
+        let seekBufferTimer = null;
+
         vid.addEventListener('seeking', () => {
-            if (container) container.classList.add('vp-buffering');
+            clearTimeout(seekBufferTimer);
+            seekBufferTimer = setTimeout(() => {
+                if (container && vid.readyState < 3 && !vid.paused) {
+                    container.classList.add('vp-buffering');
+                }
+            }, 500);
         });
         vid.addEventListener('seeked', () => {
+            clearTimeout(seekBufferTimer);
             updateBuffer();
             if (container && vid.readyState >= 3) {
                 container.classList.remove('vp-buffering');
@@ -1039,6 +1073,27 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             updateBuffer();
         }
+
+        // --- Android foreground recovery ---
+        // When the user switches to another app (phone call, notification, etc.)
+        // and comes back, the video may have stalled. Check and recover gracefully
+        // without calling vid.load() which resets all buffered data.
+        let wasPlayingBeforeHidden = false;
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Remember if the video was playing when the user left
+                wasPlayingBeforeHidden = !vid.paused && !vid.ended;
+            } else {
+                // User returned to the app
+                if (wasPlayingBeforeHidden && vid.paused && !vid.ended) {
+                    // Video was playing but got paused by the OS — try resuming
+                    playVideo();
+                } else if (wasPlayingBeforeHidden && !vid.paused && vid.readyState < 3) {
+                    // Video is "playing" but stalled — queue a gentle recovery
+                    queueRecovery();
+                }
+            }
+        });
 
         // Progress bar click/drag
         function seekFromEvent(e) {
@@ -2129,12 +2184,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ---- Theme Switcher Modal Logic ----
+    // ---- Settings & Appearance Modal Logic (UI Mode & Themes) ----
     const themeBtn = document.getElementById('themeSwitcherBtn');
     const themeNavBtn = document.getElementById('themeSwitcherNavBtn');
     const themeBottomBtn = document.getElementById('themeSwitcherBottomBtn');
     const themeModal = document.getElementById('themeModalBackdrop');
     const themeCloseBtn = document.getElementById('themeCloseBtn');
+
+    function syncActiveUiModeOption() {
+        const currentMode = document.documentElement.getAttribute('data-ui-mode') || 'standard';
+        const options = document.querySelectorAll('[data-set-ui-mode]');
+        options.forEach(btn => {
+            const isMatch = btn.getAttribute('data-set-ui-mode') === currentMode;
+            btn.classList.toggle('is-active-ui-mode', isMatch);
+            const radio = btn.querySelector('.ui-mode-radio-circle');
+            if (radio) radio.classList.toggle('checked', isMatch);
+            let badge = btn.querySelector('.active-ui-badge');
+            if (isMatch) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'active-ui-badge';
+                    badge.textContent = 'Active Mode';
+                    const top = btn.querySelector('.ui-mode-card-top');
+                    if (top) top.appendChild(badge);
+                }
+            } else if (badge) {
+                badge.remove();
+            }
+        });
+    }
 
     function syncActiveThemeOption() {
         const currentTheme = document.documentElement.getAttribute('data-theme') || 'cinematic';
@@ -2158,6 +2236,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openThemeModal() {
         if (!themeModal) return;
+        syncActiveUiModeOption();
         syncActiveThemeOption();
         themeModal.classList.add('active');
     }
@@ -2171,12 +2250,49 @@ document.addEventListener('DOMContentLoaded', () => {
     if (themeBottomBtn) themeBottomBtn.addEventListener('click', openThemeModal);
     if (themeCloseBtn) themeCloseBtn.addEventListener('click', closeThemeModal);
 
+    document.querySelectorAll('.open-settings-trigger, [data-open-settings]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            openThemeModal();
+        });
+    });
+
     if (themeModal) {
         themeModal.addEventListener('click', (e) => {
             if (e.target === themeModal) closeThemeModal();
         });
     }
 
+    // Handle UI Mode switching
+    document.querySelectorAll('[data-set-ui-mode]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.getAttribute('data-set-ui-mode');
+            if (mode === 'standard' || mode === 'minimal') {
+                document.documentElement.setAttribute('data-ui-mode', mode);
+                storage.setItem('videohosk_uimode', mode);
+                const user = (document.body && document.body.getAttribute('data-user')) ||
+                             document.documentElement.getAttribute('data-user');
+                if (user) {
+                    storage.setItem('videohosk_uimode_' + user, mode);
+                }
+                syncActiveUiModeOption();
+
+                // Persist to database in background
+                fetch('/api/settings/ui-mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ui_mode: mode })
+                }).catch(() => {});
+
+                // Show feedback toast
+                if (typeof showToast === 'function') {
+                    showToast(mode === 'minimal' ? '⚡ Minimal UI enabled (Fast & Lightweight)' : '✨ Standard UI enabled (Full Design)');
+                }
+            }
+        });
+    });
+
+    // Handle Palette Theme switching
     document.querySelectorAll('[data-set-theme]').forEach(btn => {
         btn.addEventListener('click', () => {
             const theme = btn.getAttribute('data-set-theme');
@@ -2199,7 +2315,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     metaTheme.setAttribute('content', themeMetaColors[theme] || '#060609');
                 }
                 syncActiveThemeOption();
-                closeThemeModal();
+
+                // Persist to database in background
+                fetch('/api/settings/theme', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme: theme })
+                }).catch(() => {});
             }
         });
     });
@@ -2284,6 +2406,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (!response.ok) {
                     throw new Error(data.error || 'Import failed');
+                }
+
+                if (data.alreadyExists && data.videoId) {
+                    if (importProgressSection) importProgressSection.style.display = 'none';
+                    if (importResult) importResult.style.display = 'block';
+                    if (importResultCard) importResultCard.className = 'import-result-card success';
+                    if (importResultIcon) importResultIcon.textContent = '🎬';
+                    if (importResultText) importResultText.textContent = data.message || 'Video is already in your library.';
+                    if (importResultBtn) importResultBtn.style.display = 'inline-flex';
+                    if (importWatchBtn) {
+                        importWatchBtn.style.display = 'inline-flex';
+                        importWatchBtn.href = '/watch/' + encodeURIComponent(data.videoId);
+                    }
+                    importBtn.disabled = false;
+                    importBtn.innerHTML = '<span>Import Video</span>';
+                    importUrlInput.value = '';
+                    if (importTitleInput) importTitleInput.value = '';
+                    return;
+                }
+
+                if (!data.jobId) {
+                    throw new Error('Could not start import.');
                 }
 
                 // Connect to SSE for progress
@@ -2624,6 +2768,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Import failed');
+
+                if (data.alreadyExists && data.videoId) {
+                    if (importProgressSection) importProgressSection.style.display = 'none';
+                    if (importResult) importResult.style.display = 'block';
+                    if (importResultCard) importResultCard.className = 'import-result-card success';
+                    if (importResultIcon) importResultIcon.textContent = '🎬';
+                    if (importResultText) importResultText.textContent = data.message || 'Video is already in your library.';
+                    if (importResultBtn) importResultBtn.style.display = 'inline-flex';
+                    if (importWatchBtn) {
+                        importWatchBtn.style.display = 'inline-flex';
+                        importWatchBtn.href = '/watch/' + encodeURIComponent(data.videoId);
+                    }
+                    importUrlInput.value = '';
+                    if (importTitleInput) importTitleInput.value = '';
+                    setImportQueueButton('Import Video', false);
+                    return;
+                }
 
                 (data.jobs || []).forEach(job => {
                     importJobs.set(job.id, job);

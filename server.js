@@ -25,6 +25,7 @@ if (isProduction) {
 }
 
 const { backfillMissingThumbnails } = require('./utils/thumbnail');
+const { backfillFaststart } = require('./utils/faststart');
 
 // Ensure uploads directories exist
 const uploadsDir = path.join(__dirname, 'uploads', 'videos');
@@ -90,6 +91,59 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // Health check — before session middleware to avoid creating sessions
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', uptime: Math.floor(process.uptime()) });
+});
+
+// --- Lightweight session validation for /stream/ routes ---
+// Video streaming sends many 206 range requests per playback session.
+// Each range request through full express-session middleware triggers:
+//   store.get() → JSON.parse() → store.touch() → JSON.stringify() → DB write
+// This fast-path validates the session cookie directly via a single DB read,
+// skipping session deserialization, touch, and write-back.
+const cookie = require('cookie');
+const signature = require('cookie-signature');
+const sessionSecret = process.env.SESSION_SECRET || 'dev_only_change_me';
+const streamSessionStmt = db.prepare('SELECT sess, expires_at FROM sessions WHERE sid = ?');
+
+function fastStreamAuth(req, res, next) {
+    try {
+        const cookies = cookie.parse(req.headers.cookie || '');
+        const raw = cookies['videohost.sid'];
+        if (!raw) return res.status(401).end('Unauthorized');
+
+        // express-session prepends 's:' to signed cookies
+        const sid = raw.startsWith('s:')
+            ? signature.unsign(raw.slice(2), sessionSecret)
+            : raw;
+
+        if (!sid || sid === false) return res.status(401).end('Unauthorized');
+
+        const row = streamSessionStmt.get(sid);
+        if (!row || row.expires_at <= Date.now()) {
+            return res.status(401).end('Unauthorized');
+        }
+
+        const sess = JSON.parse(row.sess);
+        if (!sess || !sess.user) {
+            return res.status(401).end('Unauthorized');
+        }
+
+        // Attach minimal session info for downstream handlers
+        req.session = { user: sess.user };
+        next();
+    } catch {
+        return res.status(401).end('Unauthorized');
+    }
+}
+
+// Register stream routes BEFORE the full session middleware
+const videoRoutes = require('./routes/videos');
+app.head('/stream/:videoKey', fastStreamAuth, (req, res, next) => {
+    req.params = { videoKey: req.params.videoKey };
+    videoRoutes.handle(req, res, next);
+});
+app.get('/stream/:videoKey', fastStreamAuth, (req, res, next) => {
+    req.params = { videoKey: req.params.videoKey };
+    videoRoutes.handle(req, res, next);
 });
 
 // Session
@@ -212,12 +266,15 @@ app.use((req, res, next) => {
     if (req.path.startsWith('/api/call/') && (req.method === 'POST' || req.method === 'GET')) {
         return next();
     }
+    // User Settings API — handled via session auth
+    if (req.path.startsWith('/api/settings') && (req.method === 'POST' || req.method === 'GET')) {
+        return next();
+    }
     return requireCsrf(req, res, next);
 });
 
 // Routes
 const authRoutes = require('./routes/auth');
-const videoRoutes = require('./routes/videos');
 const commentRoutes = require('./routes/comments');
 const importRoutes = require('./routes/import');
 const adminRoutes = require('./routes/admin');
@@ -259,6 +316,13 @@ const server = app.listen(PORT, () => {
     console.log(`VideoHost listening on http://localhost:${PORT}`);
     // Run thumbnail backfill in background for existing videos
     backfillMissingThumbnails();
+    // Optimize existing videos for instant playback (moov atom at file start)
+    // Runs after a short delay to avoid competing with thumbnail backfill
+    setTimeout(() => backfillFaststart(), 5000);
+    // Clean up any orphaned import temp files from past server restarts
+    if (typeof importRoutes.cleanupOrphanedImportFiles === 'function') {
+        importRoutes.cleanupOrphanedImportFiles();
+    }
 });
 
 // Increase timeouts for large file uploads on slow connections

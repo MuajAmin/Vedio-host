@@ -80,10 +80,25 @@ function invalidateUnreadCache(username) {
     }
 }
 
+let _settingsCache = {};
+let _settingsCacheTimes = {};
+const SETTINGS_CACHE_TTL = 10 * 1000;
+
+function invalidateSettingsCache(username) {
+    if (username) {
+        delete _settingsCache[username];
+        delete _settingsCacheTimes[username];
+    } else {
+        _settingsCache = {};
+        _settingsCacheTimes = {};
+    }
+}
+
 function attachLocals(req, res, next) {
     const user = req.session ? req.session.user : null;
     const avatars = getCachedAvatars();
     let unreadCount = 0;
+    let userSettings = { ui_mode: 'standard', theme: (user === 'hajera') ? 'sunset' : 'cinematic' };
     if (user) {
         try {
             const now = Date.now();
@@ -98,10 +113,24 @@ function attachLocals(req, res, next) {
                     _unreadCacheTimes[user] = now;
                 }
             }
+
+            const cachedSettingsTime = _settingsCacheTimes[user] || 0;
+            if (_settingsCache[user] !== undefined && (now - cachedSettingsTime) < SETTINGS_CACHE_TTL) {
+                userSettings = _settingsCache[user];
+            } else {
+                const db = require('../database');
+                if (db && typeof db.getUserSettings === 'function') {
+                    userSettings = db.getUserSettings(user);
+                    _settingsCache[user] = userSettings;
+                    _settingsCacheTimes[user] = now;
+                }
+            }
         } catch {}
     }
 
     res.locals.user = user;
+    res.locals.uiMode = userSettings.ui_mode || 'standard';
+    res.locals.userTheme = userSettings.theme || ((user === 'hajera') ? 'sunset' : 'cinematic');
     res.locals.unreadCount = unreadCount;
     res.locals.csrfToken = req.session ? getCsrfToken(req) : '';
     res.locals.escapeHtml = escapeHtml;
@@ -122,6 +151,18 @@ function requireCsrf(req, res, next) {
         || req.get('x-csrf-token');
 
     if (!expected || !submitted || !timingSafeCompare(submitted, expected)) {
+        const isJsonReq = Boolean(
+            req.xhr ||
+            (req.headers['content-type'] && req.headers['content-type'].includes('application/json')) ||
+            (req.headers['accept'] && req.headers['accept'].includes('application/json'))
+        );
+
+        if (isJsonReq) {
+            return res.status(403).json({
+                error: 'Invalid security token. Please refresh the page and try again.'
+            });
+        }
+
         return res.status(403).render('forbidden', {
             user: req.session ? req.session.user : null,
             message: 'Invalid request token. Please refresh the page and try again.'
@@ -137,6 +178,7 @@ module.exports = {
     getCsrfToken,
     invalidateAvatarCache,
     invalidateUnreadCache,
+    invalidateSettingsCache,
     renderAvatar,
     requireCsrf,
     timingSafeCompare

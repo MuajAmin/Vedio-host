@@ -28,15 +28,30 @@ if (!fs.existsSync(thumbnailsDir)) {
     fs.mkdirSync(thumbnailsDir, { recursive: true });
 }
 
+const cookiesDir = path.join(__dirname, '..', 'data');
+
+// Configuration for 1 vCPU / 1 GB RAM VPS
 const MAX_QUEUE_SIZE = 20;
 const COMPLETED_JOB_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_DOWNLOAD_TIMEOUT_MS = parseInt(process.env.IMPORT_TIMEOUT_MS, 10) || (20 * 60 * 1000); // 20 min max
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 min without progress or file growth
+const MAX_IMPORT_FILE_SIZE = '2000M'; // 2 GB limit per video to protect VPS disk
 const LEGACY_QUALITIES = new Set(['best', '720', '480', '360']);
+const VALID_VIDEO_EXTENSIONS = new Set(['.mp4', '.mkv', '.webm', '.mov', '.avi', '.flv', '.m4v', '.ts']);
+const NON_VIDEO_EXTENSIONS = new Set(['.jpg', '.jpeg', '.webp', '.png', '.gif', '.vtt', '.srt', '.json', '.part', '.temp', '.ytdl']);
 
 const activeJobs = new Map();
 const pendingQueue = [];
 let currentJob = null;
 let cachedPythonCmd = null;
 
+// Format probe queue (max 1 concurrent format analysis to protect 1 vCPU / 1 GB RAM)
+let activeFormatProbeCount = 0;
+const MAX_CONCURRENT_FORMAT_PROBES = 1;
+
+/**
+ * Normalizes hostnames for comparison.
+ */
 function normalizeHostname(hostname) {
     return String(hostname || '')
         .trim()
@@ -46,6 +61,9 @@ function normalizeHostname(hostname) {
         .replace(/\.$/, '');
 }
 
+/**
+ * Checks if an IP address belongs to a private, loopback, link-local, or cloud metadata network.
+ */
 function isPrivateAddress(address) {
     const host = normalizeHostname(address);
     const ipv4Match = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
@@ -61,16 +79,19 @@ function isPrivateAddress(address) {
         const first = parts[0];
         const second = parts[1];
         return (
-            first === 0 ||
-            first === 10 ||
-            first === 127 ||
-            (first === 100 && second >= 64 && second <= 127) ||
-            (first === 169 && second === 254) ||
-            (first === 172 && second >= 16 && second <= 31) ||
-            (first === 192 && second === 168) ||
-            (first === 192 && second === 0) ||
-            (first === 198 && (second === 18 || second === 19)) ||
-            first >= 224
+            first === 0 ||                              // Current network (0.0.0.0/8)
+            first === 10 ||                             // Private Class A (10.0.0.0/8)
+            first === 127 ||                            // Loopback (127.0.0.0/8)
+            (first === 100 && second >= 64 && second <= 127) || // Carrier-grade NAT (100.64.0.0/10)
+            (first === 169 && second === 254) ||        // Link-local / Cloud metadata (169.254.0.0/16)
+            (first === 172 && second >= 16 && second <= 31) || // Private Class B (172.16.0.0/12)
+            (first === 192 && second === 168) ||        // Private Class C (192.168.0.0/16)
+            (first === 192 && second === 0 && parts[2] === 0) || // IETF Protocol (192.0.0.0/24)
+            (first === 192 && second === 0 && parts[2] === 2) || // TEST-NET-1 (192.0.2.0/24)
+            (first === 198 && (second === 18 || second === 19)) || // Benchmark (198.18.0.0/15)
+            (first === 198 && second === 51 && parts[2] === 100) || // TEST-NET-2 (198.51.100.0/24)
+            (first === 203 && second === 0 && parts[2] === 113) ||  // TEST-NET-3 (203.0.113.0/24)
+            first >= 224                                // Multicast & Reserved (224.0.0.0/4, 240.0.0.0/4)
         );
     }
 
@@ -78,28 +99,41 @@ function isPrivateAddress(address) {
         return (
             host === '::' ||
             host === '::1' ||
-            host.startsWith('fe80:') ||
-            host.startsWith('fc') ||
-            host.startsWith('fd')
+            host.startsWith('fe80:') || // Link-local
+            host.startsWith('fc') ||    // Unique local
+            host.startsWith('fd') ||    // Unique local
+            host.startsWith('ff')       // Multicast
         );
     }
 
     return false;
 }
 
+/**
+ * Validates whether a given URL is a safe, public HTTP/HTTPS URL.
+ * Protects against SSRF, command injection, and local filesystem probing.
+ */
 async function isValidImportUrl(value) {
     try {
-        const url = new URL(String(value || '').trim());
+        const raw = String(value || '').trim();
+        if (!raw || raw.length < 8 || raw.length > 2048) return false;
+        if (raw.startsWith('-')) return false; // Prevent option injection
+        if (/[\x00-\x1f\x7f]/.test(raw)) return false; // Reject control characters
+
+        const url = new URL(raw);
         if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
 
         const hostname = normalizeHostname(url.hostname);
         if (!hostname) return false;
 
+        // Block local and internal hostnames
         if (
             hostname === 'localhost' ||
             hostname.endsWith('.localhost') ||
             hostname.endsWith('.local') ||
-            hostname.endsWith('.internal')
+            hostname.endsWith('.internal') ||
+            hostname === 'metadata.google.internal' ||
+            hostname === 'instance-data'
         ) {
             return false;
         }
@@ -108,12 +142,59 @@ async function isValidImportUrl(value) {
             return !isPrivateAddress(hostname);
         }
 
+        // Perform DNS lookup to prevent DNS-rebinding SSRF attacks
         const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
         if (!addresses.length) return false;
 
         return addresses.every(record => !isPrivateAddress(record.address));
     } catch {
         return false;
+    }
+}
+
+/**
+ * Normalizes video source URLs for consistent duplicate detection.
+ * Strips tracking parameters, converts short links to canonical URLs.
+ */
+function normalizeSourceUrl(rawUrl) {
+    try {
+        const parsed = new URL(String(rawUrl || '').trim());
+        let host = parsed.hostname.toLowerCase();
+        let pathname = parsed.pathname;
+
+        // Strip common tracking and metadata query parameters
+        const trackingParams = [
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+            'si', 'feature', 'fbclid', 'igshid', 'gclid', 'ref', 'source', 'campaign'
+        ];
+        trackingParams.forEach(param => parsed.searchParams.delete(param));
+
+        // YouTube canonicalization
+        if (host === 'youtu.be') {
+            const videoId = pathname.replace(/^\//, '').split('/')[0];
+            if (videoId) {
+                return `https://www.youtube.com/watch?v=${videoId}`;
+            }
+        }
+
+        if (host.includes('youtube.com')) {
+            // Shorts: /shorts/VIDEO_ID -> /watch?v=VIDEO_ID
+            const shortsMatch = pathname.match(/^\/shorts\/([a-zA-Z0-9_-]+)/);
+            if (shortsMatch) {
+                return `https://www.youtube.com/watch?v=${shortsMatch[1]}`;
+            }
+
+            const v = parsed.searchParams.get('v');
+            if (v) {
+                return `https://www.youtube.com/watch?v=${v.replace(/\/+$/, '')}`;
+            }
+        }
+
+        // Strip trailing slashes on pathname
+        parsed.pathname = pathname.replace(/\/+$/, '') || '/';
+        return parsed.toString().replace(/\/+$/, '');
+    } catch {
+        return String(rawUrl || '').trim();
     }
 }
 
@@ -125,11 +206,19 @@ function sanitizeQuality(value) {
 function sanitizeFormatId(value) {
     const formatId = String(value || '').trim();
     if (!formatId || formatId === 'best') return '';
-    if (formatId.length > 180) return '';
-    if (/[\r\n\t]/.test(formatId)) return '';
+    if (formatId.length > 80) return '';
     if (formatId.startsWith('-')) return '';
-    if (!/^[A-Za-z0-9._:+,/\[\]<>=!?-]+$/.test(formatId)) return '';
+    // Strict format identifier: alphanumeric, +, _, -, /
+    if (!/^[a-zA-Z0-9_+-]+(\+[a-zA-Z0-9_+-]+)*$/.test(formatId)) return '';
     return formatId;
+}
+
+function sanitizeTitle(value) {
+    return String(value || '')
+        .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // Strip ANSI terminal codes
+        .replace(/[\x00-\x1f\x7f]/g, '')        // Strip ASCII control characters
+        .trim()
+        .slice(0, 180);
 }
 
 function getQueuePosition(job) {
@@ -142,12 +231,15 @@ function serializeJob(job) {
     return {
         id: job.id,
         url: job.url,
+        normalizedUrl: job.normalizedUrl,
         status: job.status,
         progress: job.progress,
         speed: job.speed,
         eta: job.eta,
         title: job.title,
         error: job.error,
+        isPermanentError: Boolean(job.isPermanentError),
+        retryCount: job.retryCount || 0,
         videoId: job.videoId,
         quality: job.quality,
         qualityLabel: job.qualityLabel,
@@ -167,7 +259,15 @@ function sendSSE(res, job) {
     }
 }
 
-function notifyListeners(job) {
+/**
+ * Throttles listener notifications to prevent CPU and socket buffer exhaustion.
+ */
+function notifyListeners(job, force = false) {
+    const now = Date.now();
+    if (!force && job._lastNotified && (now - job._lastNotified < 350)) {
+        return;
+    }
+    job._lastNotified = now;
     for (const listener of job.listeners) {
         listener();
     }
@@ -175,7 +275,7 @@ function notifyListeners(job) {
 
 function notifyQueue() {
     for (const job of pendingQueue) {
-        notifyListeners(job);
+        notifyListeners(job, true);
     }
 }
 
@@ -199,7 +299,7 @@ function finishCurrentJob(job) {
         currentJob = null;
     }
     job.finishedAt = new Date().toISOString();
-    notifyListeners(job);
+    notifyListeners(job, true);
     notifyQueue();
     scheduleJobCleanup(job);
     processQueue();
@@ -218,7 +318,7 @@ function processQueue() {
     job.status = 'starting';
     job.queuePosition = 0;
     job.startedAt = new Date().toISOString();
-    notifyListeners(job);
+    notifyListeners(job, true);
     notifyQueue();
 
     startDownload(job).catch((err) => {
@@ -226,6 +326,37 @@ function processQueue() {
         job.error = err.message || 'Download failed.';
         finishCurrentJob(job);
     });
+}
+
+/**
+ * Robust process termination helper.
+ * Sends SIGTERM, followed by forceful SIGKILL (or taskkill on Windows) if process doesn't exit within 3s.
+ */
+function killProcessTree(proc) {
+    if (!proc || !proc.pid) return;
+
+    try {
+        if (process.platform === 'win32') {
+            proc.kill('SIGTERM');
+            const killTimer = setTimeout(() => {
+                try {
+                    spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], {
+                        stdio: 'ignore',
+                        windowsHide: true
+                    });
+                } catch {}
+            }, 2500);
+            killTimer.unref();
+        } else {
+            proc.kill('SIGTERM');
+            const killTimer = setTimeout(() => {
+                try {
+                    proc.kill('SIGKILL');
+                } catch {}
+            }, 2500);
+            killTimer.unref();
+        }
+    } catch {}
 }
 
 async function detectPythonCmd() {
@@ -251,9 +382,18 @@ async function detectPythonCmd() {
             });
 
             let settled = false;
+            const timer = setTimeout(() => {
+                if (!settled) {
+                    settled = true;
+                    killProcessTree(proc);
+                    tryNext();
+                }
+            }, 5000);
+
             proc.on('close', (code) => {
                 if (settled) return;
                 settled = true;
+                clearTimeout(timer);
                 if (code === 0) {
                     cachedPythonCmd = { cmd: candidate.cmd, prefix: candidate.prefix };
                     console.log(`[import] Using: ${candidate.cmd} ${candidate.prefix.join(' ')}`);
@@ -265,6 +405,7 @@ async function detectPythonCmd() {
             proc.on('error', () => {
                 if (settled) return;
                 settled = true;
+                clearTimeout(timer);
                 tryNext();
             });
         }
@@ -273,19 +414,14 @@ async function detectPythonCmd() {
     });
 }
 
-const cookiesDir = path.join(__dirname, '..', 'data');
-
 /**
  * Find the best matching cookies file for a given URL.
- * Looks for files like: www.youtube.com_cookies.txt, www.pornhub.com_cookies.txt
- * in the data/ directory and matches against the URL's hostname.
  */
 const domainAliases = {
     'youtu.be': 'www.youtube.com',
     'm.youtube.com': 'www.youtube.com',
     'music.youtube.com': 'www.youtube.com',
     'm.pornhub.com': 'www.pornhub.com',
-    // xHamster variants → base domain for cookie matching
     'm.xhamster.com': 'xhamster.com',
     'xhamster2.com': 'xhamster.com',
     'xhamster3.com': 'xhamster.com',
@@ -303,7 +439,6 @@ function findCookiesFileForUrl(url) {
 
         const files = fs.readdirSync(cookiesDir).filter(f => f.endsWith('_cookies.txt'));
         for (const file of files) {
-            // Extract domain from filename: "www.youtube.com_cookies.txt" → "www.youtube.com"
             const fileDomain = file.replace('_cookies.txt', '').toLowerCase();
             if (hostname === fileDomain || hostname.endsWith('.' + fileDomain) || fileDomain.endsWith('.' + hostname)) {
                 const fullPath = path.join(cookiesDir, file);
@@ -323,7 +458,6 @@ function getYtdlpBaseArgs(url) {
         '--socket-timeout', '20'
     ];
 
-    // Auto-select cookies file based on URL domain (e.g. youtube → youtube cookies, pornhub → pornhub cookies)
     const matchedCookies = url ? findCookiesFileForUrl(url) : null;
     const fallbackFile = (process.env.YTDLP_COOKIES_FILE || '').trim();
     const cookiesBrowser = (process.env.YTDLP_COOKIES_BROWSER || '').trim().toLowerCase();
@@ -351,36 +485,36 @@ function buildDownloadArgs(job, outputPath) {
         '--print', 'before_dl:%(title)s',
         '--no-mtime',
         '--no-overwrites',
-        // Keep source files if merge/remux fails — prevents file deletion at 99%
-        '--keep-video',
-        // Parallel fragment downloads — works for DASH/HLS sites (PornHub etc.),
-        // silently ignored for direct HTTP downloads (XHamster etc.)
-        '--concurrent-fragments', '3',
-        '--buffer-size', '4M',
+        // Max file size protection for 1GB RAM / limited VPS disk
+        '--max-filesize', MAX_IMPORT_FILE_SIZE,
+        // Lightweight fragments and buffer for 1 vCPU / 1 GB RAM
+        '--concurrent-fragments', '2',
+        '--buffer-size', '2M',
         '--retries', '3',
-        '--fragment-retries', '3'
+        '--fragment-retries', '3',
+        // Faststart moov atom placement for instant playback
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
+        '--prefer-free-formats'
     ];
 
     const formatId = sanitizeFormatId(job.formatId);
     if (formatId) {
         args.push('-f', formatId);
     } else {
-        // b/bv*+ba/best: prefer combined streams first (works on all sites),
-        // then try separate video+audio, then any best as last resort
         const formatSort = job.quality === 'best'
             ? 'res,fps,size,br'
             : `res:${job.quality},fps,size,br`;
         args.push('-f', 'b/bv*+ba/best', '-S', formatSort);
     }
 
-    args.push(job.url);
+    // Always use '--' before URL to prevent CLI option injection
+    args.push('--', job.url);
     return args;
 }
 
 async function findAndSaveSourceThumbnail(jobId, videoId) {
     try {
         const files = await fs.promises.readdir(uploadsDir);
-        // Look for image files starting with jobId downloaded by yt-dlp
         const thumbCandidate = files.find(file => 
             file.startsWith(jobId) && 
             ['.jpg', '.jpeg', '.webp', '.png'].includes(path.extname(file).toLowerCase())
@@ -388,14 +522,19 @@ async function findAndSaveSourceThumbnail(jobId, videoId) {
 
         if (thumbCandidate) {
             const srcPath = path.join(uploadsDir, thumbCandidate);
-            const ext = path.extname(thumbCandidate).toLowerCase();
-            const targetFilename = `${videoId}${ext}`;
-            const targetPath = path.join(thumbnailsDir, targetFilename);
+            const stat = await fs.promises.stat(srcPath);
+            // Verify thumbnail is non-empty and reasonably sized (< 10MB)
+            if (stat.size > 500 && stat.size < 10 * 1024 * 1024) {
+                const ext = path.extname(thumbCandidate).toLowerCase();
+                const targetFilename = `${videoId}${ext}`;
+                const targetPath = path.join(thumbnailsDir, targetFilename);
 
-            // Move thumbnail to thumbnails directory
-            await fs.promises.rename(srcPath, targetPath);
-            console.log(`[import] Saved official source thumbnail for video ${videoId} -> ${targetFilename}`);
-            return targetFilename;
+                await fs.promises.rename(srcPath, targetPath);
+                console.log(`[import] Saved official source thumbnail for video ${videoId} -> ${targetFilename}`);
+                return targetFilename;
+            } else {
+                await fs.promises.unlink(srcPath).catch(() => {});
+            }
         }
     } catch (err) {
         console.warn('[import] Could not process source thumbnail:', err.message);
@@ -403,6 +542,9 @@ async function findAndSaveSourceThumbnail(jobId, videoId) {
     return null;
 }
 
+/**
+ * Removes all temporary files created for a job.
+ */
 async function cleanupJobFiles(jobId) {
     try {
         const files = (await fs.promises.readdir(uploadsDir)).filter(file => file.startsWith(jobId));
@@ -412,27 +554,44 @@ async function cleanupJobFiles(jobId) {
     }
 }
 
+/**
+ * Removes any leftover intermediate files (unmerged streams, temp chunks) after successful download.
+ */
+async function cleanupJobExtraFiles(jobId, keepFilename) {
+    try {
+        const files = (await fs.promises.readdir(uploadsDir)).filter(file => file.startsWith(jobId) && file !== keepFilename);
+        await Promise.all(files.map(file => fs.promises.unlink(path.join(uploadsDir, file)).catch(() => {})));
+    } catch {}
+}
+
+/**
+ * Finds completed video file. Strictly ignores .part, .temp, and non-video files.
+ */
 async function findDownloadedFile(jobId, fallbackPath, fallbackFilename) {
     let candidates = [];
-    const nonVideoExts = new Set(['.jpg', '.jpeg', '.webp', '.png', '.gif', '.vtt', '.srt', '.json', '.part']);
     try {
         const files = (await fs.promises.readdir(uploadsDir)).filter(file => file.startsWith(jobId));
         for (const file of files) {
             const ext = path.extname(file).toLowerCase();
-            const isNonVideo = nonVideoExts.has(ext);
+            // Strictly exclude partial, temp, and non-video extensions
+            if (NON_VIDEO_EXTENSIONS.has(ext) || file.endsWith('.part') || file.endsWith('.temp') || file.endsWith('.ytdl')) {
+                continue;
+            }
+            if (!VALID_VIDEO_EXTENSIONS.has(ext)) {
+                continue;
+            }
+
             const filePath = path.join(uploadsDir, file);
             try {
                 const stat = await fs.promises.stat(filePath);
-                if (stat.isFile() && (!isNonVideo || file.endsWith('.part'))) {
-                    candidates.push({ file, filePath, size: stat.size, part: file.endsWith('.part') });
+                if (stat.isFile() && stat.size > 0) {
+                    candidates.push({ file, filePath, size: stat.size });
                 }
             } catch {}
         }
     } catch {}
 
-    candidates = candidates
-        .filter(item => item.size > 0)
-        .sort((a, b) => Number(a.part) - Number(b.part) || b.size - a.size);
+    candidates.sort((a, b) => b.size - a.size);
 
     if (candidates.length > 0) {
         return {
@@ -442,12 +601,19 @@ async function findDownloadedFile(jobId, fallbackPath, fallbackFilename) {
         };
     }
 
-    const stat = await fs.promises.stat(fallbackPath);
-    return {
-        finalFilename: fallbackFilename,
-        finalPath: fallbackPath,
-        fileSize: stat.size
-    };
+    try {
+        const stat = await fs.promises.stat(fallbackPath);
+        const fallbackExt = path.extname(fallbackPath).toLowerCase();
+        if (stat.isFile() && stat.size > 0 && !NON_VIDEO_EXTENSIONS.has(fallbackExt)) {
+            return {
+                finalFilename: fallbackFilename,
+                finalPath: fallbackPath,
+                fileSize: stat.size
+            };
+        }
+    } catch {}
+
+    return null;
 }
 
 function parseProgressLine(job, line) {
@@ -457,9 +623,9 @@ function parseProgressLine(job, line) {
     if (!job.gotTitle && !trimmed.includes('|||') && !trimmed.includes('%')) {
         job.gotTitle = true;
         if (!job.customTitle) {
-            job.title = trimmed.slice(0, 180);
+            job.title = sanitizeTitle(trimmed);
         }
-        notifyListeners(job);
+        notifyListeners(job, true);
         return;
     }
 
@@ -471,37 +637,50 @@ function parseProgressLine(job, line) {
 
     if (!Number.isNaN(percent)) {
         job.gotStdoutProgress = true;
-        job.progress = Math.min(99, Math.round(percent));
+        const newProgress = Math.min(99, Math.round(percent));
+        const progressChanged = Math.abs(newProgress - (job.progress || 0)) >= 1;
+        job.progress = newProgress;
         job.speed = (parts[1] || '').trim().replace('Unknown', '');
         job.eta = (parts[2] || '').trim().replace('Unknown', '');
         job.status = 'downloading';
-        notifyListeners(job);
+        job.lastProgressAt = Date.now();
+        if (progressChanged) {
+            notifyListeners(job, false);
+        }
     }
 }
 
-function buildErrorMessage(stderrBuffer) {
-    if (stderrBuffer.includes('Unsupported URL')) {
-        return 'This URL is not supported. Try a direct video link or a different site.';
-    }
-    if (stderrBuffer.includes('HTTP Error 403') || stderrBuffer.includes('HTTP Error 401')) {
-        return 'Access denied. The site blocked the download.';
-    }
-    if (stderrBuffer.includes('HTTP Error 410')) {
-        return 'This video has been permanently removed (HTTP 410 Gone). It is no longer available on the site.';
-    }
-    if (stderrBuffer.includes('HTTP Error 404') || stderrBuffer.includes('not found')) {
-        return 'Video not found at this URL.';
-    }
-    if (stderrBuffer.toLowerCase().includes('network') || stderrBuffer.toLowerCase().includes('connection')) {
-        return 'Network error. Check your internet connection.';
+function classifyErrorMessage(stderrBuffer) {
+    const text = (stderrBuffer || '').toLowerCase();
+    let isPermanent = false;
+    let message = 'Download failed.';
+
+    if (text.includes('unsupported url') || text.includes('no video formats found')) {
+        isPermanent = true;
+        message = 'This URL is not supported or contains no downloadable video.';
+    } else if (text.includes('http error 410')) {
+        isPermanent = true;
+        message = 'This video has been permanently removed (HTTP 410 Gone).';
+    } else if (text.includes('http error 404') || text.includes('not found')) {
+        isPermanent = true;
+        message = 'Video not found at this URL.';
+    } else if (text.includes('http error 403') || text.includes('http error 401') || text.includes('private video') || text.includes('sign in')) {
+        isPermanent = true;
+        message = 'Access denied: video is private, restricted, or requires authentication.';
+    } else if (text.includes('file is larger than max-filesize') || text.includes('max-filesize')) {
+        isPermanent = true;
+        message = `Video exceeds the maximum allowed file size (${MAX_IMPORT_FILE_SIZE}).`;
+    } else if (text.includes('network') || text.includes('connection') || text.includes('timed out') || text.includes('timeout')) {
+        isPermanent = false;
+        message = 'Network timeout or connection reset. You can retry this download.';
+    } else {
+        const errorMatch = stderrBuffer.match(/ERROR:\s*(.+?)(?:\n|$)/);
+        if (errorMatch) {
+            message = errorMatch[1].trim().slice(0, 200);
+        }
     }
 
-    const errorMatch = stderrBuffer.match(/ERROR:\s*(.+?)(?:\n|$)/);
-    if (errorMatch) {
-        return errorMatch[1].trim().slice(0, 200);
-    }
-
-    return 'Download failed.';
+    return { message, isPermanent };
 }
 
 async function startDownload(job) {
@@ -516,6 +695,7 @@ async function startDownload(job) {
     if (!pythonCmd) {
         job.status = 'error';
         job.error = 'yt-dlp not found on server. Run: pip3 install yt-dlp';
+        job.isPermanentError = false;
         finishCurrentJob(job);
         return;
     }
@@ -529,16 +709,21 @@ async function startDownload(job) {
 
     job.status = 'downloading';
     job.progress = Math.max(job.progress, 1);
-    notifyListeners(job);
+    job.lastProgressAt = Date.now();
+    notifyListeners(job, true);
 
     return new Promise((resolve) => {
         let settled = false;
         let stderrBuffer = '';
         let stdoutBuffer = '';
+        let lastSize = 0;
+        let lastSizeChangeAt = Date.now();
 
         const finish = () => {
             if (settled) return;
             settled = true;
+            clearInterval(fileSizeMonitor);
+            clearTimeout(globalTimeoutTimer);
             finishCurrentJob(job);
             resolve();
         };
@@ -553,8 +738,22 @@ async function startDownload(job) {
         job.proc = proc;
         console.log('[import] Process spawned, pid:', proc.pid);
 
+        // Global download execution timeout (e.g. 20 minutes)
+        const globalTimeoutTimer = setTimeout(() => {
+            if (settled) return;
+            console.warn(`[import] Job ${job.id} timed out after ${DEFAULT_DOWNLOAD_TIMEOUT_MS}ms`);
+            job.status = 'error';
+            job.error = 'Download timed out after 20 minutes.';
+            job.isPermanentError = false;
+            killProcessTree(proc);
+            cleanupJobFiles(job.id);
+            finish();
+        }, DEFAULT_DOWNLOAD_TIMEOUT_MS);
+        globalTimeoutTimer.unref();
+
+        // Monitor file size and detect stalls/inactivity
         const fileSizeMonitor = setInterval(async () => {
-            if (job.gotStdoutProgress || job.canceled) return;
+            if (settled || job.canceled) return;
             try {
                 const files = (await fs.promises.readdir(uploadsDir)).filter(file => file.startsWith(job.id));
                 let totalSize = 0;
@@ -565,18 +764,34 @@ async function startDownload(job) {
                     } catch {}
                 }
 
-                if (totalSize > 0) {
+                if (totalSize !== lastSize) {
+                    lastSize = totalSize;
+                    lastSizeChangeAt = Date.now();
+                } else if (Date.now() - lastSizeChangeAt > INACTIVITY_TIMEOUT_MS && Date.now() - (job.lastProgressAt || 0) > INACTIVITY_TIMEOUT_MS) {
+                    console.warn(`[import] Job ${job.id} stalled for 5 minutes without progress.`);
+                    job.status = 'error';
+                    job.error = 'Download stalled with no network progress.';
+                    job.isPermanentError = false;
+                    killProcessTree(proc);
+                    await cleanupJobFiles(job.id);
+                    return finish();
+                }
+
+                if (!job.gotStdoutProgress && totalSize > 0) {
                     const mb = (totalSize / (1024 * 1024)).toFixed(1);
                     job.speed = `${mb} MB downloaded`;
                     job.status = 'downloading';
                     job.progress = Math.min(90, Math.max(5, Math.floor(totalSize / (1024 * 1024))));
-                    notifyListeners(job);
+                    notifyListeners(job, false);
                 }
             } catch {}
-        }, 500);
+        }, 1000);
 
         proc.stdout.on('data', (data) => {
             stdoutBuffer += data.toString();
+            if (stdoutBuffer.length > 32768) {
+                stdoutBuffer = stdoutBuffer.slice(-16384);
+            }
             const lines = stdoutBuffer.split(/\r?\n/);
             stdoutBuffer = lines.pop() || '';
             for (const line of lines) {
@@ -593,7 +808,6 @@ async function startDownload(job) {
 
         proc.stderr.on('data', (data) => {
             const chunk = data.toString();
-            console.log('[import] STDERR:', chunk.trim().slice(0, 200));
             if (stderrBuffer.length < 10000) {
                 stderrBuffer += chunk;
             }
@@ -601,6 +815,7 @@ async function startDownload(job) {
 
         proc.on('close', async (code) => {
             clearInterval(fileSizeMonitor);
+            clearTimeout(globalTimeoutTimer);
             job.proc = null;
 
             if (job.canceled) {
@@ -608,7 +823,7 @@ async function startDownload(job) {
                 job.status = 'canceled';
                 job.error = 'Import canceled.';
                 job.progress = 0;
-                notifyListeners(job);
+                notifyListeners(job, true);
                 return finish();
             }
 
@@ -616,32 +831,27 @@ async function startDownload(job) {
             job.speed = '';
             job.eta = '';
             job.status = 'downloading';
-            notifyListeners(job);
+            notifyListeners(job, true);
 
-            let downloaded;
+            let downloaded = null;
             try {
                 downloaded = await findDownloadedFile(job.id, outputPath, outputFilename);
-                console.log('[import] File found:', downloaded.finalFilename, downloaded.fileSize);
+                if (downloaded) {
+                    console.log('[import] Valid video file found:', downloaded.finalFilename, downloaded.fileSize);
+                }
             } catch (findErr) {
-                console.log('[import] findDownloadedFile failed:', findErr.message);
-                // List all files in uploads dir starting with job id for debugging
-                try {
-                    const allFiles = (await fs.promises.readdir(uploadsDir)).filter(f => f.startsWith(job.id));
-                    console.log('[import] Files matching job id:', allFiles.length ? allFiles.join(', ') : '(none)');
-                } catch {}
+                console.log('[import] findDownloadedFile error:', findErr.message);
                 downloaded = null;
             }
 
-            // Accept download if file exists and is reasonably sized (>100KB),
-            // even when yt-dlp exits non-zero (e.g. merge/remux failure on xHamster etc.)
             const MIN_VALID_SIZE = 100 * 1024; // 100 KB
             if (downloaded && downloaded.fileSize >= MIN_VALID_SIZE) {
                 if (code !== 0) {
-                    console.warn('[import] yt-dlp exited with code', code, 'but file found — treating as success');
+                    console.warn('[import] yt-dlp exited non-zero but valid video file was retrieved.');
                 }
 
                 const videoId = uuidv4();
-                const title = job.customTitle || job.title || 'Imported Video';
+                const title = sanitizeTitle(job.customTitle || job.title || 'Imported Video');
 
                 let thumbnail = null;
                 let duration = null;
@@ -685,41 +895,49 @@ async function startDownload(job) {
                         downloaded.fileSize,
                         thumbnail,
                         duration,
-                        job.url,
+                        job.normalizedUrl || job.url,
                         job.qualityLabel || job.quality,
                         job.uploadedBy || 'muaj'
                     );
+
+                    // Clean up any other leftover stream chunks for this job
+                    await cleanupJobExtraFiles(job.id, downloaded.finalFilename);
 
                     job.status = 'done';
                     job.progress = 100;
                     job.videoId = videoId;
                     job.title = title;
                     console.log('[import] SUCCESS - saved as', videoId);
-                    notifyListeners(job);
+                    notifyListeners(job, true);
                     return finish();
                 } catch (dbErr) {
                     console.log('[import] DB error:', dbErr.message);
                     job.status = 'error';
-                    job.error = 'Downloaded but failed to save to library.';
-                    notifyListeners(job);
+                    job.error = 'Downloaded but failed to save to database.';
+                    job.isPermanentError = false;
+                    notifyListeners(job, true);
                     return finish();
                 }
             }
 
             await cleanupJobFiles(job.id);
+            const { message, isPermanent } = classifyErrorMessage(stderrBuffer);
             job.status = 'error';
-            job.error = buildErrorMessage(stderrBuffer);
-            console.log('[import] FAILED:', job.error);
-            notifyListeners(job);
+            job.error = message;
+            job.isPermanentError = isPermanent;
+            console.log('[import] FAILED:', job.error, `(permanent: ${isPermanent})`);
+            notifyListeners(job, true);
             return finish();
         });
 
-        proc.on('error', () => {
+        proc.on('error', (err) => {
             clearInterval(fileSizeMonitor);
+            clearTimeout(globalTimeoutTimer);
             job.proc = null;
             job.status = 'error';
-            job.error = 'Could not start download process. Install: sudo apt install python3-pip && pip3 install yt-dlp';
-            notifyListeners(job);
+            job.error = 'Could not start download process. Ensure yt-dlp and python are installed.';
+            job.isPermanentError = false;
+            notifyListeners(job, true);
             finish();
         });
     });
@@ -736,6 +954,50 @@ function parseUrlsFromBody(body) {
     return [...new Set(rawUrls.map(url => String(url || '').trim()).filter(Boolean))].slice(0, 10);
 }
 
+// ----------------------------------------------------
+// Startup Cleanup for Orphaned Temp Files
+// ----------------------------------------------------
+async function cleanupOrphanedImportFiles() {
+    try {
+        if (!fs.existsSync(uploadsDir)) return;
+        const files = await fs.promises.readdir(uploadsDir);
+        const rows = db.prepare('SELECT filename FROM videos').all();
+        const activeDbFilenames = new Set(rows.map(r => r.filename));
+
+        let cleaned = 0;
+        const now = Date.now();
+        for (const file of files) {
+            const filePath = path.join(uploadsDir, file);
+            try {
+                const stat = await fs.promises.stat(filePath);
+                const ageMs = now - stat.mtimeMs;
+                const ext = path.extname(file).toLowerCase();
+
+                // Delete partial files or unreferenced UUID files older than 15 mins
+                if (file.endsWith('.part') || file.endsWith('.temp') || file.endsWith('.ytdl') || NON_VIDEO_EXTENSIONS.has(ext)) {
+                    if (ageMs > 5 * 60 * 1000) {
+                        await fs.promises.unlink(filePath).catch(() => {});
+                        cleaned++;
+                    }
+                } else if (!activeDbFilenames.has(file) && ageMs > 30 * 60 * 1000) {
+                    // Orphaned video file not in DB
+                    await fs.promises.unlink(filePath).catch(() => {});
+                    cleaned++;
+                }
+            } catch {}
+        }
+        if (cleaned > 0) {
+            console.log(`[import-cleanup] Reclaimed disk space: cleaned ${cleaned} orphaned temp/download file(s).`);
+        }
+    } catch (err) {
+        console.warn('[import-cleanup] Startup cleanup error:', err.message);
+    }
+}
+
+// ----------------------------------------------------
+// Routes
+// ----------------------------------------------------
+
 router.post('/import-url', isAuthenticated, async (req, res) => {
     let csrfOk = false;
     requireCsrf(req, res, () => {
@@ -744,11 +1006,11 @@ router.post('/import-url', isAuthenticated, async (req, res) => {
     if (!csrfOk) return;
 
     if (activeJobs.size >= MAX_QUEUE_SIZE) {
-        return res.status(429).json({ error: 'Import queue is full. Wait for a few jobs to finish.' });
+        return res.status(429).json({ error: 'Import queue is full. Please wait for current jobs to finish.' });
     }
 
     const urls = parseUrlsFromBody(req.body);
-    const customTitle = String(req.body.title || '').trim().slice(0, 180);
+    const customTitle = sanitizeTitle(req.body.title);
     const quality = sanitizeQuality(req.body.quality);
     const formatId = sanitizeFormatId(req.body.formatId);
     const qualityLabel = String(req.body.qualityLabel || quality).trim().slice(0, 80);
@@ -758,15 +1020,40 @@ router.post('/import-url', isAuthenticated, async (req, res) => {
     }
 
     const jobs = [];
+    const alreadyExistingVideos = [];
+
     for (const url of urls) {
         const valid = await isValidImportUrl(url);
         if (!valid) {
-            return res.status(400).json({ error: `Invalid URL: ${url}` });
+            return res.status(400).json({ error: `Invalid or restricted URL: ${url.slice(0, 100)}` });
+        }
+
+        const normalizedUrl = normalizeSourceUrl(url);
+
+        // 1. Check if video already exists in database
+        const existingInDb = (typeof db.getVideoBySourceUrl === 'function')
+            ? (db.getVideoBySourceUrl(normalizedUrl) || db.getVideoBySourceUrl(url))
+            : null;
+
+        if (existingInDb) {
+            alreadyExistingVideos.push(existingInDb);
+            continue;
+        }
+
+        // 2. Check if already active or queued
+        const existingJob = (currentJob && (currentJob.normalizedUrl === normalizedUrl || currentJob.url === url))
+            ? currentJob
+            : pendingQueue.find(j => j.normalizedUrl === normalizedUrl || j.url === url);
+
+        if (existingJob) {
+            jobs.push(serializeJob(existingJob));
+            continue;
         }
 
         const job = {
             id: uuidv4(),
             url,
+            normalizedUrl,
             customTitle: urls.length === 1 ? customTitle : '',
             quality,
             formatId: urls.length === 1 ? formatId : '',
@@ -778,6 +1065,8 @@ router.post('/import-url', isAuthenticated, async (req, res) => {
             eta: '',
             title: customTitle || 'Queued import',
             error: null,
+            isPermanentError: false,
+            retryCount: 0,
             videoId: null,
             listeners: new Set(),
             createdAt: new Date().toISOString(),
@@ -786,21 +1075,39 @@ router.post('/import-url', isAuthenticated, async (req, res) => {
             proc: null,
             canceled: false,
             gotTitle: false,
-            gotStdoutProgress: false
+            gotStdoutProgress: false,
+            _lastNotified: 0
         };
 
         enqueueJob(job);
         jobs.push(serializeJob(job));
     }
 
+    if (alreadyExistingVideos.length > 0 && jobs.length === 0) {
+        const video = alreadyExistingVideos[0];
+        return res.json({
+            alreadyExists: true,
+            videoId: video.id,
+            title: video.title,
+            message: `"${video.title}" is already in your library.`
+        });
+    }
+
     res.json({
-        jobId: jobs[0].id,
+        jobId: jobs.length > 0 ? jobs[0].id : null,
         jobs,
-        message: jobs.length > 1 ? `${jobs.length} imports queued` : 'Import queued'
+        alreadyExistingCount: alreadyExistingVideos.length,
+        message: jobs.length > 1 ? `${jobs.length} import(s) queued` : (jobs.length === 1 ? 'Import queued' : 'Video already in library')
     });
 });
 
 router.post('/import-formats', isAuthenticated, async (req, res) => {
+    let csrfOk = false;
+    requireCsrf(req, res, () => {
+        csrfOk = true;
+    });
+    if (!csrfOk) return;
+
     const url = String(req.body.url || '').trim();
     if (!url) {
         return res.status(400).json({ error: 'No URL provided.' });
@@ -808,18 +1115,26 @@ router.post('/import-formats', isAuthenticated, async (req, res) => {
 
     const valid = await isValidImportUrl(url);
     if (!valid) {
-        return res.status(400).json({ error: 'Invalid URL. Must be a public http:// or https:// video URL.' });
+        return res.status(400).json({ error: 'Invalid or restricted URL. Must be a public http:// or https:// video URL.' });
     }
 
+    // Limit concurrent format analysis to protect 1 vCPU / 1 GB RAM
+    if (activeFormatProbeCount >= MAX_CONCURRENT_FORMAT_PROBES) {
+        return res.status(429).json({ error: 'Server is currently analyzing another URL. Please wait a few seconds and try again.' });
+    }
+
+    activeFormatProbeCount++;
     try {
         const info = await fetchVideoInfo(url);
         res.json({
-            title: info.title || '',
+            title: sanitizeTitle(info.title || ''),
             duration: info.duration || null,
             formats: buildFormatOptions(info)
         });
     } catch (err) {
         res.status(400).json({ error: err.message || 'Could not analyze this URL.' });
+    } finally {
+        activeFormatProbeCount = Math.max(0, activeFormatProbeCount - 1);
     }
 });
 
@@ -831,6 +1146,12 @@ router.get('/import-jobs', isAuthenticated, (req, res) => {
 });
 
 router.post('/import-cancel/:jobId', isAuthenticated, (req, res) => {
+    let csrfOk = false;
+    requireCsrf(req, res, () => {
+        csrfOk = true;
+    });
+    if (!csrfOk) return;
+
     const job = activeJobs.get(req.params.jobId);
     if (!job) {
         return res.status(404).json({ error: 'Job not found.' });
@@ -842,15 +1163,22 @@ router.post('/import-cancel/:jobId', isAuthenticated, (req, res) => {
         job.canceled = true;
         job.status = 'canceled';
         job.error = 'Import canceled.';
-        notifyListeners(job);
+        notifyListeners(job, true);
         notifyQueue();
         scheduleJobCleanup(job);
         return res.json({ success: true });
     }
 
-    if ((job.status === 'starting' || job.status === 'downloading') && job.proc) {
+    if (job.status === 'starting' || job.status === 'downloading') {
         job.canceled = true;
-        job.proc.kill('SIGTERM');
+        if (job.proc) {
+            killProcessTree(job.proc);
+        }
+        job.status = 'canceled';
+        job.error = 'Import canceled.';
+        notifyListeners(job, true);
+        notifyQueue();
+        scheduleJobCleanup(job);
         return res.json({ success: true });
     }
 
@@ -858,9 +1186,24 @@ router.post('/import-cancel/:jobId', isAuthenticated, (req, res) => {
 });
 
 router.post('/import-retry/:jobId', isAuthenticated, async (req, res) => {
+    let csrfOk = false;
+    requireCsrf(req, res, () => {
+        csrfOk = true;
+    });
+    if (!csrfOk) return;
+
     const oldJob = activeJobs.get(req.params.jobId);
     if (!oldJob) {
         return res.status(404).json({ error: 'Job not found.' });
+    }
+
+    if (oldJob.isPermanentError) {
+        return res.status(400).json({ error: `Cannot retry: ${oldJob.error}` });
+    }
+
+    const retryCount = (oldJob.retryCount || 0) + 1;
+    if (retryCount > 3) {
+        return res.status(400).json({ error: 'Maximum retry limit reached (3 attempts).' });
     }
 
     if (activeJobs.size >= MAX_QUEUE_SIZE) {
@@ -875,6 +1218,7 @@ router.post('/import-retry/:jobId', isAuthenticated, async (req, res) => {
     const job = {
         id: uuidv4(),
         url: oldJob.url,
+        normalizedUrl: oldJob.normalizedUrl || normalizeSourceUrl(oldJob.url),
         customTitle: oldJob.customTitle || '',
         quality: oldJob.quality,
         formatId: oldJob.formatId,
@@ -886,6 +1230,8 @@ router.post('/import-retry/:jobId', isAuthenticated, async (req, res) => {
         eta: '',
         title: oldJob.customTitle || oldJob.title || 'Queued import',
         error: null,
+        isPermanentError: false,
+        retryCount,
         videoId: null,
         listeners: new Set(),
         createdAt: new Date().toISOString(),
@@ -894,7 +1240,8 @@ router.post('/import-retry/:jobId', isAuthenticated, async (req, res) => {
         proc: null,
         canceled: false,
         gotTitle: false,
-        gotStdoutProgress: false
+        gotStdoutProgress: false,
+        _lastNotified: 0
     };
 
     enqueueJob(job);
@@ -922,18 +1269,23 @@ router.get('/import-progress/:jobId', isAuthenticated, (req, res) => {
             clearInterval(keepalive);
         }
     }, 15000);
+    keepalive.unref();
 
     const listener = () => sendSSE(res, job);
     job.listeners.add(listener);
     sendSSE(res, job);
 
-    req.on('close', () => {
+    const cleanup = () => {
         clearInterval(keepalive);
         job.listeners.delete(listener);
         if (job.listeners.size === 0 && ['done', 'error', 'canceled'].includes(job.status)) {
             scheduleJobCleanup(job);
         }
-    });
+    };
+
+    req.on('close', cleanup);
+    res.on('finish', cleanup);
+    res.on('error', cleanup);
 });
 
 async function fetchVideoInfo(url) {
@@ -947,6 +1299,7 @@ async function fetchVideoInfo(url) {
         ...getYtdlpBaseArgs(url),
         '--dump-single-json',
         '--no-warnings',
+        '--',
         url
     ];
 
@@ -961,15 +1314,16 @@ async function fetchVideoInfo(url) {
         let stdout = '';
         let stderr = '';
         const timer = setTimeout(() => {
-            proc.kill('SIGTERM');
+            killProcessTree(proc);
             reject(new Error('URL analysis timed out.'));
         }, 45000);
+        timer.unref();
 
         proc.stdout.on('data', (chunk) => {
             stdout += chunk.toString();
             if (stdout.length > 5 * 1024 * 1024) {
                 clearTimeout(timer);
-                proc.kill('SIGTERM');
+                killProcessTree(proc);
                 reject(new Error('URL analysis response was too large.'));
             }
         });
@@ -986,8 +1340,6 @@ async function fetchVideoInfo(url) {
         proc.on('close', (code) => {
             clearTimeout(timer);
 
-            // Try parsing JSON even if exit code is non-zero —
-            // some sites (xHamster etc.) output valid JSON but yt-dlp still reports warnings/errors
             if (stdout.trim()) {
                 try {
                     const info = JSON.parse(stdout);
@@ -998,12 +1350,13 @@ async function fetchVideoInfo(url) {
                         return resolve(info);
                     }
                 } catch {
-                    // JSON parse failed, fall through to error handling
+                    // JSON parse failed, fall through
                 }
             }
 
             if (code !== 0) {
-                return reject(new Error(buildErrorMessage(stderr)));
+                const { message } = classifyErrorMessage(stderr);
+                return reject(new Error(message));
             }
 
             return reject(new Error('Could not read format information.'));
@@ -1066,5 +1419,10 @@ function buildFormatOptions(info) {
 }
 
 router.getImportJobs = () => Array.from(activeJobs.values()).map(serializeJob);
+router.cleanupOrphanedImportFiles = cleanupOrphanedImportFiles;
+router.normalizeSourceUrl = normalizeSourceUrl;
+router.isValidImportUrl = isValidImportUrl;
+router.sanitizeFormatId = sanitizeFormatId;
+router.sanitizeTitle = sanitizeTitle;
 
 module.exports = router;

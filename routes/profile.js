@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { isAuthenticated } = require('../middleware/auth');
-const { requireCsrf, invalidateAvatarCache } = require('../utils/security');
+const { requireCsrf, invalidateAvatarCache, invalidateSettingsCache } = require('../utils/security');
 const db = require('../database');
 
 const avatarsDir = path.join(__dirname, '..', 'uploads', 'avatars');
@@ -101,6 +101,44 @@ router.post('/profile/avatar/remove', isAuthenticated, (req, res) => {
         return res.json({ success: true });
     }
     return res.redirect(returnUrl);
+});
+
+// GET /api/settings — Get user preferences
+router.get('/api/settings', isAuthenticated, (req, res) => {
+    const user = req.session.user;
+    const settings = db.getUserSettings(user);
+    res.json({ success: true, settings });
+});
+
+// POST /api/settings/ui-mode — Save UI Mode preference
+router.post('/api/settings/ui-mode', isAuthenticated, (req, res) => {
+    const user = req.session.user;
+    const mode = (req.body && req.body.ui_mode) ? String(req.body.ui_mode).trim().toLowerCase() : (typeof req.body === 'string' ? req.body.trim().toLowerCase() : '');
+    
+    if (mode !== 'standard' && mode !== 'minimal') {
+        return res.status(400).json({ error: 'Invalid UI mode. Must be "standard" or "minimal".' });
+    }
+
+    db.setUserSetting(user, 'ui_mode', mode);
+    invalidateSettingsCache(user);
+
+    return res.json({ success: true, ui_mode: mode });
+});
+
+// POST /api/settings/theme — Save Palette Theme preference
+router.post('/api/settings/theme', isAuthenticated, (req, res) => {
+    const user = req.session.user;
+    const theme = (req.body && req.body.theme) ? String(req.body.theme).trim().toLowerCase() : (typeof req.body === 'string' ? req.body.trim().toLowerCase() : '');
+    const validThemes = new Set(['cinematic', 'cyberpunk', 'emerald', 'sunset']);
+
+    if (!validThemes.has(theme)) {
+        return res.status(400).json({ error: 'Invalid theme.' });
+    }
+
+    db.setUserSetting(user, 'theme', theme);
+    invalidateSettingsCache(user);
+
+    return res.json({ success: true, theme });
 });
 
 module.exports = router;

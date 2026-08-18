@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="bn" data-user="<%= typeof user !== 'undefined' && user ? user : '' %>">
+<html lang="bn" data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-ui-mode="<%= typeof uiMode !== 'undefined' && uiMode ? uiMode : 'standard' %>" data-theme="<%= typeof userTheme !== 'undefined' && userTheme ? userTheme : (typeof user !== 'undefined' && user === 'hajera' ? 'sunset' : 'cinematic') %>">
 
 <head>
     <meta charset="UTF-8">
@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="/css/style.css?v=8.0">
     <link rel="stylesheet" href="/css/messages.css?v=8.0">
     <link rel="stylesheet" href="/css/calling.css?v=8.0">
+    <link rel="stylesheet" href="/css/minimal.css?v=8.0">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -270,42 +271,90 @@
             </div>
             <% } %>
 
-            <!-- Global Theme Selector Modal / Drawer -->
+            <!-- Global Settings & Appearance Modal / Drawer -->
             <div class="theme-modal-backdrop" id="themeModalBackdrop">
-                <div class="theme-modal">
+                <div class="theme-modal settings-modal-box">
                     <div class="theme-modal-header">
-                        <h3>🎨 Choose Palette Theme</h3>
-                        <button type="button" class="theme-close-btn" id="themeCloseBtn">&times;</button>
+                        <div class="settings-modal-title-group">
+                            <span class="settings-modal-icon">⚙️</span>
+                            <div>
+                                <h3 class="settings-modal-title">Settings &amp; Appearance</h3>
+                                <p class="settings-modal-subtitle">Customize interface experience and color palette</p>
+                            </div>
+                        </div>
+                        <button type="button" class="theme-close-btn" id="themeCloseBtn" aria-label="Close Settings">&times;</button>
                     </div>
-                    <div class="theme-options-grid">
-                        <button type="button" class="theme-card-option" data-set-theme="cinematic">
-                            <div class="theme-preview preview-cinematic">
-                                <div class="dot dot-1"></div>
-                                <div class="dot dot-2"></div>
+
+                    <div class="settings-modal-scroll-body">
+                        <!-- UI Mode Section (Settings -> Appearance -> UI Mode) -->
+                        <div class="settings-section">
+                            <div class="settings-section-header">
+                                <span class="settings-section-badge">UI MODE</span>
+                                <h4 class="settings-section-title">Interface Experience</h4>
+                                <p class="settings-section-desc">Switch between full visual design and high-performance Android minimal mode</p>
                             </div>
-                            <span>🎬 Obsidian Gold</span>
-                        </button>
-                        <button type="button" class="theme-card-option" data-set-theme="cyberpunk">
-                            <div class="theme-preview preview-cyberpunk">
-                                <div class="dot dot-1"></div>
-                                <div class="dot dot-2"></div>
+                            <div class="ui-mode-options-grid">
+                                <button type="button" class="ui-mode-card-option" data-set-ui-mode="standard">
+                                    <div class="ui-mode-card-top">
+                                        <div class="ui-mode-radio-circle"><span class="ui-mode-radio-dot"></span></div>
+                                        <span class="ui-mode-pill pill-standard">Full Design</span>
+                                    </div>
+                                    <div class="ui-mode-card-content">
+                                        <h5 class="ui-mode-name">Standard UI</h5>
+                                        <p class="ui-mode-info">Full existing design with rich glow effects, glassmorphism, floating elements, and smooth cinematic animations.</p>
+                                    </div>
+                                </button>
+
+                                <button type="button" class="ui-mode-card-option" data-set-ui-mode="minimal">
+                                    <div class="ui-mode-card-top">
+                                        <div class="ui-mode-radio-circle"><span class="ui-mode-radio-dot"></span></div>
+                                        <span class="ui-mode-pill pill-minimal">⚡ Fast Android</span>
+                                    </div>
+                                    <div class="ui-mode-card-content">
+                                        <h5 class="ui-mode-name">Minimal UI</h5>
+                                        <p class="ui-mode-info">Clean, lightweight, high-speed Android interface with zero lag, instant touches, and low battery/memory usage.</p>
+                                    </div>
+                                </button>
                             </div>
-                            <span>⚡ Cyberpunk Neon</span>
-                        </button>
-                        <button type="button" class="theme-card-option" data-set-theme="emerald">
-                            <div class="theme-preview preview-emerald">
-                                <div class="dot dot-1"></div>
-                                <div class="dot dot-2"></div>
+                        </div>
+
+                        <!-- Palette Theme Section -->
+                        <div class="settings-section">
+                            <div class="settings-section-header">
+                                <span class="settings-section-badge">PALETTE</span>
+                                <h4 class="settings-section-title">Accent Palette Theme</h4>
                             </div>
-                            <span>🌿 Emerald Luxury</span>
-                        </button>
-                        <button type="button" class="theme-card-option" data-set-theme="sunset">
-                            <div class="theme-preview preview-sunset">
-                                <div class="dot dot-1"></div>
-                                <div class="dot dot-2"></div>
+                            <div class="theme-options-grid">
+                                <button type="button" class="theme-card-option" data-set-theme="cinematic">
+                                    <div class="theme-preview preview-cinematic">
+                                        <div class="dot dot-1"></div>
+                                        <div class="dot dot-2"></div>
+                                    </div>
+                                    <span>🎬 Obsidian Gold</span>
+                                </button>
+                                <button type="button" class="theme-card-option" data-set-theme="cyberpunk">
+                                    <div class="theme-preview preview-cyberpunk">
+                                        <div class="dot dot-1"></div>
+                                        <div class="dot dot-2"></div>
+                                    </div>
+                                    <span>⚡ Cyberpunk Neon</span>
+                                </button>
+                                <button type="button" class="theme-card-option" data-set-theme="emerald">
+                                    <div class="theme-preview preview-emerald">
+                                        <div class="dot dot-1"></div>
+                                        <div class="dot dot-2"></div>
+                                    </div>
+                                    <span>🌿 Emerald Luxury</span>
+                                </button>
+                                <button type="button" class="theme-card-option" data-set-theme="sunset">
+                                    <div class="theme-preview preview-sunset">
+                                        <div class="dot dot-1"></div>
+                                        <div class="dot dot-2"></div>
+                                    </div>
+                                    <span>🌅 Sunset Velvet</span>
+                                </button>
                             </div>
-                            <span>🌅 Sunset Velvet</span>
-                        </button>
+                        </div>
                     </div>
                 </div>
             </div>
