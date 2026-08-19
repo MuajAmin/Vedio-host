@@ -165,6 +165,17 @@ db.exec(`
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        endpoint TEXT NOT NULL UNIQUE,
+        keys_p256dh TEXT NOT NULL,
+        keys_auth TEXT NOT NULL,
+        user_agent TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_used_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_at ON videos(uploaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_asc ON videos(uploaded_at ASC);
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
@@ -179,6 +190,8 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_reactions_message_id ON message_reactions(message_id);
     CREATE INDEX IF NOT EXISTS idx_call_logs_users ON call_logs(caller, receiver, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_call_logs_created ON call_logs(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_push_subs_username ON push_subscriptions(username);
+    CREATE INDEX IF NOT EXISTS idx_push_subs_endpoint ON push_subscriptions(endpoint);
 `);
 
 // Migrations for older SQLite files.
@@ -1246,6 +1259,92 @@ function getVideoBySourceUrl(sourceUrl) {
 }
 
 db.getVideoBySourceUrl = getVideoBySourceUrl;
+
+// ============================================================
+//  PUSH SUBSCRIPTION HELPERS
+// ============================================================
+
+function savePushSubscription(username, subscription, userAgent = null) {
+    if (!username || !subscription || !subscription.endpoint) return null;
+    try {
+        const keys = subscription.keys || {};
+        const nowIso = new Date().toISOString();
+        db.prepare(`
+            INSERT INTO push_subscriptions (username, endpoint, keys_p256dh, keys_auth, user_agent, created_at, last_used_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(endpoint) DO UPDATE SET
+                username = excluded.username,
+                keys_p256dh = excluded.keys_p256dh,
+                keys_auth = excluded.keys_auth,
+                user_agent = COALESCE(excluded.user_agent, push_subscriptions.user_agent),
+                last_used_at = excluded.last_used_at
+        `).run(username, subscription.endpoint, keys.p256dh || '', keys.auth || '', userAgent, nowIso, nowIso);
+        return true;
+    } catch (err) {
+        console.error('[db] Error saving push subscription:', err.message);
+        return null;
+    }
+}
+
+function getPushSubscriptions(username) {
+    if (!username) return [];
+    try {
+        return db.prepare('SELECT * FROM push_subscriptions WHERE username = ?').all(username);
+    } catch (err) {
+        console.error('[db] Error getting push subscriptions:', err.message);
+        return [];
+    }
+}
+
+function deletePushSubscription(endpoint) {
+    if (!endpoint) return false;
+    try {
+        db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(endpoint);
+        return true;
+    } catch (err) {
+        console.error('[db] Error deleting push subscription:', err.message);
+        return false;
+    }
+}
+
+function deletePushSubscriptionsForUser(username) {
+    if (!username) return 0;
+    try {
+        const result = db.prepare('DELETE FROM push_subscriptions WHERE username = ?').run(username);
+        return result.changes || 0;
+    } catch (err) {
+        console.error('[db] Error deleting user push subscriptions:', err.message);
+        return 0;
+    }
+}
+
+function cleanupStalePushSubscriptions(maxAgeDays = 30) {
+    try {
+        const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
+        const result = db.prepare('DELETE FROM push_subscriptions WHERE last_used_at < ?').run(cutoff);
+        if (result.changes > 0) {
+            console.log(`[db] Cleaned up ${result.changes} stale push subscriptions.`);
+        }
+        return result.changes || 0;
+    } catch (err) {
+        console.error('[db] Error cleaning up stale push subscriptions:', err.message);
+        return 0;
+    }
+}
+
+function touchPushSubscription(endpoint) {
+    if (!endpoint) return;
+    try {
+        db.prepare('UPDATE push_subscriptions SET last_used_at = ? WHERE endpoint = ?').run(new Date().toISOString(), endpoint);
+    } catch {}
+}
+
+db.savePushSubscription = savePushSubscription;
+db.getPushSubscriptions = getPushSubscriptions;
+db.deletePushSubscription = deletePushSubscription;
+db.deletePushSubscriptionsForUser = deletePushSubscriptionsForUser;
+db.cleanupStalePushSubscriptions = cleanupStalePushSubscriptions;
+db.touchPushSubscription = touchPushSubscription;
 
 module.exports = db;
 

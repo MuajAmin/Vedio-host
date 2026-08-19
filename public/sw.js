@@ -2,9 +2,10 @@
 //  VideoHost Service Worker — Android Mobile PWA Cache Engine
 //  Strategy: Cache-first for versioned static assets (CSS, JS, fonts),
 //  Network-only for SSE streams, WebRTC signaling, API, & range videos.
+//  + Web Push Notification Handler for Messenger-style notifications
 // ============================================================
 
-const CACHE_NAME = 'videohost-v8.0';
+const CACHE_NAME = 'videohost-v8.1';
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
@@ -107,5 +108,127 @@ self.addEventListener('fetch', (event) => {
                 });
             })
         );
+    }
+});
+
+// ============================================================
+//  WEB PUSH NOTIFICATION HANDLER
+//  Receives push events and shows native browser/Android notifications
+// ============================================================
+
+self.addEventListener('push', (event) => {
+    if (!event.data) return;
+
+    let data;
+    try {
+        data = event.data.json();
+    } catch {
+        return;
+    }
+
+    const title = data.title || 'VideoHost';
+    const body = data.body || 'You have a new message';
+    const messageId = data.messageId;
+    const sender = data.sender || '';
+    const tag = data.tag || `msg-${sender}`;
+    const url = data.url || '/messages';
+
+    // Check if user is currently viewing the messages page
+    // If so, skip the system notification (SSE handles in-page updates)
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+            // Check if any visible client is on the messages page
+            const isViewingMessages = clients.some((client) => {
+                if (client.visibilityState !== 'visible') return false;
+                try {
+                    const clientUrl = new URL(client.url);
+                    return clientUrl.pathname === '/messages';
+                } catch {
+                    return false;
+                }
+            });
+
+            if (isViewingMessages) {
+                // User is actively viewing messages — SSE handles UI updates
+                // Skip the system notification to avoid being intrusive
+                return;
+            }
+
+            // Show the native notification
+            const options = {
+                body,
+                icon: data.icon || '/css/icon-192.png',
+                badge: data.badge || '/css/icon-192.png',
+                tag,
+                renotify: true, // Vibrate/sound even when replacing same tag
+                data: {
+                    url,
+                    messageId,
+                    sender,
+                    timestamp: data.timestamp
+                },
+                vibrate: [200, 100, 200],
+                requireInteraction: false,
+                silent: false
+            };
+
+            // Add timestamp if available
+            if (data.timestamp) {
+                try {
+                    options.timestamp = new Date(data.timestamp).getTime();
+                } catch {}
+            }
+
+            return self.registration.showNotification(title, options);
+        })
+    );
+});
+
+// ============================================================
+//  NOTIFICATION CLICK HANDLER
+//  Opens/focuses the website and navigates to the correct conversation
+// ============================================================
+
+self.addEventListener('notificationclick', (event) => {
+    const notification = event.notification;
+    notification.close();
+
+    const targetUrl = (notification.data && notification.data.url) || '/messages';
+
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+            // Try to find an existing tab with our site open
+            for (const client of clients) {
+                try {
+                    const clientUrl = new URL(client.url);
+                    // Check if this client is from our origin
+                    if (clientUrl.origin === self.location.origin) {
+                        // Navigate to messages if not already there
+                        client.navigate(targetUrl);
+                        client.focus();
+                        return;
+                    }
+                } catch {}
+            }
+
+            // No existing tab found — open a new one
+            return self.clients.openWindow(targetUrl);
+        })
+    );
+});
+
+// ============================================================
+//  MESSAGE HANDLER
+//  Communication between the main page and service worker
+// ============================================================
+
+self.addEventListener('message', (event) => {
+    if (!event.data) return;
+
+    // Handle skip-notification message from the active page
+    // (used when the page knows the user is viewing the conversation)
+    if (event.data.type === 'SKIP_NOTIFICATION') {
+        // The page is signaling that it's handling this message in-page
+        // No action needed — the push handler already checks visibility
     }
 });

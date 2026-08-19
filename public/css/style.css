@@ -4139,7 +4139,7 @@ input, textarea, select {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #e11d48;
+    background: var(--accent-gold);
 }
 
 /* Fullscreen */

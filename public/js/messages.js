@@ -2108,6 +2108,223 @@
     // Start Real-Time SSE Stream (syncState is called from the 'connected' handler)
     initSSE();
 
+    // Initialize Push Notifications after SSE is set up
+    initPushNotifications();
+
+    // ------------------------------------------------------------
+    //  20. WEB PUSH NOTIFICATION MANAGER
+    // ------------------------------------------------------------
+    function initPushNotifications() {
+        // Check browser support
+        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+            return;
+        }
+
+        // Already granted — silently subscribe without prompting
+        if (Notification.permission === 'granted') {
+            subscribeToPush();
+            return;
+        }
+
+        // Denied — nothing we can do, messaging works fine without push
+        if (Notification.permission === 'denied') {
+            return;
+        }
+
+        // Default (not yet decided) — show a non-intrusive prompt
+        // Only show once per session to avoid being annoying
+        if (sessionStorage.getItem('pushPromptShown')) {
+            return;
+        }
+
+        // Delay the prompt slightly so it doesn't appear immediately on page load
+        setTimeout(() => {
+            showPushPermissionBanner();
+        }, 5000);
+    }
+
+    function showPushPermissionBanner() {
+        // Don't show on login page or if already exists
+        if (!currentUser) return;
+        if (document.getElementById('pushPermBanner')) return;
+
+        sessionStorage.setItem('pushPromptShown', '1');
+
+        const partnerDisplay = partnerUser === 'muaj' ? 'Muaj' : 'Hajera';
+        const banner = document.createElement('div');
+        banner.id = 'pushPermBanner';
+        banner.style.cssText = `
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 99999;
+            background: linear-gradient(135deg, rgba(20, 22, 35, 0.97), rgba(30, 34, 55, 0.97));
+            border: 1px solid rgba(120, 130, 255, 0.25);
+            border-radius: 16px;
+            padding: 16px 20px;
+            max-width: 360px;
+            width: calc(100% - 32px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 60px rgba(100, 110, 255, 0.08);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            animation: pushBannerSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        `;
+
+        banner.innerHTML = `
+            <style>
+                @keyframes pushBannerSlideUp {
+                    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+                    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+                }
+            </style>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div style="width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg, #6366f1, #8b5cf6); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <span style="font-size:18px;">🔔</span>
+                </div>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-size:13.5px; font-weight:600; color:#e2e4f0; line-height:1.3;">
+                        Get notified when ${escapeHtml(partnerDisplay)} messages you
+                    </div>
+                    <div style="font-size:12px; color:#8b8fa8; margin-top:2px; line-height:1.3;">
+                        Even when this tab is closed
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button type="button" id="pushPermDismiss" style="
+                    background: transparent;
+                    border: 1px solid rgba(255,255,255,0.1);
+                    color: #8b8fa8;
+                    padding: 7px 16px;
+                    border-radius: 8px;
+                    font-size: 12.5px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                ">Not now</button>
+                <button type="button" id="pushPermEnable" style="
+                    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+                    border: none;
+                    color: #fff;
+                    padding: 7px 18px;
+                    border-radius: 8px;
+                    font-size: 12.5px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+                ">Enable</button>
+            </div>
+        `;
+
+        document.body.appendChild(banner);
+
+        document.getElementById('pushPermDismiss').addEventListener('click', () => {
+            banner.style.opacity = '0';
+            banner.style.transform = 'translateX(-50%) translateY(20px)';
+            banner.style.transition = 'all 0.3s ease';
+            setTimeout(() => banner.remove(), 300);
+        });
+
+        document.getElementById('pushPermEnable').addEventListener('click', () => {
+            banner.style.opacity = '0';
+            banner.style.transform = 'translateX(-50%) translateY(20px)';
+            banner.style.transition = 'all 0.3s ease';
+            setTimeout(() => banner.remove(), 300);
+            requestPushPermission();
+        });
+    }
+
+    async function requestPushPermission() {
+        try {
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+                await subscribeToPush();
+            }
+        } catch (err) {
+            console.warn('[push] Permission request failed:', err);
+        }
+    }
+
+    async function subscribeToPush() {
+        try {
+            // Wait for service worker registration
+            let reg = window.__swRegistration;
+            if (!reg) {
+                reg = await navigator.serviceWorker.ready;
+            }
+
+            // Check if already subscribed
+            let subscription = await reg.pushManager.getSubscription();
+
+            if (!subscription) {
+                // Fetch VAPID public key from server
+                const resp = await fetch('/api/push/vapid-public-key', {
+                    credentials: 'same-origin'
+                });
+                if (!resp.ok) {
+                    console.warn('[push] Could not fetch VAPID key');
+                    return;
+                }
+                const { publicKey } = await resp.json();
+                if (!publicKey) return;
+
+                // Convert VAPID key from base64url to Uint8Array
+                const applicationServerKey = urlBase64ToUint8Array(publicKey);
+
+                // Subscribe to push
+                subscription = await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey
+                });
+            }
+
+            // Send subscription to server
+            await fetch('/api/push/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    subscription: {
+                        endpoint: subscription.endpoint,
+                        keys: {
+                            p256dh: arrayBufferToBase64(subscription.getKey('p256dh')),
+                            auth: arrayBufferToBase64(subscription.getKey('auth'))
+                        }
+                    }
+                })
+            });
+        } catch (err) {
+            console.warn('[push] Subscription failed:', err);
+        }
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; i++) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    }
+
+    function arrayBufferToBase64(buffer) {
+        if (!buffer) return '';
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
     // Reconcile and reconnect on page restoration from bfcache
     window.addEventListener('pageshow', (event) => {
         if (event.persisted) {

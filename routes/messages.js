@@ -6,6 +6,7 @@ const { isAuthenticated } = require('../middleware/auth');
 const { requireCsrf, invalidateUnreadCache } = require('../utils/security');
 const db = require('../database');
 const { parseUserAgent, getClientIp } = require('../utils/device');
+const { sendPushToUser } = require('../utils/pushNotify');
 
 const router = express.Router();
 
@@ -224,6 +225,9 @@ router.post('/api/messages', isAuthenticated, (req, res) => {
         ipAddress
     });
 
+    // Send push notification to partner (async, non-blocking)
+    sendPushToUser(partner, saved);
+
     res.json({ success: true, message: saved, stats: updatedStats });
 });
 
@@ -274,6 +278,9 @@ router.post('/api/messages/voice', isAuthenticated, (req, res) => {
             unreadCount: senderUnread,
             stats: updatedStats
         });
+
+        // Send push notification to partner (async, non-blocking)
+        sendPushToUser(partner, saved);
 
         res.json({ success: true, message: saved, stats: updatedStats });
     });

@@ -95,13 +95,16 @@ html[data-ui-mode="minimal"] .sparkle-trail-container,
 html[data-ui-mode="minimal"] .love-banner-shimmer,
 html[data-ui-mode="minimal"] .love-banner-particles,
 html[data-ui-mode="minimal"] .logo-shine,
+html[data-ui-mode="minimal"] .login-bg-effects,
 html[data-ui-mode="minimal"] .incoming-call-ambient-glow,
 html[data-ui-mode="minimal"] .incoming-call-pulse-ring,
 html[data-ui-mode="minimal"] .incoming-call-shimmer-border,
 html[data-ui-mode="minimal"] .active-call-ambient-backdrop,
 html[data-ui-mode="minimal"] .active-call-avatar-glow-ring,
 html[data-ui-mode="minimal"] .badge-pulse-dot,
-html[data-ui-mode="minimal"] .bottom-nav-fab-ring {
+html[data-ui-mode="minimal"] .bottom-nav-fab-ring,
+html[data-ui-mode="minimal"] .msg-floating-launcher::before,
+html[data-ui-mode="minimal"] .aperture-ring {
     display: none !important;
     animation: none !important;
 }
@@ -116,9 +119,10 @@ html[data-ui-mode="minimal"] body {
 }
 
 /* --------------------------------------------------------------------------
-   3. Android Top App Bar & Navigation
+   3. Android Top App Bar & Navigation (Standard Navbar & Admin App Bar)
    -------------------------------------------------------------------------- */
-html[data-ui-mode="minimal"] .navbar {
+html[data-ui-mode="minimal"] .navbar,
+html[data-ui-mode="minimal"] .android-app-bar {
     height: var(--min-header-height) !important;
     min-height: var(--min-header-height) !important;
     background: var(--min-bg-surface) !important;
@@ -156,12 +160,15 @@ html[data-ui-mode="minimal"] .nav-brand-pill {
     border-radius: var(--min-radius-xs) !important;
 }
 
-html[data-ui-mode="minimal"] .nav-right {
+html[data-ui-mode="minimal"] .nav-right,
+html[data-ui-mode="minimal"] .app-bar-actions {
     gap: 8px !important;
 }
 
 html[data-ui-mode="minimal"] .nav-right .btn,
-html[data-ui-mode="minimal"] .nav-theme-toggle {
+html[data-ui-mode="minimal"] .nav-theme-toggle,
+html[data-ui-mode="minimal"] .btn-app-bar-action,
+html[data-ui-mode="minimal"] .app-bar-back-btn {
     min-height: 38px !important;
     padding: 6px 10px !important;
     background: var(--min-bg-surface-raised) !important;
@@ -172,7 +179,9 @@ html[data-ui-mode="minimal"] .nav-theme-toggle {
 }
 
 html[data-ui-mode="minimal"] .nav-right .btn:active,
-html[data-ui-mode="minimal"] .nav-theme-toggle:active {
+html[data-ui-mode="minimal"] .nav-theme-toggle:active,
+html[data-ui-mode="minimal"] .btn-app-bar-action:active,
+html[data-ui-mode="minimal"] .app-bar-back-btn:active {
     background: var(--min-bg-surface-active) !important;
 }
 
@@ -309,19 +318,42 @@ html[data-ui-mode="minimal"] .header-titles .subtitle {
     color: var(--min-text-secondary) !important;
 }
 
+/* Fixed Search Box: Clean relative wrapper with solid input styling */
 html[data-ui-mode="minimal"] .search-box {
+    position: relative !important;
     width: 100% !important;
-    background: var(--min-bg-input) !important;
-    border: 1px solid var(--min-border-strong) !important;
-    border-radius: var(--min-radius-md) !important;
-    padding: 2px 10px !important;
-    height: 44px !important;
+    max-width: 480px !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    height: auto !important;
     box-shadow: none !important;
 }
 
 html[data-ui-mode="minimal"] .search-input {
+    width: 100% !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 8px 14px 8px 40px !important;
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-md) !important;
     font-size: 14px !important;
     color: var(--min-text-primary) !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .search-input:focus {
+    border-color: var(--accent-gold) !important;
+    background: var(--min-bg-surface-raised) !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+html[data-ui-mode="minimal"] .search-icon {
+    left: 12px !important;
+    width: 16px !important;
+    height: 16px !important;
 }
 
 /* Continue Watching Rail */
@@ -430,7 +462,7 @@ html[data-ui-mode="minimal"] .card-watch-progress span {
 }
 
 html[data-ui-mode="minimal"] .play-overlay {
-    display: none !important; /* Remove heavy hover overlay */
+    display: none !important;
 }
 
 html[data-ui-mode="minimal"] .card-info {
@@ -453,6 +485,19 @@ html[data-ui-mode="minimal"] .card-meta {
     font-size: 11px !important;
     color: var(--min-text-secondary) !important;
     margin-top: 4px;
+}
+
+/* Empty State in Minimal Mode */
+html[data-ui-mode="minimal"] .empty-state,
+html[data-ui-mode="minimal"] .admin-empty,
+html[data-ui-mode="minimal"] .no-comments-box,
+html[data-ui-mode="minimal"] .no-suggestions-card {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    padding: 24px 16px !important;
+    box-shadow: none !important;
+    text-align: center;
 }
 
 /* --------------------------------------------------------------------------
@@ -479,6 +524,26 @@ html[data-ui-mode="minimal"] .vp-controls {
     background: linear-gradient(to top, rgba(10, 11, 16, 0.95), transparent) !important;
 }
 
+html[data-ui-mode="minimal"] .vp-speed-menu {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-sm) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
+}
+
+html[data-ui-mode="minimal"] .vp-speed-option {
+    color: var(--min-text-primary) !important;
+}
+
+html[data-ui-mode="minimal"] .vp-speed-option:hover,
+html[data-ui-mode="minimal"] .vp-speed-option:active {
+    background: var(--min-bg-surface-active) !important;
+}
+
+html[data-ui-mode="minimal"] .vp-speed-option.active::before {
+    background: var(--accent-gold) !important;
+}
+
 html[data-ui-mode="minimal"] .video-info-section {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border) !important;
@@ -492,6 +557,29 @@ html[data-ui-mode="minimal"] .video-title {
     font-size: 17px !important;
     font-weight: 700 !important;
     line-height: 1.35 !important;
+    color: var(--min-text-primary) !important;
+}
+
+/* Inline Title Rename Form */
+html[data-ui-mode="minimal"] .title-edit-form {
+    gap: 6px !important;
+}
+
+html[data-ui-mode="minimal"] .title-edit-input {
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-sm) !important;
+    color: var(--min-text-primary) !important;
+    padding: 6px 10px !important;
+    font-size: 14px !important;
+}
+
+html[data-ui-mode="minimal"] .title-save-btn,
+html[data-ui-mode="minimal"] .title-cancel-btn,
+html[data-ui-mode="minimal"] .title-edit-btn {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-sm) !important;
     color: var(--min-text-primary) !important;
 }
 
@@ -516,7 +604,24 @@ html[data-ui-mode="minimal"] .video-action-buttons .btn:active {
     background: var(--min-bg-surface-active) !important;
 }
 
-/* Suggested Videos Panel */
+/* Thumbnail Manager in Minimal Mode */
+html[data-ui-mode="minimal"] .thumbnail-manager {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    padding: 14px 16px !important;
+    margin-bottom: 14px !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .thumbnail-input {
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-sm) !important;
+    color: var(--min-text-primary) !important;
+}
+
+/* Suggested Videos Panel & Text Containment */
 html[data-ui-mode="minimal"] .suggestions-panel {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border) !important;
@@ -530,6 +635,23 @@ html[data-ui-mode="minimal"] .suggestions-heading {
     font-weight: 600 !important;
 }
 
+html[data-ui-mode="minimal"] .suggestion-chips .chip-btn {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    color: var(--min-text-secondary) !important;
+    border-radius: var(--min-radius-full) !important;
+    padding: 3px 10px !important;
+    font-size: 11px !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .suggestion-chips .chip-btn.active {
+    background: var(--accent-gold) !important;
+    color: #000 !important;
+    font-weight: 600 !important;
+    border-color: var(--accent-gold) !important;
+}
+
 html[data-ui-mode="minimal"] .suggestion-card {
     display: flex !important;
     flex-direction: row !important;
@@ -541,6 +663,7 @@ html[data-ui-mode="minimal"] .suggestion-card {
     box-shadow: none !important;
     margin-bottom: 8px !important;
     transition: background 0.12s ease;
+    overflow: hidden;
 }
 
 html[data-ui-mode="minimal"] .suggestion-card:active {
@@ -556,11 +679,25 @@ html[data-ui-mode="minimal"] .suggestion-thumb-wrap {
     background: #000 !important;
 }
 
+html[data-ui-mode="minimal"] .suggestion-details {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    flex: 1 1 auto;
+}
+
 html[data-ui-mode="minimal"] .suggestion-title {
     font-size: 13px !important;
     font-weight: 600 !important;
     line-height: 1.3 !important;
     color: var(--min-text-primary) !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
 }
 
 html[data-ui-mode="minimal"] .suggestion-meta {
@@ -590,6 +727,13 @@ html[data-ui-mode="minimal"] .comment-input {
     color: var(--min-text-primary) !important;
 }
 
+html[data-ui-mode="minimal"] .comment-emoji-bar .emoji-chip {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-full) !important;
+    box-shadow: none !important;
+}
+
 html[data-ui-mode="minimal"] .comment-item {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--min-border-subtle) !important;
@@ -599,13 +743,87 @@ html[data-ui-mode="minimal"] .comment-item {
     box-shadow: none !important;
 }
 
+/* Autoplay Toast Notification */
+html[data-ui-mode="minimal"] .autoplay-toast {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--border-accent) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Watch Together Stage & Cinema Chat Drawer */
+html[data-ui-mode="minimal"] .wt-status-bar {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    padding: 8px 12px !important;
+    margin-bottom: 12px !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .wt-invite-banner {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--border-accent) !important;
+    border-radius: var(--min-radius-md) !important;
+    padding: 12px 14px !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .wt-chat-drawer {
+    background: var(--min-bg-surface) !important;
+    border-left: 1px solid var(--min-border-strong) !important;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.6) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-chat-header {
+    background: var(--min-bg-surface-raised) !important;
+    border-bottom: 1px solid var(--min-border) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-chat-input {
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-sm) !important;
+    color: var(--min-text-primary) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-emoji-bar .wt-emoji-btn {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-full) !important;
+}
+
 /* --------------------------------------------------------------------------
-   7. Direct Messages (/messages & Floating Chat Drawer)
+   7. Direct Messages (/messages & Floating Chat Drawer Widget)
    -------------------------------------------------------------------------- */
-html[data-ui-mode="minimal"] .messages-page-wrapper {
-    height: 100dvh !important;
+html[data-ui-mode="minimal"] .msg-fullpage-container {
     background: var(--min-bg-root) !important;
     padding: 0 !important;
+}
+
+html[data-ui-mode="minimal"] .msg-fullpage-sidebar {
+    background: var(--min-bg-surface) !important;
+    border-right: 1px solid var(--min-border) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-stat-card {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border-subtle) !important;
+    border-radius: var(--min-radius-sm) !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .msg-media-tab-btn {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-sm) !important;
+    color: var(--min-text-secondary) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-media-tab-btn.is-active {
+    background: var(--min-bg-surface-active) !important;
+    border-color: var(--accent-gold) !important;
+    color: var(--min-text-primary) !important;
 }
 
 html[data-ui-mode="minimal"] .msg-header {
@@ -624,6 +842,18 @@ html[data-ui-mode="minimal"] .msg-header-name {
 html[data-ui-mode="minimal"] .msg-header-presence-sub {
     font-size: 11px !important;
     color: var(--min-text-secondary) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-inchat-search-bar {
+    background: var(--min-bg-surface-raised) !important;
+    border-bottom: 1px solid var(--min-border) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-inchat-search-input {
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    color: var(--min-text-primary) !important;
+    border-radius: var(--min-radius-sm) !important;
 }
 
 html[data-ui-mode="minimal"] .msg-body-container {
@@ -661,6 +891,47 @@ html[data-ui-mode="minimal"] .msg-time-stamp {
     margin-top: 4px;
 }
 
+/* Quoted Reply Preview */
+html[data-ui-mode="minimal"] .msg-reply-bar,
+html[data-ui-mode="minimal"] .msg-quote-card {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-sm) !important;
+}
+
+/* Chat Media: Shared Videos, Voice Notes, Call Events */
+html[data-ui-mode="minimal"] .msg-video-card {
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-sm) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-voice-player {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border-subtle) !important;
+    border-radius: var(--min-radius-sm) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-call-event-card {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .msg-reaction-badge {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-full) !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .msg-reaction-badge.is-user-reacted {
+    border-color: var(--accent-gold) !important;
+    background: var(--min-bg-surface-active) !important;
+}
+
+/* Messages Footer & Inputs */
 html[data-ui-mode="minimal"] .msg-footer {
     background: var(--min-bg-surface) !important;
     border-top: 1px solid var(--min-border) !important;
@@ -686,6 +957,29 @@ html[data-ui-mode="minimal"] .msg-quick-emoji-btn {
     border-radius: var(--min-radius-full) !important;
 }
 
+/* Chat Drawer Widget */
+html[data-ui-mode="minimal"] .msg-drawer-widget {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-lg) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
+}
+
+/* Attach Video Modal & Action Sheet */
+html[data-ui-mode="minimal"] .msg-attach-video-modal {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-mobile-actions-sheet {
+    background: var(--min-bg-surface) !important;
+    border-top: 1px solid var(--min-border-strong) !important;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.7) !important;
+}
+
+/* Floating Launcher & Global Invite Toast */
 html[data-ui-mode="minimal"] .msg-floating-launcher {
     bottom: calc(var(--min-bottom-nav-height) + 16px) !important;
     right: 14px !important;
@@ -711,8 +1005,21 @@ html[data-ui-mode="minimal"] .msg-floating-toast-card {
     padding: 10px 12px !important;
 }
 
+html[data-ui-mode="minimal"] .wt-global-invite-toast {
+    bottom: calc(var(--min-bottom-nav-height) + 14px) !important;
+    left: 12px !important;
+    right: 12px !important;
+}
+
+html[data-ui-mode="minimal"] .wt-toast-pill {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--border-accent) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
+}
+
 /* --------------------------------------------------------------------------
-   8. WebRTC Calling UI in Minimal Mode
+   8. WebRTC Calling UI & Minimized Call Pill
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] .incoming-call-card {
     background: var(--min-bg-surface) !important;
@@ -776,8 +1083,196 @@ html[data-ui-mode="minimal"] .call-control-btn.btn-end-call {
     border: none !important;
 }
 
+html[data-ui-mode="minimal"] .call-quick-emoji-btn {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-full) !important;
+}
+
+html[data-ui-mode="minimal"] .minimized-call-pill {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--border-accent) !important;
+    border-radius: var(--min-radius-full) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
+    bottom: calc(var(--min-bottom-nav-height) + 14px) !important;
+}
+
 /* --------------------------------------------------------------------------
-   9. Settings & Appearance Modal Styling
+   9. Upload Studio Page (/upload)
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] .upload-container {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    padding: 16px !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .upload-dropzone {
+    background: var(--min-bg-input) !important;
+    border: 2px dashed var(--min-border-strong) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: none !important;
+    padding: 24px 16px !important;
+}
+
+html[data-ui-mode="minimal"] .upload-dropzone.dragover {
+    border-color: var(--accent-gold) !important;
+    background: var(--min-bg-surface-raised) !important;
+}
+
+html[data-ui-mode="minimal"] .upload-tabs {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-sm) !important;
+    padding: 3px !important;
+}
+
+html[data-ui-mode="minimal"] .upload-tab {
+    background: transparent !important;
+    border-radius: var(--min-radius-xs) !important;
+    color: var(--min-text-secondary) !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+}
+
+html[data-ui-mode="minimal"] .upload-tab.active {
+    background: var(--min-bg-surface-active) !important;
+    color: var(--accent-gold) !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .selected-file-card,
+html[data-ui-mode="minimal"] .import-status-card,
+html[data-ui-mode="minimal"] .import-result-card {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .form-input,
+html[data-ui-mode="minimal"] .quality-select {
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-sm) !important;
+    color: var(--min-text-primary) !important;
+}
+
+/* --------------------------------------------------------------------------
+   10. Admin Control Center (/admin)
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] .admin-app-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 12px 14px 24px 14px !important;
+}
+
+html[data-ui-mode="minimal"] .hajera-hero-card,
+html[data-ui-mode="minimal"] .vps-monitor-card,
+html[data-ui-mode="minimal"] .admin-card,
+html[data-ui-mode="minimal"] .admin-table-card {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: none !important;
+    padding: 16px !important;
+    margin-bottom: 16px !important;
+}
+
+html[data-ui-mode="minimal"] .vps-metric-box,
+html[data-ui-mode="minimal"] .admin-stat-card,
+html[data-ui-mode="minimal"] .session-mobile-card,
+html[data-ui-mode="minimal"] .hajera-android-card,
+html[data-ui-mode="minimal"] .admin-video-android-card,
+html[data-ui-mode="minimal"] .timeline-entry {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border-subtle) !important;
+    border-radius: var(--min-radius-sm) !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .admin-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+html[data-ui-mode="minimal"] .admin-table th {
+    background: var(--min-bg-surface-raised) !important;
+    border-bottom: 1px solid var(--min-border-strong) !important;
+    color: var(--min-text-secondary) !important;
+    padding: 10px 12px !important;
+    font-size: 12px !important;
+}
+
+html[data-ui-mode="minimal"] .admin-table td {
+    border-bottom: 1px solid var(--min-border-subtle) !important;
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+}
+
+html[data-ui-mode="minimal"] .admin-tabs-nav .admin-tab-btn {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    color: var(--min-text-secondary) !important;
+    border-radius: var(--min-radius-sm) !important;
+}
+
+html[data-ui-mode="minimal"] .admin-tabs-nav .admin-tab-btn.active {
+    background: var(--min-bg-surface-active) !important;
+    border-color: var(--accent-gold) !important;
+    color: var(--accent-gold) !important;
+}
+
+/* --------------------------------------------------------------------------
+   11. Login Page (/login)
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] .login-container {
+    background: var(--min-bg-root) !important;
+}
+
+html[data-ui-mode="minimal"] .login-card {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-lg) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
+}
+
+html[data-ui-mode="minimal"] .input-wrapper {
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-md) !important;
+}
+
+html[data-ui-mode="minimal"] .input-wrapper input {
+    background: transparent !important;
+    color: var(--min-text-primary) !important;
+}
+
+html[data-ui-mode="minimal"] .login-btn {
+    background: var(--accent-gold) !important;
+    color: #0a0b10 !important;
+    font-weight: 700 !important;
+    border-radius: var(--min-radius-md) !important;
+    box-shadow: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   12. Error & Forbidden Pages (/error, /forbidden)
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] .error-container {
+    background: var(--min-bg-root) !important;
+}
+
+html[data-ui-mode="minimal"] .error-content {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-lg) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
+}
+
+/* --------------------------------------------------------------------------
+   13. Settings & Appearance Modal Styling
    -------------------------------------------------------------------------- */
 .settings-modal-box {
     max-width: 520px !important;
@@ -788,7 +1283,9 @@ html[data-ui-mode="minimal"] .call-control-btn.btn-end-call {
     overflow: hidden;
 }
 
-html[data-ui-mode="minimal"] .settings-modal-box {
+html[data-ui-mode="minimal"] .settings-modal-box,
+html[data-ui-mode="minimal"] .profile-modal-card,
+html[data-ui-mode="minimal"] .theme-modal {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border-strong) !important;
     border-radius: var(--min-radius-lg) !important;
@@ -964,7 +1461,7 @@ html[data-ui-mode="minimal"] .settings-modal-box {
 }
 
 /* --------------------------------------------------------------------------
-   10. Mobile Responsive Touch Adaptations (320px - 430px)
+   14. Mobile Responsive Touch Adaptations (320px - 480px)
    -------------------------------------------------------------------------- */
 @media (max-width: 480px) {
     .ui-mode-options-grid {
@@ -982,10 +1479,15 @@ html[data-ui-mode="minimal"] .settings-modal-box {
     html[data-ui-mode="minimal"] .card-thumbnail {
         aspect-ratio: 16 / 9 !important;
     }
+
+    html[data-ui-mode="minimal"] .vps-metrics-grid {
+        grid-template-columns: 1fr !important;
+    }
 }
 
 @media (max-width: 360px) {
-    html[data-ui-mode="minimal"] .navbar {
+    html[data-ui-mode="minimal"] .navbar,
+    html[data-ui-mode="minimal"] .android-app-bar {
         padding: 0 8px !important;
     }
 
@@ -995,5 +1497,9 @@ html[data-ui-mode="minimal"] .settings-modal-box {
 
     html[data-ui-mode="minimal"] .bottom-nav-label {
         font-size: 10px !important;
+    }
+
+    html[data-ui-mode="minimal"] .nav-btn-text {
+        display: none !important;
     }
 }

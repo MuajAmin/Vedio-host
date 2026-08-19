@@ -1787,6 +1787,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (profileModal) {
         const openProfileModal = () => {
+            syncActiveUiModeOption();
             profileModal.style.display = 'flex';
             requestAnimationFrame(() => profileModal.classList.add('active'));
         };
@@ -2272,6 +2273,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const openBtn = e.target.closest('#themeSwitcherBtn, #themeSwitcherNavBtn, #themeSwitcherBottomBtn, .open-settings-trigger, [data-open-settings]');
         if (openBtn) {
             e.preventDefault();
+            if (profileModal && profileModal.classList.contains('active') && typeof closeProfileModal === 'function') {
+                closeProfileModal();
+            }
             openThemeModal();
             return;
         }
@@ -2877,6 +2881,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let activeHearts = 0;
 
             function spawnHeart() {
+                if (document.documentElement.getAttribute('data-ui-mode') === 'minimal') return;
                 if (activeHearts >= maxHearts) return;
                 activeHearts++;
 
@@ -3006,6 +3011,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let lastTouchBurst = 0;
 
             document.addEventListener('touchstart', (e) => {
+                if (document.documentElement.getAttribute('data-ui-mode') === 'minimal') return;
                 const now = Date.now();
                 if (now - lastTouchBurst < 400) return;
                 lastTouchBurst = now;
@@ -3778,6 +3784,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize SPA navigation engine & current page modules on startup
     initSpaNavigation();
     initPageModules();
+    if (typeof syncActiveUiModeOption === 'function') syncActiveUiModeOption();
+    if (typeof syncActiveThemeOption === 'function') syncActiveThemeOption();
 
 });
 

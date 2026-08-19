@@ -266,6 +266,10 @@ app.use((req, res, next) => {
     if (req.path.startsWith('/api/call/') && (req.method === 'POST' || req.method === 'GET')) {
         return next();
     }
+    // Push Subscription API — handled via session auth
+    if (req.path.startsWith('/api/push/') && (req.method === 'POST' || req.method === 'GET')) {
+        return next();
+    }
     // User Settings API — handled via session auth
     if (req.path.startsWith('/api/settings') && (req.method === 'POST' || req.method === 'GET')) {
         return next();
@@ -286,6 +290,7 @@ const profileRoutes = require('./routes/profile');
 const watchTogetherRoutes = require('./routes/watchTogether');
 const messagesRoutes = require('./routes/messages');
 const callRoutes = require('./routes/calls');
+const pushRoutes = require('./routes/push');
 
 app.use('/', authRoutes);
 app.use('/', videoRoutes);
@@ -296,6 +301,7 @@ app.use('/', profileRoutes);
 app.use('/', watchTogetherRoutes);
 app.use('/', messagesRoutes);
 app.use('/', callRoutes);
+app.use('/', pushRoutes);
 
 
 
@@ -327,6 +333,14 @@ const server = app.listen(PORT, () => {
     if (typeof importRoutes.cleanupOrphanedImportFiles === 'function') {
         importRoutes.cleanupOrphanedImportFiles();
     }
+    // Periodic cleanup of stale push subscriptions (every 24 hours)
+    setInterval(() => {
+        try {
+            db.cleanupStalePushSubscriptions(30);
+        } catch (err) {
+            console.error('[push] Cleanup error:', err.message);
+        }
+    }, 24 * 60 * 60 * 1000).unref();
 });
 
 // Increase timeouts for large file uploads on slow connections
