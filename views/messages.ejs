@@ -38,19 +38,29 @@ function formatTime(isoStr) {
     }
 }
 
+function getDhakaDateParts(date) {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Dhaka',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric'
+    });
+    return formatter.format(date);
+}
+
 function formatDateHeader(isoStr) {
     if (!isoStr) return '';
     try {
         const d = new Date(isoStr);
         if (isNaN(d.getTime())) return '';
-        const options = { timeZone: 'Asia/Dhaka', year: 'numeric', month: 'numeric', day: 'numeric' };
-        const msgDateStr = d.toLocaleDateString('en-US', options);
-        const todayDateStr = new Date().toLocaleDateString('en-US', options);
-        const yesterday = new Date(Date.now() - 86400000);
-        const yesterdayDateStr = yesterday.toLocaleDateString('en-US', options);
+        const now = new Date();
+        const msgDateStr = getDhakaDateParts(d);
+        const todayDateStr = getDhakaDateParts(now);
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const yesterdayDateStr = getDhakaDateParts(yesterday);
         if (msgDateStr === todayDateStr) return 'Today';
         if (msgDateStr === yesterdayDateStr) return 'Yesterday';
-        return d.toLocaleDateString('en-US', { timeZone: 'Asia/Dhaka', month: 'short', day: 'numeric' });
+        return d.toLocaleDateString('en-US', { timeZone: 'Asia/Dhaka', month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
     } catch {
         return '';
     }
@@ -150,7 +160,7 @@ if (msgList.length === 0) {
         let dateDivider = '';
         if (dateStr && dateStr !== lastDate) {
             lastDate = dateStr;
-            dateDivider = `<div class="msg-date-divider"><span>${h(dateStr)}</span></div>`;
+            dateDivider = `<div class="msg-date-divider" data-date="${h(dateStr)}"><span>${h(dateStr)}</span></div>`;
         }
 
         let videoCardHtml = '';

@@ -1,6 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
-const { isAuthenticated, isMuaj } = require('../middleware/auth');
+const { isAuthenticated } = require('../middleware/auth');
 const db = require('../database');
 const { broadcastToUser, broadcastToBoth } = require('../utils/realtime');
 
@@ -121,8 +121,10 @@ router.get('/watch-together/active', isAuthenticated, (req, res) => {
 });
 
 // POST /watch-together/create — Host creates a room
-router.post('/watch-together/create', isMuaj, (req, res) => {
+router.post('/watch-together/create', isAuthenticated, (req, res) => {
     const { videoId, videoTitle, currentTime, playing, playbackRate } = req.body;
+    const hostUser = req.session.user;
+    const inviteeUser = hostUser === 'muaj' ? 'hajera' : 'muaj';
 
     if (!videoId) {
         return res.status(400).json({ error: 'videoId required' });
@@ -143,7 +145,7 @@ router.post('/watch-together/create', isMuaj, (req, res) => {
     const resolvedTitle = (videoTitle || videoRow.title || 'Untitled Video').trim();
 
     // Close any existing room by this host
-    const existing = getRoomByHost('muaj');
+    const existing = getRoomByHost(hostUser);
     if (existing) {
         if (existing.room.graceTimer) clearTimeout(existing.room.graceTimer);
         broadcastToRoom(existing.room, 'room-closed', { reason: 'Host started a new session' });
@@ -151,7 +153,7 @@ router.post('/watch-together/create', isMuaj, (req, res) => {
             try { client.end(); } catch {}
         }
         rooms.delete(existing.id);
-        broadcastToUser('hajera', 'watch-together-ended', {
+        broadcastToUser(inviteeUser, 'watch-together-ended', {
             roomId: existing.id,
             reason: 'Host started a new session'
         });
@@ -161,7 +163,7 @@ router.post('/watch-together/create', isMuaj, (req, res) => {
     const room = {
         videoId,
         videoTitle: resolvedTitle,
-        host: 'muaj',
+        host: hostUser,
         guest: null,
         active: true,
         videoState: {
@@ -178,12 +180,12 @@ router.post('/watch-together/create', isMuaj, (req, res) => {
 
     rooms.set(roomId, room);
 
-    // Broadcast instant real-time notification to Hajera across all routes
-    broadcastToUser('hajera', 'watch-together-invite', {
+    // Broadcast instant real-time notification to the partner user across all routes
+    broadcastToUser(inviteeUser, 'watch-together-invite', {
         roomId,
         videoId,
         videoTitle: resolvedTitle,
-        host: 'muaj',
+        host: hostUser,
         createdAt: room.createdAt,
         videoState: room.videoState
     });
@@ -192,6 +194,7 @@ router.post('/watch-together/create', isMuaj, (req, res) => {
         roomId,
         videoId,
         videoTitle: resolvedTitle,
+        host: hostUser,
         videoState: room.videoState
     });
 });
@@ -217,6 +220,7 @@ router.post('/watch-together/join/:roomId', isAuthenticated, (req, res) => {
             status: 'already-host',
             videoId: room.videoId,
             videoTitle: room.videoTitle,
+            host: room.host,
             videoState: room.videoState,
             chatHistory: room.chatHistory.slice(-50),
             avatars
@@ -245,6 +249,7 @@ router.post('/watch-together/join/:roomId', isAuthenticated, (req, res) => {
         status: 'joined',
         videoId: room.videoId,
         videoTitle: room.videoTitle,
+        host: room.host,
         videoState: room.videoState,
         chatHistory: room.chatHistory.slice(-50),
         avatars
@@ -295,10 +300,15 @@ router.post('/watch-together/leave/:roomId', isAuthenticated, (req, res) => {
 });
 
 // POST /watch-together/sync/:roomId — Host sends video state sync
-router.post('/watch-together/sync/:roomId', isMuaj, (req, res) => {
+router.post('/watch-together/sync/:roomId', isAuthenticated, (req, res) => {
     const room = rooms.get(req.params.roomId);
     if (!room || !room.active) {
         return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const user = req.session.user;
+    if (user !== room.host) {
+        return res.status(403).json({ error: 'Only host can broadcast playback sync' });
     }
 
     const { currentTime, playing, playbackRate, action } = req.body;

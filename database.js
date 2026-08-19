@@ -522,15 +522,19 @@ function parseSqliteDate(str) {
     if (!str) return 0;
     if (typeof str === 'number') return str;
     const s = String(str).trim();
-    const iso = s.includes('T') ? (s.endsWith('Z') ? s : s + 'Z') : s.replace(' ', 'T') + 'Z';
+    if (!s) return 0;
+    const iso = (s.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(s)) ? s.replace(' ', 'T') : (s.includes('T') ? s + 'Z' : s.replace(' ', 'T') + 'Z');
     const t = new Date(iso).getTime();
-    return isNaN(t) ? new Date(str).getTime() : t;
+    return isNaN(t) ? new Date(str).getTime() || 0 : t;
 }
 
 function normalizeIsoDate(str) {
     if (!str) return null;
     const s = String(str).trim();
-    if (s.includes('T') && s.endsWith('Z')) return s;
+    if (!s) return null;
+    if (s.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(s)) {
+        return s.replace(' ', 'T');
+    }
     return s.includes('T') ? s + 'Z' : s.replace(' ', 'T') + 'Z';
 }
 

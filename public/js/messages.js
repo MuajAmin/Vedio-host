@@ -70,50 +70,36 @@
         replyToMessage: null,
         isSyncing: false,
         isInitialSyncDone: false,
-        lastSyncAt: 0 // debounce timestamp for syncState()
+        lastSyncAt: 0, // debounce timestamp for syncState()
+        isSending: false,
+        isLoadingOlder: false,
+        hasMoreOlder: true
     };
 
     // ------------------------------------------------------------
-    //  3. DOM ELEMENT REFERENCES
+    //  3. DOM ELEMENT REFERENCES & HELPERS
     // ------------------------------------------------------------
-    const DOM = {
-        launcher: document.getElementById('msgFloatingLauncher'),
-        drawer: document.getElementById('msgDrawerWidget'),
-        drawerCloseBtn: document.getElementById('msgDrawerCloseBtn'),
-        unreadPill: document.getElementById('msgLauncherUnreadBadge'),
-        fullPageList: document.getElementById('msgFullpageList'),
-        drawerList: document.getElementById('msgDrawerList'),
-        floatingToast: document.getElementById('msgFloatingToast'),
-        floatingToastText: document.getElementById('msgFloatingToastText'),
-        floatingToastReply: document.getElementById('msgFloatingToastReply'),
-        floatingToastClose: document.getElementById('msgFloatingToastClose'),
-        // Sidebar Stats
-        statTotalMessages: document.getElementById('msgStatTotalMessages'),
-        statSharedVideos: document.getElementById('msgStatSharedVideos'),
-        statVoiceMessages: document.getElementById('msgStatVoiceMessages'),
-        statCalls: document.getElementById('msgStatCalls'),
-        tabCountVideos: document.getElementById('msgTabCountVideos'),
-        tabCountVoice: document.getElementById('msgTabCountVoice'),
-        tabCountCalls: document.getElementById('msgTabCountCalls'),
-        sidebarWatchingBanner: document.getElementById('msgSidebarWatchingBanner'),
-        // In-chat Search
-        searchToggleBtn: document.getElementById('msgSearchToggleBtn'),
-        inChatSearchBar: document.getElementById('msgInChatSearchBar'),
-        inChatSearchInput: document.getElementById('msgInChatSearchInput'),
-        inChatSearchClose: document.getElementById('msgInChatSearchClose')
-    };
+    function getFullpageList() {
+        return document.getElementById('msgFullpageList');
+    }
+
+    function getDrawerList() {
+        return document.getElementById('msgDrawerList');
+    }
+
+    function getActiveContainers() {
+        const list = [];
+        const dl = getDrawerList();
+        const fl = getFullpageList();
+        if (dl) list.push(dl);
+        if (fl) list.push(fl);
+        return list;
+    }
 
     let toastDismissTimeout = null;
     let typingTimeout = null;
     let isCurrentlyTyping = false;
     let sseSource = null;
-
-    function getActiveContainers() {
-        const list = [];
-        if (DOM.drawerList) list.push(DOM.drawerList);
-        if (DOM.fullPageList) list.push(DOM.fullPageList);
-        return list;
-    }
 
     // ------------------------------------------------------------
     //  4. FORMATTING & HTML HELPERS
@@ -127,6 +113,39 @@
             .replace(/'/g, '&#039;');
     }
 
+    function getDhakaDateParts(date) {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Dhaka',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric'
+        });
+        return formatter.format(date);
+    }
+
+    function formatDateHeader(isoStr) {
+        if (!isoStr) return '';
+        try {
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return '';
+            const now = new Date();
+            const msgDateStr = getDhakaDateParts(d);
+            const todayDateStr = getDhakaDateParts(now);
+            const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            const yesterdayDateStr = getDhakaDateParts(yesterday);
+            if (msgDateStr === todayDateStr) return 'Today';
+            if (msgDateStr === yesterdayDateStr) return 'Yesterday';
+            return d.toLocaleDateString('en-US', {
+                timeZone: 'Asia/Dhaka',
+                month: 'short',
+                day: 'numeric',
+                year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+            });
+        } catch {
+            return '';
+        }
+    }
+
     function formatTime(isoStr) {
         if (!isoStr) return '';
         try {
@@ -138,24 +157,6 @@
                 minute: '2-digit',
                 hour12: true
             });
-        } catch {
-            return '';
-        }
-    }
-
-    function formatDateHeader(isoStr) {
-        if (!isoStr) return '';
-        try {
-            const d = new Date(isoStr);
-            if (isNaN(d.getTime())) return '';
-            const options = { timeZone: 'Asia/Dhaka', year: 'numeric', month: 'numeric', day: 'numeric' };
-            const msgDateStr = d.toLocaleDateString('en-US', options);
-            const todayDateStr = new Date().toLocaleDateString('en-US', options);
-            const yesterday = new Date(Date.now() - 86400000);
-            const yesterdayDateStr = yesterday.toLocaleDateString('en-US', options);
-            if (msgDateStr === todayDateStr) return 'Today';
-            if (msgDateStr === yesterdayDateStr) return 'Yesterday';
-            return d.toLocaleDateString('en-US', { timeZone: 'Asia/Dhaka', month: 'short', day: 'numeric' });
         } catch {
             return '';
         }
@@ -471,10 +472,20 @@
         `;
     }
 
-    function scrollToBottom(container) {
+    function isScrolledNearBottom(container) {
+        if (!container) return true;
+        const threshold = 150;
+        return (container.scrollHeight - container.scrollTop - container.clientHeight) <= threshold;
+    }
+
+    function scrollToBottom(container, smooth = false) {
         if (!container) return;
         requestAnimationFrame(() => {
-            container.scrollTop = container.scrollHeight;
+            if (smooth) {
+                container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+            } else {
+                container.scrollTop = container.scrollHeight;
+            }
         });
     }
 
@@ -485,9 +496,9 @@
         State.unreadCount = Math.max(0, parseInt(count, 10) || 0);
         const text = State.unreadCount > 99 ? '99+' : String(State.unreadCount);
 
-        const currentLauncher = document.getElementById('msgFloatingLauncher') || DOM.launcher;
-        const currentPill = document.getElementById('msgLauncherUnreadBadge') || DOM.unreadPill;
-        const currentDrawer = document.getElementById('msgDrawerWidget') || DOM.drawer;
+        const currentLauncher = document.getElementById('msgFloatingLauncher');
+        const currentPill = document.getElementById('msgLauncherUnreadBadge');
+        const currentDrawer = document.getElementById('msgDrawerWidget');
         const allNavBadges = document.querySelectorAll('.nav-msg-badge');
 
         if (currentPill) {
@@ -521,8 +532,10 @@
     }
 
     function showFloatingMessageToast(msg) {
-        if (!DOM.floatingToast || !msg) return;
-        const isDrawerOpen = DOM.drawer && DOM.drawer.classList.contains('is-open');
+        const toast = document.getElementById('msgFloatingToast');
+        if (!toast || !msg) return;
+        const drawer = document.getElementById('msgDrawerWidget');
+        const isDrawerOpen = drawer && drawer.classList.contains('is-open');
         if (isDrawerOpen || State.isMessagesPage) return;
 
         let previewText = 'New message';
@@ -562,25 +575,27 @@
             previewText = `🎬 Shared video: ${msg.video.title || 'video'}`;
         }
 
-        if (DOM.floatingToastText) {
-            DOM.floatingToastText.textContent = previewText;
+        const toastText = document.getElementById('msgFloatingToastText');
+        if (toastText) {
+            toastText.textContent = previewText;
         }
 
-        if (DOM.floatingToastReply) {
+        const toastReply = document.getElementById('msgFloatingToastReply');
+        if (toastReply) {
             if (isCallEvent) {
-                DOM.floatingToastReply.textContent = isVideo ? '📹 Video Back' : '📞 Call Back';
-                DOM.floatingToastReply.className = `msg-floating-toast-reply-btn ${isVideo ? 'btn-trigger-video-call' : 'btn-trigger-audio-call'}`;
-                DOM.floatingToastReply.href = '#';
+                toastReply.textContent = isVideo ? '📹 Video Back' : '📞 Call Back';
+                toastReply.className = `msg-floating-toast-reply-btn ${isVideo ? 'btn-trigger-video-call' : 'btn-trigger-audio-call'}`;
+                toastReply.href = '#';
             } else {
-                DOM.floatingToastReply.textContent = 'Reply';
-                DOM.floatingToastReply.className = 'msg-floating-toast-reply-btn';
-                DOM.floatingToastReply.href = '/messages';
+                toastReply.textContent = 'Reply';
+                toastReply.className = 'msg-floating-toast-reply-btn';
+                toastReply.href = '/messages';
             }
         }
 
-        DOM.floatingToast.style.display = 'block';
-        void DOM.floatingToast.offsetWidth; // Force reflow
-        DOM.floatingToast.classList.add('is-visible');
+        toast.style.display = 'block';
+        void toast.offsetWidth; // Force reflow
+        toast.classList.add('is-visible');
 
         clearTimeout(toastDismissTimeout);
         toastDismissTimeout = setTimeout(() => {
@@ -589,12 +604,13 @@
     }
 
     function hideFloatingMessageToast() {
-        if (!DOM.floatingToast) return;
-        DOM.floatingToast.classList.remove('is-visible');
+        const toast = document.getElementById('msgFloatingToast');
+        if (!toast) return;
+        toast.classList.remove('is-visible');
         clearTimeout(toastDismissTimeout);
         setTimeout(() => {
-            if (!DOM.floatingToast.classList.contains('is-visible')) {
-                DOM.floatingToast.style.display = 'none';
+            if (!toast.classList.contains('is-visible')) {
+                toast.style.display = 'none';
             }
         }, 350);
     }
@@ -606,20 +622,27 @@
         if (!stats) return;
         State.stats = { ...State.stats, ...stats };
 
-        if (DOM.statTotalMessages) DOM.statTotalMessages.textContent = State.stats.totalMessages || 0;
-        if (DOM.statSharedVideos) DOM.statSharedVideos.textContent = State.stats.sharedVideos || 0;
-        if (DOM.statVoiceMessages) DOM.statVoiceMessages.textContent = State.stats.voiceMessages || 0;
-        if (DOM.statCalls) DOM.statCalls.textContent = State.stats.totalCalls || 0;
-        if (DOM.tabCountVideos) DOM.tabCountVideos.textContent = State.stats.sharedVideos || 0;
-        if (DOM.tabCountVoice) DOM.tabCountVoice.textContent = State.stats.voiceMessages || 0;
-        if (DOM.tabCountCalls) DOM.tabCountCalls.textContent = State.stats.totalCalls || 0;
+        const elTotal = document.getElementById('msgStatTotalMessages');
+        const elVideos = document.getElementById('msgStatSharedVideos');
+        const elVoice = document.getElementById('msgStatVoiceMessages');
+        const elCalls = document.getElementById('msgStatCalls');
+        const tabVideos = document.getElementById('msgTabCountVideos');
+        const tabVoice = document.getElementById('msgTabCountVoice');
+        const tabCalls = document.getElementById('msgTabCountCalls');
+
+        if (elTotal) elTotal.textContent = State.stats.totalMessages || 0;
+        if (elVideos) elVideos.textContent = State.stats.sharedVideos || 0;
+        if (elVoice) elVoice.textContent = State.stats.voiceMessages || 0;
+        if (elCalls) elCalls.textContent = State.stats.totalCalls || 0;
+        if (tabVideos) tabVideos.textContent = State.stats.sharedVideos || 0;
+        if (tabVoice) tabVoice.textContent = State.stats.voiceMessages || 0;
+        if (tabCalls) tabCalls.textContent = State.stats.totalCalls || 0;
     }
 
     function updatePartnerPresenceUI(presence) {
         if (!presence) return;
         State.partnerPresence = presence;
 
-        const status = presence.status || 'offline';
         const isOnline = presence.isOnline || presence.isWatching;
         const isWatching = presence.isWatching;
         const statusClass = isWatching ? 'dot-watching' : (isOnline ? 'dot-online' : (presence.isIdle ? 'dot-idle' : 'dot-offline'));
@@ -640,7 +663,7 @@
             }
         });
 
-        const watchingBanner = document.getElementById('msgSidebarWatchingBanner') || DOM.sidebarWatchingBanner;
+        const watchingBanner = document.getElementById('msgSidebarWatchingBanner');
         if (watchingBanner) {
             if (isWatching && presence.videoTitle) {
                 watchingBanner.style.display = 'flex';
@@ -657,15 +680,33 @@
     }
 
     // ------------------------------------------------------------
-    //  7. DOM MESSAGE INSERTION & DEDUPLICATION
+    //  7. DOM MESSAGE INSERTION, DEDUPLICATION & DATE DIVIDERS
     // ------------------------------------------------------------
-    function appendOrUpdateMessage(msg) {
+    function ensureDateDividerForAppend(container, dateStr) {
+        if (!container || !dateStr) return;
+        const allDividers = container.querySelectorAll('.msg-date-divider');
+        const lastDivider = allDividers.length > 0 ? allDividers[allDividers.length - 1] : null;
+        const lastDateText = lastDivider ? (lastDivider.getAttribute('data-date') || lastDivider.textContent.trim()) : '';
+
+        if (lastDateText !== dateStr) {
+            const div = document.createElement('div');
+            div.className = 'msg-date-divider';
+            div.setAttribute('data-date', dateStr);
+            div.innerHTML = `<span>${escapeHtml(dateStr)}</span>`;
+            container.appendChild(div);
+        }
+    }
+
+    function appendOrUpdateMessage(msg, options = {}) {
         if (!msg || !msg.id) return;
 
         State.messages.set(msg.id, msg);
         if (msg.id > State.lastKnownId) {
             State.lastKnownId = msg.id;
         }
+
+        const isOut = msg.sender === currentUser;
+        const dateStr = formatDateHeader(msg.createdAt);
 
         getActiveContainers().forEach(container => {
             // Remove empty state if present
@@ -685,30 +726,27 @@
                     }
                 }
                 // Update reactions
-                const bubbleWrap = existingRow.querySelector('.msg-bubble-wrap');
-                if (bubbleWrap) {
-                    const reactionsRow = bubbleWrap.querySelector('.msg-reactions-row');
-                    const newHtml = renderReactionsHtml(msg.reactions, currentUser);
-                    if (reactionsRow) {
-                        if (newHtml) reactionsRow.outerHTML = newHtml;
-                        else reactionsRow.remove();
-                    } else if (newHtml) {
-                        const metaRow = bubbleWrap.querySelector('.msg-meta-row');
-                        if (metaRow) metaRow.insertAdjacentHTML('beforebegin', newHtml);
-                        else bubbleWrap.insertAdjacentHTML('beforeend', newHtml);
-                    }
-                }
+                updateMessageReactionsDOM(msg.id, msg.reactions);
                 return;
             }
+
+            const nearBottomBefore = isScrolledNearBottom(container);
 
             // Remove typing indicator if present
             const typingRow = container.querySelector('.msg-typing-row');
             if (typingRow) typingRow.remove();
 
+            // Ensure date divider for new date
+            ensureDateDividerForAppend(container, dateStr);
+
             // Insert new message row at end
             container.insertAdjacentHTML('beforeend', renderMessageHTML(msg));
             applyActiveFiltersToRow(container.lastElementChild);
-            scrollToBottom(container);
+
+            // Only auto-scroll if message is outgoing OR user was already near bottom
+            if (isOut || nearBottomBefore || options.forceScroll) {
+                scrollToBottom(container, !isOut);
+            }
         });
     }
 
@@ -716,30 +754,67 @@
         if (!row || !row.classList.contains('msg-row')) return;
 
         let visible = true;
+        const tab = State.activeMediaTab || 'all';
 
         // Media tab filter
-        if (State.activeMediaTab === 'videos') {
+        if (tab === 'videos') {
             visible = !!row.querySelector('.msg-video-card');
-        } else if (State.activeMediaTab === 'voice') {
+        } else if (tab === 'voice') {
             visible = !!row.querySelector('.msg-voice-player');
+        } else if (tab === 'calls') {
+            visible = row.hasAttribute('data-is-call') || !!row.querySelector('.msg-call-event-card');
         }
 
         // Search keyword filter
         if (visible && State.searchKeyword) {
-            const text = (row.querySelector('.msg-text-content')?.textContent || '').toLowerCase();
-            const videoTitle = (row.querySelector('.msg-video-card-title')?.textContent || '').toLowerCase();
-            visible = text.includes(State.searchKeyword) || videoTitle.includes(State.searchKeyword);
+            const text = (row.innerText || '').toLowerCase();
+            visible = text.includes(State.searchKeyword);
         }
 
         row.style.display = visible ? 'flex' : 'none';
     }
 
     function applyFiltersToAll() {
-        const container = DOM.fullPageList || DOM.drawerList;
-        if (!container) return;
+        const tab = State.activeMediaTab || 'all';
+        const kw = (State.searchKeyword || '').toLowerCase().trim();
 
-        container.querySelectorAll('.msg-row').forEach(row => {
-            applyActiveFiltersToRow(row);
+        getActiveContainers().forEach(container => {
+            const rows = container.querySelectorAll('.msg-row');
+            const dateDividers = container.querySelectorAll('.msg-date-divider');
+
+            rows.forEach(row => {
+                let matchesTab = true;
+                if (tab === 'videos') {
+                    matchesTab = !!row.querySelector('.msg-video-card');
+                } else if (tab === 'voice') {
+                    matchesTab = !!row.querySelector('.msg-voice-player');
+                } else if (tab === 'calls') {
+                    matchesTab = row.hasAttribute('data-is-call') || !!row.querySelector('.msg-call-event-card');
+                }
+
+                let matchesSearch = true;
+                if (kw) {
+                    const text = (row.innerText || '').toLowerCase();
+                    matchesSearch = text.includes(kw);
+                }
+
+                const visible = matchesTab && matchesSearch;
+                row.style.display = visible ? 'flex' : 'none';
+            });
+
+            // Clean up date dividers where all sibling rows until next divider are hidden
+            dateDividers.forEach(divider => {
+                let next = divider.nextElementSibling;
+                let hasVisible = false;
+                while (next && !next.classList.contains('msg-date-divider')) {
+                    if (next.classList.contains('msg-row') && next.style.display !== 'none') {
+                        hasVisible = true;
+                        break;
+                    }
+                    next = next.nextElementSibling;
+                }
+                divider.style.display = hasVisible ? 'flex' : 'none';
+            });
         });
     }
 
@@ -780,7 +855,8 @@
                     State.isInitialSyncDone = true;
 
                     // If active on messages page, ensure messages are marked as read
-                    if (State.isMessagesPage || (DOM.drawer && DOM.drawer.classList.contains('is-open'))) {
+                    const drawer = document.getElementById('msgDrawerWidget');
+                    if (State.isMessagesPage || (drawer && drawer.classList.contains('is-open'))) {
                         if (State.unreadCount > 0 || (data.messages && data.messages.some(m => m.sender === partnerUser && !m.isRead))) {
                             markMessagesAsRead();
                         }
@@ -812,7 +888,7 @@
 
     // Ingest initial SSR rendered messages from DOM on page load
     function ingestSSRMessages() {
-        const container = DOM.fullPageList || DOM.drawerList;
+        const container = getFullpageList() || getDrawerList();
         if (!container) return;
 
         container.querySelectorAll('.msg-row[data-msg-id]').forEach(row => {
@@ -856,10 +932,135 @@
                     videoId: video ? video.id : null,
                     voiceUrl: voicePlayer ? voicePlayer.getAttribute('data-audio-src') : null,
                     replyTo,
-                    replyToId: replyTo ? replyTo.id : null
+                    replyToId: replyTo ? replyTo.id : null,
+                    isRead: row.querySelector('.msg-seen-check')?.classList.contains('is-seen') || false
                 });
             }
         });
+
+        // Set up infinite scroll for loaded containers
+        getActiveContainers().forEach(setupInfiniteScroll);
+        State.isInitialSyncDone = true;
+    }
+
+    // ------------------------------------------------------------
+    //  8.5. INFINITE SCROLL & OLDER MESSAGE PAGINATION
+    // ------------------------------------------------------------
+    function setupInfiniteScroll(container) {
+        if (!container || container.dataset.scrollBound === 'true') return;
+        container.dataset.scrollBound = 'true';
+
+        container.addEventListener('scroll', () => {
+            if (container.scrollTop < 100 && !State.isLoadingOlder && State.hasMoreOlder) {
+                loadOlderMessages(container);
+            }
+        }, { passive: true });
+    }
+
+    function loadOlderMessages(container) {
+        if (State.isLoadingOlder || !State.hasMoreOlder) return;
+
+        const rows = container.querySelectorAll('.msg-row[data-msg-id]');
+        if (rows.length === 0) return;
+
+        let oldestId = Infinity;
+        rows.forEach(r => {
+            const id = parseInt(r.getAttribute('data-msg-id'), 10);
+            if (id && id < oldestId) oldestId = id;
+        });
+
+        if (oldestId === Infinity) return;
+
+        State.isLoadingOlder = true;
+        showOlderLoadingSpinner(container, true);
+
+        fetch(`/api/messages?limit=50&beforeId=${oldestId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && Array.isArray(data.messages)) {
+                    if (data.messages.length < 50) {
+                        State.hasMoreOlder = false;
+                    }
+                    if (data.messages.length > 0) {
+                        prependOlderMessages(container, data.messages);
+                    }
+                } else {
+                    State.hasMoreOlder = false;
+                }
+            })
+            .catch(err => {
+                console.warn('[messages] Error loading older messages:', err);
+            })
+            .finally(() => {
+                State.isLoadingOlder = false;
+                showOlderLoadingSpinner(container, false);
+            });
+    }
+
+    function showOlderLoadingSpinner(container, show) {
+        let spinner = container.querySelector('.msg-older-loading');
+        if (show) {
+            if (!spinner) {
+                spinner = document.createElement('div');
+                spinner.className = 'msg-older-loading is-active';
+                spinner.innerHTML = `<span class="msg-older-spinner"></span><span>Loading history...</span>`;
+                container.insertBefore(spinner, container.firstElementChild);
+            } else {
+                spinner.classList.add('is-active');
+            }
+        } else {
+            if (spinner) spinner.classList.remove('is-active');
+        }
+    }
+
+    function prependOlderMessages(container, messages) {
+        if (!container || !messages || messages.length === 0) return;
+
+        const prevScrollHeight = container.scrollHeight;
+        const prevScrollTop = container.scrollTop;
+
+        const spinner = container.querySelector('.msg-older-loading');
+        const insertTarget = spinner ? spinner.nextSibling : container.firstChild;
+
+        const fragment = document.createDocumentFragment();
+        let curDate = '';
+
+        messages.forEach(msg => {
+            State.messages.set(msg.id, msg);
+            const dateStr = formatDateHeader(msg.createdAt);
+            if (dateStr && dateStr !== curDate) {
+                curDate = dateStr;
+                const div = document.createElement('div');
+                div.className = 'msg-date-divider';
+                div.setAttribute('data-date', dateStr);
+                div.innerHTML = `<span>${escapeHtml(dateStr)}</span>`;
+                fragment.appendChild(div);
+            }
+
+            const temp = document.createElement('div');
+            temp.innerHTML = renderMessageHTML(msg);
+            const rowEl = temp.firstElementChild;
+            if (rowEl) {
+                applyActiveFiltersToRow(rowEl);
+                fragment.appendChild(rowEl);
+            }
+        });
+
+        // If the top existing date divider matches the last date of prepended batch, remove duplicate
+        const existingFirstDivider = container.querySelector('.msg-date-divider');
+        if (existingFirstDivider && existingFirstDivider.getAttribute('data-date') === curDate) {
+            existingFirstDivider.remove();
+        }
+
+        if (insertTarget) {
+            container.insertBefore(fragment, insertTarget);
+        } else {
+            container.appendChild(fragment);
+        }
+
+        // Strictly preserve scroll position
+        const newScrollHeight = container.scrollHeight;
+        container.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
     }
 
     // ------------------------------------------------------------
@@ -984,7 +1185,8 @@
                 if (msg.sender === partnerUser) {
                     playNotificationChime();
 
-                    const isDrawerOpen = DOM.drawer && DOM.drawer.classList.contains('is-open');
+                    const drawer = document.getElementById('msgDrawerWidget');
+                    const isDrawerOpen = drawer && drawer.classList.contains('is-open');
                     if (State.isMessagesPage || isDrawerOpen) {
                         markMessagesAsRead();
                     } else {
@@ -1010,6 +1212,10 @@
 
         sseSource.addEventListener('messages-read', () => {
             try {
+                // Update in-memory state
+                State.messages.forEach(m => {
+                    if (m.sender === currentUser) m.isRead = true;
+                });
                 document.querySelectorAll('.msg-seen-check').forEach(el => {
                     el.classList.add('is-seen');
                     el.textContent = '✓✓';
@@ -1071,8 +1277,11 @@
                             <span class="msg-typing-dot"></span>
                         </div>
                     `;
+                    const nearBottom = isScrolledNearBottom(container);
                     container.appendChild(typingRow);
-                    scrollToBottom(container);
+                    if (nearBottom) {
+                        scrollToBottom(container, true);
+                    }
                 }
             } else {
                 if (typingRow) typingRow.remove();
@@ -1207,22 +1416,7 @@
                 .then(data => {
                     if (data.success && Array.isArray(data.messages) && data.messages.length > 0) {
                         getActiveContainers().forEach(container => {
-                            const fragment = document.createDocumentFragment();
-                            const tempDiv = document.createElement('div');
-                            tempDiv.innerHTML = data.messages.map(m => {
-                                State.messages.set(m.id, m);
-                                return renderMessageHTML(m);
-                            }).join('');
-
-                            const firstChild = container.firstElementChild;
-                            while (tempDiv.firstChild) {
-                                fragment.appendChild(tempDiv.firstChild);
-                            }
-                            if (firstChild) {
-                                container.insertBefore(fragment, firstChild);
-                            } else {
-                                container.appendChild(fragment);
-                            }
+                            prependOlderMessages(container, data.messages);
                         });
 
                         targetEl = document.querySelector(`.msg-row[data-msg-id="${numId}"]`);
@@ -1246,10 +1440,9 @@
     let swipedRow = null;
     let selectedMobileMsg = null;
 
-    const mobileBackdrop = document.getElementById('msgMobileActionsBackdrop');
-    const mobileSheet = document.getElementById('msgMobileActionsSheet');
-
     function openMobileActionSheet(msgObj) {
+        const mobileBackdrop = document.getElementById('msgMobileActionsBackdrop');
+        const mobileSheet = document.getElementById('msgMobileActionsSheet');
         if (!msgObj || !mobileBackdrop || !mobileSheet) return;
         selectedMobileMsg = msgObj;
 
@@ -1270,6 +1463,7 @@
     }
 
     function closeMobileActionSheet() {
+        const mobileBackdrop = document.getElementById('msgMobileActionsBackdrop');
         if (!mobileBackdrop) return;
         mobileBackdrop.classList.remove('is-open');
         setTimeout(() => {
@@ -1279,59 +1473,59 @@
         }, 250);
     }
 
-    if (mobileBackdrop) {
-        mobileBackdrop.addEventListener('click', (e) => {
-            if (e.target === mobileBackdrop) {
-                closeMobileActionSheet();
-                return;
-            }
+    // Delegated mobile actions sheet click
+    document.addEventListener('click', (e) => {
+        const mobileBackdrop = document.getElementById('msgMobileActionsBackdrop');
+        if (e.target === mobileBackdrop) {
+            closeMobileActionSheet();
+            return;
+        }
 
-            const reactBtn = e.target.closest('.msg-mobile-react-btn');
-            if (reactBtn && selectedMobileMsg) {
-                const emoji = reactBtn.getAttribute('data-emoji') || reactBtn.textContent.trim();
-                toggleReaction(selectedMobileMsg.id, emoji, e.clientX, e.clientY);
-                closeMobileActionSheet();
-                return;
-            }
+        const reactBtn = e.target.closest('.msg-mobile-react-btn');
+        if (reactBtn && selectedMobileMsg) {
+            const emoji = reactBtn.getAttribute('data-emoji') || reactBtn.textContent.trim();
+            toggleReaction(selectedMobileMsg.id, emoji, e.clientX, e.clientY);
+            closeMobileActionSheet();
+            return;
+        }
 
-            const replyBtn = e.target.closest('.btn-mobile-reply');
-            if (replyBtn && selectedMobileMsg) {
-                setReplyMessage(selectedMobileMsg);
-                closeMobileActionSheet();
-                return;
-            }
+        const replyBtn = e.target.closest('.btn-mobile-reply');
+        if (replyBtn && selectedMobileMsg) {
+            setReplyMessage(selectedMobileMsg);
+            closeMobileActionSheet();
+            return;
+        }
 
-            const copyBtn = e.target.closest('.btn-mobile-copy');
-            if (copyBtn && selectedMobileMsg && selectedMobileMsg.text) {
-                navigator.clipboard.writeText(selectedMobileMsg.text).then(() => {
-                    closeMobileActionSheet();
-                });
-                return;
-            }
-
-            const deleteBtn = e.target.closest('.btn-mobile-delete');
-            if (deleteBtn && selectedMobileMsg) {
-                const targetMsgId = selectedMobileMsg.id;
+        const copyBtn = e.target.closest('.btn-mobile-copy');
+        if (copyBtn && selectedMobileMsg && selectedMobileMsg.text) {
+            navigator.clipboard.writeText(selectedMobileMsg.text).then(() => {
                 closeMobileActionSheet();
-                if (confirm('Delete this message permanently?')) {
-                    fetch(`/api/messages/delete/${targetMsgId}`, { method: 'POST' })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.success) {
-                                State.messages.delete(targetMsgId);
-                                document.querySelectorAll(`[data-msg-id="${targetMsgId}"]`).forEach(row => {
-                                    row.style.opacity = '0';
-                                    row.style.transform = 'scale(0.85)';
-                                    setTimeout(() => row.remove(), 250);
-                                });
-                                if (data.stats) updateStatsUI(data.stats);
-                            }
-                        });
-                }
-                return;
+            });
+            return;
+        }
+
+        const deleteBtn = e.target.closest('.btn-mobile-delete');
+        if (deleteBtn && selectedMobileMsg) {
+            const targetMsgId = selectedMobileMsg.id;
+            closeMobileActionSheet();
+            if (confirm('Delete this message permanently?')) {
+                fetch(`/api/messages/delete/${targetMsgId}`, { method: 'POST' })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            State.messages.delete(targetMsgId);
+                            document.querySelectorAll(`[data-msg-id="${targetMsgId}"]`).forEach(row => {
+                                row.style.opacity = '0';
+                                row.style.transform = 'scale(0.85)';
+                                setTimeout(() => row.remove(), 250);
+                            });
+                            if (data.stats) updateStatsUI(data.stats);
+                        }
+                    });
             }
-        });
-    }
+            return;
+        }
+    });
 
     // Touch events on messages for Long-Press and Swipe-to-Reply
     document.addEventListener('touchstart', (e) => {
@@ -1392,7 +1586,7 @@
         }
     }, { passive: true });
 
-    document.addEventListener('touchend', (e) => {
+    document.addEventListener('touchend', () => {
         clearTimeout(touchTimer);
         touchTimer = null;
 
@@ -1420,14 +1614,19 @@
     }, { passive: true });
 
     // ------------------------------------------------------------
-    //  11. SENDING MESSAGES & INTERACTIONS
+    //  11. SENDING MESSAGES & INTERACTIONS (Double-Send Protected)
     // ------------------------------------------------------------
     function sendMessage(text, videoId = null) {
         const cleanText = (text || '').trim();
         if (!cleanText && !videoId) return;
+        if (State.isSending) return; // Prevent duplicate rapid sends
+        State.isSending = true;
 
         const replyToId = State.replyToMessage ? State.replyToMessage.id : null;
         cancelReply();
+
+        const sendBtns = document.querySelectorAll('.msg-send-btn');
+        sendBtns.forEach(btn => { btn.style.opacity = '0.6'; btn.disabled = true; });
 
         fetch('/api/messages', {
             method: 'POST',
@@ -1437,12 +1636,16 @@
         .then(res => res.json())
         .then(data => {
             if (data.success && data.message) {
-                appendOrUpdateMessage(data.message);
+                appendOrUpdateMessage(data.message, { forceScroll: true });
                 if (data.stats) updateStatsUI(data.stats);
                 sendTypingState(false);
             }
         })
-        .catch(err => console.error('[messages] Send failed:', err));
+        .catch(err => console.error('[messages] Send failed:', err))
+        .finally(() => {
+            State.isSending = false;
+            sendBtns.forEach(btn => { btn.style.opacity = ''; btn.disabled = false; });
+        });
     }
 
     function sendTypingState(isTyping) {
@@ -1475,12 +1678,22 @@
     }
 
     // ------------------------------------------------------------
-    //  12. VOICE RECORDING (MediaRecorder API)
+    //  12. VOICE RECORDING (MediaRecorder API with Track Cleanup)
     // ------------------------------------------------------------
     let mediaRecorder = null;
     let audioChunks = [];
     let recordInterval = null;
     let recordSeconds = 0;
+    let activeMicrophoneStream = null;
+
+    function cleanupMicrophoneStream() {
+        if (activeMicrophoneStream) {
+            activeMicrophoneStream.getTracks().forEach(track => {
+                try { track.stop(); } catch {}
+            });
+            activeMicrophoneStream = null;
+        }
+    }
 
     function setupVoiceRecording(recordBtn, recordingBar, cancelBtn, sendVoiceBtn) {
         if (!recordBtn || !recordingBar) return;
@@ -1488,6 +1701,7 @@
         recordBtn.addEventListener('click', async () => {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                activeMicrophoneStream = stream;
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
 
@@ -1496,7 +1710,7 @@
                 };
 
                 mediaRecorder.onstop = () => {
-                    stream.getTracks().forEach(track => track.stop());
+                    cleanupMicrophoneStream();
                 };
 
                 mediaRecorder.start();
@@ -1505,13 +1719,14 @@
                 const timerEl = recordingBar.querySelector('.msg-rec-timer');
                 if (timerEl) timerEl.textContent = '0:00';
 
+                clearInterval(recordInterval);
                 recordInterval = setInterval(() => {
                     recordSeconds++;
                     const m = Math.floor(recordSeconds / 60);
                     const s = recordSeconds % 60;
                     if (timerEl) timerEl.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
                 }, 1000);
-            } catch (err) {
+            } catch {
                 alert('Microphone access was denied or is not supported in this browser.');
             }
         });
@@ -1519,8 +1734,9 @@
         if (cancelBtn) {
             cancelBtn.addEventListener('click', () => {
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
+                    try { mediaRecorder.stop(); } catch {}
                 }
+                cleanupMicrophoneStream();
                 clearInterval(recordInterval);
                 audioChunks = [];
                 recordingBar.classList.remove('is-recording');
@@ -1532,6 +1748,7 @@
                 if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
 
                 mediaRecorder.onstop = () => {
+                    cleanupMicrophoneStream();
                     clearInterval(recordInterval);
                     recordingBar.classList.remove('is-recording');
 
@@ -1552,14 +1769,18 @@
                     .then(res => res.json())
                     .then(data => {
                         if (data.success && data.message) {
-                            appendOrUpdateMessage(data.message);
+                            appendOrUpdateMessage(data.message, { forceScroll: true });
                             if (data.stats) updateStatsUI(data.stats);
                         }
                     })
                     .catch(err => console.error('[messages] Voice send failed:', err));
                 };
 
-                mediaRecorder.stop();
+                try {
+                    mediaRecorder.stop();
+                } catch {
+                    cleanupMicrophoneStream();
+                }
             });
         }
     }
@@ -1804,14 +2025,64 @@
                 textarea.value = starterChip.textContent.trim();
                 textarea.focus();
             }
+            return;
+        }
+
+        // 5. Drawer Close Button
+        const drawerClose = e.target.closest('#msgDrawerCloseBtn');
+        if (drawerClose) {
+            const drawer = document.getElementById('msgDrawerWidget');
+            const launcher = document.getElementById('msgFloatingLauncher');
+            if (drawer) drawer.classList.remove('is-open');
+            if (launcher) launcher.classList.remove('is-open');
+            return;
+        }
+
+        // 6. In-Chat Search Bar Toggle & Close
+        const searchToggle = e.target.closest('#msgSearchToggleBtn');
+        if (searchToggle) {
+            const searchBar = document.getElementById('msgInChatSearchBar');
+            const searchInput = document.getElementById('msgInChatSearchInput');
+            if (searchBar) {
+                const isOpen = searchBar.classList.toggle('is-open');
+                if (isOpen && searchInput) {
+                    searchInput.value = '';
+                    searchInput.focus();
+                } else {
+                    State.searchKeyword = '';
+                    applyFiltersToAll();
+                }
+            }
+            return;
+        }
+
+        const searchClose = e.target.closest('#msgInChatSearchClose');
+        if (searchClose) {
+            const searchBar = document.getElementById('msgInChatSearchBar');
+            const searchInput = document.getElementById('msgInChatSearchInput');
+            if (searchBar) searchBar.classList.remove('is-open');
+            if (searchInput) searchInput.value = '';
+            State.searchKeyword = '';
+            applyFiltersToAll();
+            return;
+        }
+    });
+
+    // In-chat search input handler
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.id === 'msgInChatSearchInput') {
+            State.searchKeyword = e.target.value.toLowerCase().trim();
+            applyFiltersToAll();
         }
     });
 
     // ------------------------------------------------------------
-    //  15. COMPOSER SETUP
+    //  15. COMPOSER SETUP (Idempotent per DOM element)
     // ------------------------------------------------------------
     function setupComposer(formOrWrap) {
         if (!formOrWrap) return;
+        if (formOrWrap.dataset.composerBound === 'true') return;
+        formOrWrap.dataset.composerBound = 'true';
 
         const textarea = formOrWrap.querySelector('.msg-textarea');
         const sendBtn = formOrWrap.querySelector('.msg-send-btn');
@@ -1833,7 +2104,9 @@
 
             textarea.addEventListener('focus', () => {
                 setTimeout(() => {
-                    getActiveContainers().forEach(scrollToBottom);
+                    getActiveContainers().forEach(c => {
+                        if (isScrolledNearBottom(c)) scrollToBottom(c);
+                    });
                     if (window.innerWidth <= 900) {
                         try {
                             textarea.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -1846,6 +2119,7 @@
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     const text = textarea.value;
+                    if (!text.trim() && !State.isSending) return;
                     textarea.value = '';
                     textarea.style.height = 'auto';
                     sendMessage(text);
@@ -1856,6 +2130,7 @@
         if (sendBtn && textarea) {
             sendBtn.addEventListener('click', () => {
                 const text = textarea.value;
+                if (!text.trim() && !State.isSending) return;
                 textarea.value = '';
                 textarea.style.height = 'auto';
                 sendMessage(text);
@@ -1929,109 +2204,39 @@
     }
 
     // ------------------------------------------------------------
-    //  16. IN-CHAT SEARCH & SHARED MEDIA TABS
+    //  16. SHARED MEDIA TABS IN SIDEBAR
     // ------------------------------------------------------------
-    if (DOM.searchToggleBtn && DOM.inChatSearchBar && DOM.inChatSearchInput) {
-        DOM.searchToggleBtn.addEventListener('click', () => {
-            const isOpen = DOM.inChatSearchBar.classList.toggle('is-open');
-            if (isOpen) {
-                DOM.inChatSearchInput.value = '';
-                DOM.inChatSearchInput.focus();
-            } else {
-                State.searchKeyword = '';
-                applyFiltersToAll();
-            }
-        });
-
-        if (DOM.inChatSearchClose) {
-            DOM.inChatSearchClose.addEventListener('click', () => {
-                DOM.inChatSearchBar.classList.remove('is-open');
-                DOM.inChatSearchInput.value = '';
-                State.searchKeyword = '';
-                applyFiltersToAll();
-            });
-        }
-
-        DOM.inChatSearchInput.addEventListener('input', () => {
-            State.searchKeyword = DOM.inChatSearchInput.value.toLowerCase().trim();
-            applyFiltersToAll();
-        });
-    }
-
-    function applyFiltersToAll() {
-        const tab = State.activeMediaTab || 'all';
-        const kw = (State.searchKeyword || '').toLowerCase().trim();
-
-        getActiveContainers().forEach(container => {
-            const rows = container.querySelectorAll('.msg-row');
-            const dateDividers = container.querySelectorAll('.msg-date-divider');
-
-            rows.forEach(row => {
-                let matchesTab = true;
-                if (tab === 'videos') {
-                    matchesTab = !!row.querySelector('.msg-video-card');
-                } else if (tab === 'voice') {
-                    matchesTab = !!row.querySelector('.msg-voice-player');
-                } else if (tab === 'calls') {
-                    matchesTab = row.hasAttribute('data-is-call') || !!row.querySelector('.msg-call-event-card');
-                }
-
-                let matchesSearch = true;
-                if (kw) {
-                    const text = (row.innerText || '').toLowerCase();
-                    matchesSearch = text.includes(kw);
-                }
-
-                const visible = matchesTab && matchesSearch;
-                row.style.display = visible ? 'flex' : 'none';
-            });
-
-            // Clean up date dividers where all sibling rows until next divider are hidden
-            dateDividers.forEach(divider => {
-                let next = divider.nextElementSibling;
-                let hasVisible = false;
-                while (next && !next.classList.contains('msg-date-divider')) {
-                    if (next.classList.contains('msg-row') && next.style.display !== 'none') {
-                        hasVisible = true;
-                        break;
-                    }
-                    next = next.nextElementSibling;
-                }
-                divider.style.display = hasVisible ? 'flex' : 'none';
-            });
-        });
-    }
-
-    // Shared Media Explorer Tabs in Sidebar
-    document.querySelectorAll('.msg-media-tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+    document.addEventListener('click', (e) => {
+        const tabBtn = e.target.closest('.msg-media-tab-btn');
+        if (tabBtn) {
             document.querySelectorAll('.msg-media-tab-btn').forEach(b => b.classList.remove('is-active'));
-            btn.classList.add('is-active');
-            State.activeMediaTab = btn.getAttribute('data-tab') || 'all';
+            tabBtn.classList.add('is-active');
+            State.activeMediaTab = tabBtn.getAttribute('data-tab') || 'all';
             applyFiltersToAll();
-        });
+        }
     });
 
     // ------------------------------------------------------------
     //  17. FLOATING TOAST & LAUNCHER INTERACTIONS
     // ------------------------------------------------------------
-    if (DOM.floatingToast) {
-        DOM.floatingToast.addEventListener('click', (e) => {
+    document.addEventListener('click', (e) => {
+        const toast = document.getElementById('msgFloatingToast');
+        if (toast && toast.contains(e.target)) {
             if (e.target.closest('#msgFloatingToastClose') || e.target.closest('.msg-floating-toast-close-btn')) {
                 hideFloatingMessageToast();
                 return;
             }
             hideFloatingMessageToast();
             window.location.href = '/messages';
-        });
-    }
+        }
+    });
 
     // ------------------------------------------------------------
     //  18. GLOBAL VIDEO SHARE BUTTON ("Share to Chat" on /watch/:id)
     // ------------------------------------------------------------
-    const shareToChatBtn = document.getElementById('btnShareToChat');
-    if (shareToChatBtn) {
-        shareToChatBtn.addEventListener('click', () => {
+    document.addEventListener('click', (e) => {
+        const shareToChatBtn = e.target.closest('#btnShareToChat');
+        if (shareToChatBtn) {
             const videoId = shareToChatBtn.getAttribute('data-video-id');
             if (!videoId) return;
 
@@ -2047,8 +2252,8 @@
             setTimeout(() => {
                 shareToChatBtn.innerHTML = originalHtml;
             }, 2000);
-        });
-    }
+        }
+    });
 
     // Right-click context menu handler on desktop
     document.addEventListener('contextmenu', (e) => {
@@ -2072,6 +2277,7 @@
     // Escape key listener to close action sheets / cancel reply
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
+            const mobileBackdrop = document.getElementById('msgMobileActionsBackdrop');
             if (mobileBackdrop && mobileBackdrop.classList.contains('is-open')) {
                 closeMobileActionSheet();
                 return;
@@ -2093,19 +2299,15 @@
     ingestSSRMessages();
 
     // Initial Auto-scroll
-    getActiveContainers().forEach(scrollToBottom);
+    getActiveContainers().forEach(c => scrollToBottom(c));
 
     // Initial Unread Count Sync from DOM
-    if (DOM.unreadPill && DOM.unreadPill.textContent) {
-        updateUnreadBadges(parseInt(DOM.unreadPill.textContent, 10) || 0);
-    } else {
-        const initialNavBadge = document.querySelector('.nav-msg-badge');
-        if (initialNavBadge && initialNavBadge.textContent) {
-            updateUnreadBadges(parseInt(initialNavBadge.textContent, 10) || 0);
-        }
+    const initialBadge = document.getElementById('msgLauncherUnreadBadge') || document.querySelector('.nav-msg-badge');
+    if (initialBadge && initialBadge.textContent) {
+        updateUnreadBadges(parseInt(initialBadge.textContent, 10) || 0);
     }
 
-    // Start Real-Time SSE Stream (syncState is called from the 'connected' handler)
+    // Start Real-Time SSE Stream
     initSSE();
 
     // Initialize Push Notifications after SSE is set up
@@ -2132,19 +2334,16 @@
         }
 
         // Default (not yet decided) — show a non-intrusive prompt
-        // Only show once per session to avoid being annoying
         if (sessionStorage.getItem('pushPromptShown')) {
             return;
         }
 
-        // Delay the prompt slightly so it doesn't appear immediately on page load
         setTimeout(() => {
             showPushPermissionBanner();
         }, 5000);
     }
 
     function showPushPermissionBanner() {
-        // Don't show on login page or if already exists
         if (!currentUser) return;
         if (document.getElementById('pushPermBanner')) return;
 
@@ -2253,38 +2452,29 @@
 
     async function subscribeToPush() {
         try {
-            // Wait for service worker registration
             let reg = window.__swRegistration;
             if (!reg) {
                 reg = await navigator.serviceWorker.ready;
             }
 
-            // Check if already subscribed
             let subscription = await reg.pushManager.getSubscription();
 
             if (!subscription) {
-                // Fetch VAPID public key from server
                 const resp = await fetch('/api/push/vapid-public-key', {
                     credentials: 'same-origin'
                 });
-                if (!resp.ok) {
-                    console.warn('[push] Could not fetch VAPID key');
-                    return;
-                }
+                if (!resp.ok) return;
                 const { publicKey } = await resp.json();
                 if (!publicKey) return;
 
-                // Convert VAPID key from base64url to Uint8Array
                 const applicationServerKey = urlBase64ToUint8Array(publicKey);
 
-                // Subscribe to push
                 subscription = await reg.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey
                 });
             }
 
-            // Send subscription to server
             await fetch('/api/push/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2328,16 +2518,15 @@
     // Reconcile and reconnect on page restoration from bfcache
     window.addEventListener('pageshow', (event) => {
         if (event.persisted) {
-            // bfcache restore — SSE is dead, force reconnect
             if (sseSource) { sseSource.close(); sseSource = null; }
             initSSE();
         }
     });
 
-    // Reconcile on tab visibility change (covers both focus and visibility)
+    // Reconcile on tab visibility change
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-            initSSE(); // no-op if already connected (readyState check inside)
+            initSSE();
             syncState();
         }
     });
@@ -2357,30 +2546,32 @@
         window.visualViewport.addEventListener('resize', () => {
             if (State.isMessagesPage) {
                 setTimeout(() => {
-                    getActiveContainers().forEach(scrollToBottom);
+                    getActiveContainers().forEach(c => {
+                        if (isScrolledNearBottom(c)) scrollToBottom(c);
+                    });
                 }, 100);
             }
         });
     }
 
     // SPA Navigation Handler
-    window.addEventListener('page:navigate', (e) => {
+    window.addEventListener('page:navigate', () => {
         const isMessagesNow = !!document.getElementById('msgFullpageList') || document.body.getAttribute('data-page') === 'messages';
         State.isMessagesPage = isMessagesNow;
-        DOM.fullPageList = document.getElementById('msgFullpageList');
-        DOM.drawerList = document.getElementById('msgDrawerList');
 
         // Re-setup composers in newly swapped DOM
         document.querySelectorAll('.msg-composer-wrap').forEach(setupComposer);
 
         if (isMessagesNow) {
-            if (DOM.launcher) DOM.launcher.style.display = 'none';
+            const launcher = document.getElementById('msgFloatingLauncher');
+            if (launcher) launcher.style.display = 'none';
             ingestSSRMessages();
-            getActiveContainers().forEach(scrollToBottom);
+            getActiveContainers().forEach(c => scrollToBottom(c));
             markMessagesAsRead();
         } else {
-            if (DOM.launcher) {
-                DOM.launcher.style.display = State.unreadCount > 0 ? 'flex' : 'none';
+            const launcher = document.getElementById('msgFloatingLauncher');
+            if (launcher) {
+                launcher.style.display = State.unreadCount > 0 ? 'flex' : 'none';
             }
         }
     });

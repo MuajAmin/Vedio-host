@@ -670,6 +670,36 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     background: var(--msg-primary);
 }
 
+/* Infinite Scroll / Older Messages Loading Spinner */
+.msg-older-loading {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 0;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--msg-text-muted);
+    width: 100%;
+}
+
+.msg-older-loading.is-active {
+    display: flex;
+}
+
+.msg-older-spinner {
+    width: 15px;
+    height: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-top-color: var(--msg-primary);
+    border-radius: 50%;
+    animation: msgSpinnerRotate 0.65s linear infinite;
+}
+
+@keyframes msgSpinnerRotate {
+    to { transform: rotate(360deg); }
+}
+
 /* Date Divider */
 .msg-date-divider {
     display: flex;
@@ -927,6 +957,14 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     border: 1px solid var(--msg-bubble-in-border);
     color: var(--msg-bubble-in-text);
     border-bottom-left-radius: 4px;
+}
+
+.msg-text-content {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    max-width: 100%;
+    line-height: 1.5;
 }
 
 /* Reactions Pill Badge attached to Bubble */
