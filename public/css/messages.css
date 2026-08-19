@@ -1006,7 +1006,7 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
 
 .msg-text-content {
     word-break: break-word;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     white-space: pre-wrap;
     max-width: 100%;
     line-height: 1.5;
