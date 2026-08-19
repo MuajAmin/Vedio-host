@@ -274,10 +274,6 @@ app.use((req, res, next) => {
     if (req.path.startsWith('/api/settings') && (req.method === 'POST' || req.method === 'GET')) {
         return next();
     }
-    // Delete video route — protected via isAuthenticated session auth
-    if (req.path.startsWith('/delete/') && req.method === 'POST') {
-        return next();
-    }
     return requireCsrf(req, res, next);
 });
 

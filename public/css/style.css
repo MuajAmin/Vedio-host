@@ -10629,77 +10629,160 @@ h3,
     box-shadow: 0 0 20px rgba(244, 63, 94, 0.35);
 }
 
-/* ---- Invite Banner ---- */
+/* ---- Watch Together In-Page Invite Banner ---- */
 .wt-invite-banner {
     display: none;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    padding: 14px 18px;
-    margin-bottom: 14px;
-    border-radius: var(--radius-lg);
-    background: linear-gradient(135deg, rgba(30, 27, 75, 0.8), rgba(88, 28, 135, 0.7));
-    border: 1px solid rgba(168, 85, 247, 0.4);
-    box-shadow: 0 8px 32px rgba(147, 51, 234, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    animation: wt-banner-glow 3s ease-in-out infinite alternate;
+    gap: 18px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    border-radius: var(--radius-lg, 18px);
+    background: linear-gradient(135deg, rgba(20, 18, 38, 0.9), rgba(38, 24, 64, 0.85));
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    position: relative;
+    overflow: hidden;
+}
+
+.wt-invite-banner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(236, 72, 153, 0.6), transparent);
 }
 
 .wt-invite-banner.visible {
     display: flex;
 }
 
-@keyframes wt-banner-glow {
-    0% { border-color: rgba(168, 85, 247, 0.35); box-shadow: 0 8px 24px rgba(147, 51, 234, 0.2); }
-    100% { border-color: rgba(236, 72, 153, 0.6); box-shadow: 0 8px 36px rgba(236, 72, 153, 0.35); }
-}
-
 .wt-invite-content {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
     min-width: 0;
+    flex: 1;
+}
+
+.wt-invite-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
 }
 
 .wt-invite-avatar {
-    width: 42px;
-    height: 42px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #a855f7, #ec4899);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.4rem;
-    flex-shrink: 0;
-    box-shadow: 0 0 16px rgba(236, 72, 153, 0.5);
-    animation: wt-avatar-pulse 2s ease-in-out infinite;
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 18px rgba(236, 72, 153, 0.4);
+    overflow: hidden;
 }
 
-@keyframes wt-avatar-pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.08); }
+.wt-invite-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.wt-invite-live-dot {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #22c55e;
+    border: 2px solid #141226;
+    box-shadow: 0 0 10px #22c55e;
+    animation: wt-pulse 1.4s ease-in-out infinite;
+}
+
+.wt-invite-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.wt-invite-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wt-invite-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #f472b6;
+    background: rgba(236, 72, 153, 0.15);
+    padding: 2px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(236, 72, 153, 0.35);
+}
+
+.wt-invite-sync-pill {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #a78bfa;
+    background: rgba(167, 139, 250, 0.12);
+    padding: 2px 7px;
+    border-radius: 10px;
 }
 
 .wt-invite-text h4 {
-    margin: 0 0 2px 0;
-    font-family: var(--font-display);
-    font-size: 0.96rem;
+    margin: 0;
+    font-family: var(--font-display, inherit);
+    font-size: 1rem;
     font-weight: 800;
     color: #ffffff;
-    letter-spacing: 0.02em;
+    line-height: 1.3;
 }
 
-.wt-invite-text p {
+.wt-invite-host-name {
+    color: #fbbf24;
+    font-weight: 800;
+}
+
+.wt-invite-sub {
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 0.82rem;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(255, 255, 255, 0.75);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wt-invite-sub svg {
+    flex-shrink: 0;
+    color: #38bdf8;
+}
+
+.wt-invite-video-title {
+    color: #ffffff;
+    font-weight: 600;
 }
 
 .wt-invite-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex-shrink: 0;
 }
 
@@ -10708,92 +10791,227 @@ h3,
     border: none;
     color: #ffffff;
     font-weight: 700;
-    box-shadow: 0 4px 16px rgba(236, 72, 153, 0.4);
+    font-size: 0.88rem;
+    padding: 10px 18px;
+    border-radius: var(--radius-md, 14px);
+    box-shadow: 0 4px 18px rgba(236, 72, 153, 0.45);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
 }
 
 .wt-btn-join:hover {
     background: linear-gradient(135deg, #f43f5e, #a855f7);
-    box-shadow: 0 6px 22px rgba(236, 72, 153, 0.6);
-    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(236, 72, 153, 0.65);
+    transform: translateY(-1px) scale(1.02);
+    color: #ffffff;
 }
 
 .wt-btn-dismiss {
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-md, 14px);
+    padding: 9px 14px;
+    font-size: 0.84rem;
+    transition: all 0.2s ease;
 }
 
-/* ---- Global Floating Watch Together Invite Toast ---- */
+.wt-btn-dismiss:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* ---- Global Floating Watch Together Invite Card ---- */
 .wt-global-invite-toast {
     position: fixed;
-    top: 20px;
+    top: 24px;
     left: 50%;
-    transform: translateX(-50%) translateY(-30px);
-    z-index: 99999;
+    transform: translateX(-50%) translateY(-24px) scale(0.96);
+    z-index: 100000;
     opacity: 0;
     pointer-events: none;
-    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    max-width: calc(100vw - 32px);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.35s ease;
+    max-width: 540px;
+    width: calc(100vw - 32px);
+    margin: 0 auto;
 }
 
 .wt-global-invite-toast.visible {
     opacity: 1;
     pointer-events: auto;
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(-50%) translateY(0) scale(1);
 }
 
+.wt-toast-card,
 .wt-toast-pill {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 10px 18px;
-    border-radius: 999px;
-    background: linear-gradient(135deg, rgba(26, 16, 60, 0.95), rgba(76, 29, 149, 0.9));
-    border: 1px solid rgba(236, 72, 153, 0.6);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(236, 72, 153, 0.35);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    animation: wt-toast-glow 2.5s ease-in-out infinite alternate;
+    gap: 16px;
+    padding: 14px 18px;
+    border-radius: var(--radius-xl, 24px);
+    background: linear-gradient(135deg, rgba(14, 16, 28, 0.94), rgba(24, 22, 42, 0.94));
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 
+                0 0 0 1px rgba(255, 255, 255, 0.05),
+                0 0 32px rgba(236, 72, 153, 0.2);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    position: relative;
+    overflow: hidden;
+    width: 100%;
 }
 
-@keyframes wt-toast-glow {
-    0% { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(168, 85, 247, 0.3); }
-    100% { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 35px rgba(236, 72, 153, 0.5); }
+.wt-toast-card::before,
+.wt-toast-pill::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
 }
 
+.wt-toast-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.wt-toast-avatar-box,
 .wt-toast-icon {
-    font-size: 1.5rem;
-    animation: wt-avatar-pulse 1.8s ease-in-out infinite;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(236, 72, 153, 0.3));
+    border: 2px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+}
+
+.wt-toast-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.wt-toast-avatar-letter {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.wt-toast-live-dot {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #22c55e;
+    border: 2px solid #0e101c;
+    box-shadow: 0 0 10px #22c55e;
+    animation: wt-pulse 1.4s ease-in-out infinite;
 }
 
 .wt-toast-info {
     display: flex;
     flex-direction: column;
+    gap: 3px;
     min-width: 0;
+    flex: 1;
 }
 
+.wt-toast-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wt-toast-badge,
 .wt-toast-tag {
-    font-size: 0.65rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.68rem;
     font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     color: #f472b6;
+    background: rgba(236, 72, 153, 0.14);
+    padding: 2px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(236, 72, 153, 0.3);
+}
+
+.wt-badge-pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ec4899;
+    box-shadow: 0 0 8px #ec4899;
+    animation: wt-pulse 1.2s ease-in-out infinite;
+}
+
+.wt-toast-status-pill {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #a78bfa;
+    background: rgba(167, 139, 250, 0.12);
+    padding: 2px 7px;
+    border-radius: 10px;
 }
 
 .wt-toast-title {
     margin: 0;
-    font-family: var(--font-display);
-    font-size: 0.88rem;
+    font-family: var(--font-display, inherit);
+    font-size: 0.94rem;
     font-weight: 700;
     color: #ffffff;
+    line-height: 1.3;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 320px;
+}
+
+.wt-toast-host {
+    color: #fbbf24;
+    font-weight: 800;
+}
+
+.wt-toast-video {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.72);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wt-toast-video svg {
+    flex-shrink: 0;
+    color: #38bdf8;
+}
+
+.wt-toast-video-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .wt-toast-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    flex-shrink: 0;
 }
 
 .wt-toast-join-btn {
@@ -10801,41 +11019,45 @@ h3,
     border: none;
     color: #ffffff;
     font-weight: 700;
-    padding: 6px 14px;
-    border-radius: 20px;
+    font-size: 0.84rem;
+    padding: 9px 16px;
+    border-radius: var(--radius-md, 14px);
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     text-decoration: none;
-    box-shadow: 0 4px 14px rgba(236, 72, 153, 0.4);
-    transition: all 0.2s ease;
+    box-shadow: 0 4px 18px rgba(236, 72, 153, 0.45);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
 }
 
 .wt-toast-join-btn:hover {
     background: linear-gradient(135deg, #f43f5e, #a855f7);
-    transform: scale(1.05);
-    box-shadow: 0 6px 20px rgba(236, 72, 153, 0.6);
+    transform: translateY(-1px) scale(1.03);
+    box-shadow: 0 6px 24px rgba(236, 72, 153, 0.65);
+    color: #ffffff;
 }
 
 .wt-toast-close-btn {
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     color: rgba(255, 255, 255, 0.7);
-    font-size: 1.2rem;
-    line-height: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s ease;
+    flex-shrink: 0;
 }
 
 .wt-toast-close-btn:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.2);
     color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: scale(1.08);
 }
 
 /* ---- Sync Overlay on Player ---- */
@@ -11194,7 +11416,7 @@ h3,
     bottom: 0;
     width: 360px;
     max-width: 90vw;
-    z-index: 1000;
+    z-index: 10050;
     background: rgba(10, 10, 16, 0.94);
     backdrop-filter: blur(28px);
     -webkit-backdrop-filter: blur(28px);
@@ -11605,13 +11827,15 @@ h3,
     .wt-invite-banner {
         flex-direction: column;
         align-items: stretch;
-        gap: 12px;
-        padding: 12px 14px;
+        gap: 14px;
+        padding: 14px 16px;
+        border-radius: 16px;
     }
 
     .wt-invite-actions {
         width: 100%;
         justify-content: flex-end;
+        gap: 8px;
     }
 
     .wt-btn-join {
@@ -11619,24 +11843,40 @@ h3,
         justify-content: center;
     }
 
-    .wt-global-invite-toast {
-        top: 12px;
-        max-width: calc(100vw - 20px);
+    .wt-btn-dismiss {
+        padding: 9px 12px;
     }
 
+    .wt-global-invite-toast {
+        top: 14px;
+        width: calc(100vw - 24px);
+        max-width: calc(100vw - 24px);
+    }
+
+    .wt-toast-card,
     .wt-toast-pill {
-        gap: 8px;
-        padding: 8px 12px;
+        padding: 12px 14px;
+        gap: 12px;
+        border-radius: 18px;
+    }
+
+    .wt-toast-avatar-box,
+    .wt-toast-icon {
+        width: 40px;
+        height: 40px;
     }
 
     .wt-toast-title {
-        max-width: 170px;
-        font-size: 0.8rem;
+        font-size: 0.86rem;
+    }
+
+    .wt-toast-video {
+        font-size: 0.76rem;
     }
 
     .wt-toast-join-btn {
-        padding: 5px 10px;
-        font-size: 0.76rem;
+        padding: 7px 12px;
+        font-size: 0.78rem;
     }
 
     .wt-status-bar {

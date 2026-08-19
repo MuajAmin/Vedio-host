@@ -9,20 +9,20 @@
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] {
     /* Fast, solid, low-overhead dark theme surfaces */
-    --min-bg-root: #0a0b10;
-    --min-bg-surface: #12131c;
-    --min-bg-surface-raised: #181926;
-    --min-bg-surface-active: #222334;
-    --min-bg-input: #0e0f17;
-    --min-bg-overlay: rgba(10, 11, 16, 0.88);
+    --min-bg-root: #090a0f;
+    --min-bg-surface: #11131a;
+    --min-bg-surface-raised: #181a24;
+    --min-bg-surface-active: #222533;
+    --min-bg-input: #0c0d14;
+    --min-bg-overlay: rgba(9, 10, 15, 0.92);
 
     --min-border: rgba(255, 255, 255, 0.08);
     --min-border-strong: rgba(255, 255, 255, 0.16);
     --min-border-subtle: rgba(255, 255, 255, 0.05);
 
-    --min-text-primary: #f2f3f7;
-    --min-text-secondary: #9ea2b3;
-    --min-text-muted: #65697d;
+    --min-text-primary: #f8fafc;
+    --min-text-secondary: #94a3b8;
+    --min-text-muted: #64748b;
 
     --min-radius-xs: 4px;
     --min-radius-sm: 8px;
@@ -33,7 +33,7 @@ html[data-ui-mode="minimal"] {
 
     --min-touch-target: 48px;
     --min-header-height: 56px;
-    --min-bottom-nav-height: 60px;
+    --min-bottom-nav-height: 58px;
 
     /* Override base tokens with high-performance solid values */
     --bg-deep: var(--min-bg-root);
@@ -45,37 +45,50 @@ html[data-ui-mode="minimal"] {
 
     --border-subtle: var(--min-border);
     --border-glass: var(--min-border);
-    --border-accent: rgba(229, 184, 90, 0.3);
+    --border-accent: rgba(229, 184, 90, 0.35);
 
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
     --shadow-glow: none;
+
+    --accent-gold: #e5b85a;
+    --min-accent-primary: #e5b85a;
+    --min-accent-bubble: #b88d3e;
+    --min-accent-muted: rgba(229, 184, 90, 0.14);
 }
 
 /* Palette Overrides in Minimal Mode */
 html[data-ui-mode="minimal"][data-theme="cinematic"] {
     --border-accent: rgba(229, 184, 90, 0.35);
+    --accent-gold: #e5b85a;
     --min-accent-primary: #e5b85a;
-    --min-accent-muted: rgba(229, 184, 90, 0.15);
+    --min-accent-bubble: #b88d3e;
+    --min-accent-muted: rgba(229, 184, 90, 0.14);
 }
 
 html[data-ui-mode="minimal"][data-theme="cyberpunk"] {
     --border-accent: rgba(0, 240, 255, 0.35);
+    --accent-gold: #00f0ff;
     --min-accent-primary: #00f0ff;
-    --min-accent-muted: rgba(0, 240, 255, 0.15);
+    --min-accent-bubble: #0284c7;
+    --min-accent-muted: rgba(0, 240, 255, 0.14);
 }
 
 html[data-ui-mode="minimal"][data-theme="emerald"] {
     --border-accent: rgba(16, 185, 129, 0.35);
+    --accent-gold: #10b981;
     --min-accent-primary: #10b981;
-    --min-accent-muted: rgba(16, 185, 129, 0.15);
+    --min-accent-bubble: #059669;
+    --min-accent-muted: rgba(16, 185, 129, 0.14);
 }
 
 html[data-ui-mode="minimal"][data-theme="sunset"] {
     --border-accent: rgba(244, 63, 94, 0.35);
+    --accent-gold: #f43f5e;
     --min-accent-primary: #f43f5e;
-    --min-accent-muted: rgba(244, 63, 94, 0.15);
+    --min-accent-bubble: #e11d48;
+    --min-accent-muted: rgba(244, 63, 94, 0.14);
 }
 
 /* --------------------------------------------------------------------------
@@ -85,6 +98,7 @@ html[data-ui-mode="minimal"] * {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
     text-shadow: none !important;
+    -webkit-tap-highlight-color: transparent !important;
 }
 
 /* Hide CPU/GPU-heavy ambient background orbs, particles & loop animations */
@@ -104,7 +118,9 @@ html[data-ui-mode="minimal"] .active-call-avatar-glow-ring,
 html[data-ui-mode="minimal"] .badge-pulse-dot,
 html[data-ui-mode="minimal"] .bottom-nav-fab-ring,
 html[data-ui-mode="minimal"] .msg-floating-launcher::before,
-html[data-ui-mode="minimal"] .aperture-ring {
+html[data-ui-mode="minimal"] .aperture-ring,
+html[data-ui-mode="minimal"] .mobile-bottom-bar::before,
+html[data-ui-mode="minimal"] .mobile-bottom-bar::after {
     display: none !important;
     animation: none !important;
 }
@@ -154,10 +170,12 @@ html[data-ui-mode="minimal"] .logo-text-group .logo-main-text {
 
 html[data-ui-mode="minimal"] .nav-brand-pill {
     font-size: 9px !important;
+    font-weight: 700 !important;
     padding: 1px 5px !important;
     background: var(--min-bg-surface-active) !important;
     border: 1px solid var(--min-border) !important;
     border-radius: var(--min-radius-xs) !important;
+    color: var(--accent-gold) !important;
 }
 
 html[data-ui-mode="minimal"] .nav-right,
@@ -175,7 +193,7 @@ html[data-ui-mode="minimal"] .app-bar-back-btn {
     border: 1px solid var(--min-border) !important;
     border-radius: var(--min-radius-md) !important;
     box-shadow: none !important;
-    transition: background 0.15s ease, border-color 0.15s ease;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
 }
 
 html[data-ui-mode="minimal"] .nav-right .btn:active,
@@ -183,6 +201,15 @@ html[data-ui-mode="minimal"] .nav-theme-toggle:active,
 html[data-ui-mode="minimal"] .btn-app-bar-action:active,
 html[data-ui-mode="minimal"] .app-bar-back-btn:active {
     background: var(--min-bg-surface-active) !important;
+    transform: scale(0.97);
+}
+
+html[data-ui-mode="minimal"] .nav-right .btn-primary,
+html[data-ui-mode="minimal"] .btn-upload {
+    background: var(--accent-gold) !important;
+    color: #090a0f !important;
+    font-weight: 600 !important;
+    border-color: var(--accent-gold) !important;
 }
 
 html[data-ui-mode="minimal"] .user-badge {
@@ -192,25 +219,57 @@ html[data-ui-mode="minimal"] .user-badge {
     padding: 4px 10px 4px 4px !important;
     box-shadow: none !important;
     cursor: pointer;
+    transition: background 0.12s ease, transform 0.08s ease;
+}
+
+html[data-ui-mode="minimal"] .user-badge:active {
+    background: var(--min-bg-surface-active) !important;
+    transform: scale(0.97);
+}
+
+html[data-ui-mode="minimal"] .nav-msg-badge,
+html[data-ui-mode="minimal"] .bottom-nav-badge {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border: 1.5px solid var(--min-bg-surface) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+    animation: none !important;
+    font-size: 9.5px !important;
+    font-weight: 800 !important;
 }
 
 /* --------------------------------------------------------------------------
-   4. Android Bottom Navigation Dock
+   4. Android Material 3 Bottom Navigation Bar
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] .mobile-bottom-bar {
-    height: var(--min-bottom-nav-height) !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: calc(var(--min-bottom-nav-height) + env(safe-area-inset-bottom, 0px)) !important;
     background: var(--min-bg-surface) !important;
     border-top: 1px solid var(--min-border) !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.4) !important;
-    padding: 0 4px calc(env(safe-area-inset-bottom, 0px) / 2) 4px !important;
-    z-index: 100;
+    padding: 0 6px calc(env(safe-area-inset-bottom, 0px)) 6px !important;
+    z-index: 1000 !important;
+    animation: none !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item {
-    padding: 6px 4px !important;
+    padding: 4px 6px !important;
     border-radius: var(--min-radius-md) !important;
-    transition: background 0.12s ease;
+    transition: background 0.12s ease, color 0.12s ease;
     color: var(--min-text-muted) !important;
+    min-height: 48px !important;
+    justify-content: center !important;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-item:active {
+    transform: scale(0.96);
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item.active {
@@ -218,29 +277,35 @@ html[data-ui-mode="minimal"] .bottom-nav-item.active {
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item.active .bottom-nav-icon-wrap {
-    background: rgba(255, 255, 255, 0.08) !important;
+    background: var(--min-accent-muted) !important;
     border-radius: var(--min-radius-full) !important;
-    padding: 2px 12px !important;
+    padding: 2px 14px !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-label {
     font-size: 11px !important;
-    font-weight: 500 !important;
+    font-weight: 600 !important;
     letter-spacing: 0.1px;
+    margin-top: 2px;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill {
-    width: 40px !important;
-    height: 40px !important;
+    width: 42px !important;
+    height: 42px !important;
     background: var(--accent-gold) !important;
     border-radius: var(--min-radius-md) !important;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+    transition: transform 0.08s ease;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-upload:active .upload-btn-pill {
+    transform: scale(0.92);
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill svg {
-    stroke: #0a0b10 !important;
-    width: 20px !important;
-    height: 20px !important;
+    stroke: #090a0f !important;
+    width: 22px !important;
+    height: 22px !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -249,11 +314,11 @@ html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill svg {
 html[data-ui-mode="minimal"] .app-container {
     max-width: 1280px;
     margin: 0 auto;
-    padding-bottom: calc(var(--min-bottom-nav-height) + 24px) !important;
+    padding-bottom: calc(var(--min-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 24px) !important;
 }
 
 html[data-ui-mode="minimal"] .main-content {
-    padding: 12px 14px 24px 14px !important;
+    padding: 14px 16px 24px 16px !important;
 }
 
 /* Minimal Love Banner (Hajera) */
@@ -278,7 +343,7 @@ html[data-ui-mode="minimal"] .love-banner-icon {
 
 html[data-ui-mode="minimal"] .love-main-title {
     font-size: 16px !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
     margin-bottom: 2px !important;
 }
 
@@ -292,8 +357,8 @@ html[data-ui-mode="minimal"] .love-quote {
 html[data-ui-mode="minimal"] .dashboard-header-bar {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-bottom: 16px !important;
+    gap: 12px;
+    margin-bottom: 18px !important;
 }
 
 html[data-ui-mode="minimal"] .header-titles .header-pill {
@@ -304,10 +369,11 @@ html[data-ui-mode="minimal"] .header-titles .header-pill {
     border-radius: var(--min-radius-xs) !important;
     color: var(--accent-gold) !important;
     box-shadow: none !important;
+    font-weight: 600;
 }
 
 html[data-ui-mode="minimal"] .header-titles h1 {
-    font-size: 20px !important;
+    font-size: 22px !important;
     font-weight: 700 !important;
     letter-spacing: -0.3px;
     margin-top: 4px;
@@ -341,19 +407,25 @@ html[data-ui-mode="minimal"] .search-input {
     font-size: 14px !important;
     color: var(--min-text-primary) !important;
     box-shadow: none !important;
+    transition: border-color 0.12s ease, background 0.12s ease;
 }
 
 html[data-ui-mode="minimal"] .search-input:focus {
     border-color: var(--accent-gold) !important;
     background: var(--min-bg-surface-raised) !important;
     box-shadow: none !important;
-    transform: none !important;
+    outline: none !important;
 }
 
 html[data-ui-mode="minimal"] .search-icon {
+    position: absolute !important;
     left: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
     width: 16px !important;
     height: 16px !important;
+    color: var(--min-text-muted) !important;
+    pointer-events: none;
 }
 
 /* Continue Watching Rail */
@@ -397,7 +469,7 @@ html[data-ui-mode="minimal"] .video-card {
     border-radius: var(--min-radius-md) !important;
     box-shadow: none !important;
     overflow: hidden;
-    transition: transform 0.12s ease, border-color 0.12s ease;
+    transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease;
     display: flex;
     flex-direction: column;
 }
@@ -422,11 +494,11 @@ html[data-ui-mode="minimal"] .thumb-img {
 }
 
 html[data-ui-mode="minimal"] .card-duration {
-    background: rgba(0, 0, 0, 0.8) !important;
+    background: rgba(0, 0, 0, 0.82) !important;
     border: 1px solid rgba(255, 255, 255, 0.15) !important;
     border-radius: var(--min-radius-xs) !important;
     font-size: 11px !important;
-    font-weight: 500 !important;
+    font-weight: 600 !important;
     padding: 2px 6px !important;
     bottom: 6px !important;
     right: 6px !important;
@@ -438,7 +510,7 @@ html[data-ui-mode="minimal"] .card-badge {
     font-size: 10px !important;
     padding: 2px 6px !important;
     border-radius: var(--min-radius-xs) !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
     box-shadow: none !important;
 }
 
@@ -504,7 +576,7 @@ html[data-ui-mode="minimal"] .no-suggestions-card {
    6. Video Player Page (/watch/:id)
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] .watch-page {
-    padding: 8px 10px 48px 10px !important;
+    padding: 8px 12px 48px 12px !important;
 }
 
 html[data-ui-mode="minimal"] .watch-layout-grid {
@@ -521,7 +593,32 @@ html[data-ui-mode="minimal"] .vp-cinema {
 }
 
 html[data-ui-mode="minimal"] .vp-controls {
-    background: linear-gradient(to top, rgba(10, 11, 16, 0.95), transparent) !important;
+    background: linear-gradient(to top, rgba(9, 10, 15, 0.95), transparent) !important;
+}
+
+html[data-ui-mode="minimal"] .vp-progress-wrap {
+    height: 14px !important;
+    cursor: pointer;
+}
+
+html[data-ui-mode="minimal"] .vp-progress-played {
+    background: var(--accent-gold) !important;
+}
+
+html[data-ui-mode="minimal"] .vp-progress-thumb {
+    background: var(--accent-gold) !important;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.6) !important;
+}
+
+html[data-ui-mode="minimal"] .vp-btn {
+    min-width: 42px !important;
+    min-height: 42px !important;
+    color: #f8fafc !important;
+    transition: transform 0.08s ease;
+}
+
+html[data-ui-mode="minimal"] .vp-btn:active {
+    transform: scale(0.92);
 }
 
 html[data-ui-mode="minimal"] .vp-speed-menu {
@@ -533,6 +630,7 @@ html[data-ui-mode="minimal"] .vp-speed-menu {
 
 html[data-ui-mode="minimal"] .vp-speed-option {
     color: var(--min-text-primary) !important;
+    padding: 8px 12px !important;
 }
 
 html[data-ui-mode="minimal"] .vp-speed-option:hover,
@@ -540,8 +638,9 @@ html[data-ui-mode="minimal"] .vp-speed-option:active {
     background: var(--min-bg-surface-active) !important;
 }
 
-html[data-ui-mode="minimal"] .vp-speed-option.active::before {
-    background: var(--accent-gold) !important;
+html[data-ui-mode="minimal"] .vp-speed-option.active {
+    color: var(--accent-gold) !important;
+    font-weight: 700;
 }
 
 html[data-ui-mode="minimal"] .video-info-section {
@@ -598,10 +697,19 @@ html[data-ui-mode="minimal"] .video-action-buttons .btn {
     border: 1px solid var(--min-border) !important;
     font-size: 13px !important;
     box-shadow: none !important;
+    transition: background 0.12s ease, transform 0.08s ease;
 }
 
 html[data-ui-mode="minimal"] .video-action-buttons .btn:active {
     background: var(--min-bg-surface-active) !important;
+    transform: scale(0.97);
+}
+
+html[data-ui-mode="minimal"] .btn-wt-start {
+    background: var(--accent-gold) !important;
+    color: #090a0f !important;
+    border-color: var(--accent-gold) !important;
+    font-weight: 700 !important;
 }
 
 /* Thumbnail Manager in Minimal Mode */
@@ -640,15 +748,16 @@ html[data-ui-mode="minimal"] .suggestion-chips .chip-btn {
     border: 1px solid var(--min-border) !important;
     color: var(--min-text-secondary) !important;
     border-radius: var(--min-radius-full) !important;
-    padding: 3px 10px !important;
+    padding: 4px 10px !important;
     font-size: 11px !important;
     box-shadow: none !important;
+    transition: background 0.12s ease, color 0.12s ease;
 }
 
 html[data-ui-mode="minimal"] .suggestion-chips .chip-btn.active {
     background: var(--accent-gold) !important;
-    color: #000 !important;
-    font-weight: 600 !important;
+    color: #090a0f !important;
+    font-weight: 700 !important;
     border-color: var(--accent-gold) !important;
 }
 
@@ -662,12 +771,13 @@ html[data-ui-mode="minimal"] .suggestion-card {
     border-radius: var(--min-radius-sm) !important;
     box-shadow: none !important;
     margin-bottom: 8px !important;
-    transition: background 0.12s ease;
+    transition: background 0.12s ease, transform 0.08s ease;
     overflow: hidden;
 }
 
 html[data-ui-mode="minimal"] .suggestion-card:active {
     background: var(--min-bg-surface-active) !important;
+    transform: scale(0.985);
 }
 
 html[data-ui-mode="minimal"] .suggestion-thumb-wrap {
@@ -763,10 +873,61 @@ html[data-ui-mode="minimal"] .wt-status-bar {
 
 html[data-ui-mode="minimal"] .wt-invite-banner {
     background: var(--min-bg-surface) !important;
-    border: 1px solid var(--border-accent) !important;
-    border-radius: var(--min-radius-md) !important;
-    padding: 12px 14px !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-lg) !important;
+    padding: 14px 16px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+html[data-ui-mode="minimal"] .wt-invite-banner::before {
+    display: none !important;
+}
+
+html[data-ui-mode="minimal"] .wt-invite-avatar {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border-strong) !important;
     box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .wt-invite-tag {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    color: var(--min-accent-primary) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-invite-sync-pill {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    color: var(--min-text-muted) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-invite-text h4 {
+    color: var(--min-text-primary) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-invite-host-name {
+    color: var(--min-accent-primary) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-invite-sub {
+    color: var(--min-text-secondary) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-btn-join {
+    background: var(--min-accent-primary) !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border-radius: var(--min-radius-md) !important;
+    font-weight: 700 !important;
+}
+
+html[data-ui-mode="minimal"] .wt-btn-dismiss {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    color: var(--min-text-secondary) !important;
+    border-radius: var(--min-radius-md) !important;
 }
 
 html[data-ui-mode="minimal"] .wt-chat-drawer {
@@ -879,15 +1040,15 @@ html[data-ui-mode="minimal"] .msg-row-incoming .msg-bubble {
 }
 
 html[data-ui-mode="minimal"] .msg-row-outgoing .msg-bubble {
-    background: var(--accent-gold-dim) !important;
-    color: #fff !important;
+    background: var(--min-accent-bubble, #b88d3e) !important;
+    color: #ffffff !important;
     border: none !important;
     border-bottom-right-radius: 4px !important;
 }
 
 html[data-ui-mode="minimal"] .msg-time-stamp {
     font-size: 10px !important;
-    opacity: 0.75;
+    opacity: 0.8;
     margin-top: 4px;
 }
 
@@ -979,19 +1140,19 @@ html[data-ui-mode="minimal"] .msg-mobile-actions-sheet {
     box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.7) !important;
 }
 
-/* Floating Launcher & Global Invite Toast */
+/* Floating Launcher & Global Toast Positions */
 html[data-ui-mode="minimal"] .msg-floating-launcher {
-    bottom: calc(var(--min-bottom-nav-height) + 16px) !important;
+    bottom: calc(var(--min-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 14px) !important;
     right: 14px !important;
-    width: 52px !important;
-    height: 52px !important;
+    width: 50px !important;
+    height: 50px !important;
     background: var(--accent-gold) !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45) !important;
     border-radius: var(--min-radius-full) !important;
 }
 
 html[data-ui-mode="minimal"] .msg-floating-toast {
-    bottom: calc(var(--min-bottom-nav-height) + 12px) !important;
+    bottom: calc(var(--min-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 12px) !important;
     left: 10px !important;
     right: 10px !important;
     max-width: calc(100vw - 20px) !important;
@@ -1006,16 +1167,80 @@ html[data-ui-mode="minimal"] .msg-floating-toast-card {
 }
 
 html[data-ui-mode="minimal"] .wt-global-invite-toast {
-    bottom: calc(var(--min-bottom-nav-height) + 14px) !important;
-    left: 12px !important;
-    right: 12px !important;
+    position: fixed !important;
+    top: 14px !important;
+    bottom: auto !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) translateY(-20px) !important;
+    width: calc(100vw - 24px) !important;
+    max-width: 480px !important;
+    z-index: 100000 !important;
 }
 
+html[data-ui-mode="minimal"] .wt-global-invite-toast.visible {
+    transform: translateX(-50%) translateY(0) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-toast-card,
 html[data-ui-mode="minimal"] .wt-toast-pill {
+    background: var(--min-bg-surface) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    border-radius: var(--min-radius-lg) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important;
+    padding: 12px 14px !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+html[data-ui-mode="minimal"] .wt-toast-card::before,
+html[data-ui-mode="minimal"] .wt-toast-pill::before {
+    display: none !important;
+}
+
+html[data-ui-mode="minimal"] .wt-toast-avatar-box,
+html[data-ui-mode="minimal"] .wt-toast-icon {
     background: var(--min-bg-surface-raised) !important;
-    border: 1px solid var(--border-accent) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    box-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .wt-toast-badge {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    color: var(--min-accent-primary) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-toast-status-pill {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    color: var(--min-text-muted) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-toast-title {
+    color: var(--min-text-primary) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-toast-host {
+    color: var(--min-accent-primary) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-toast-video {
+    color: var(--min-text-secondary) !important;
+}
+
+html[data-ui-mode="minimal"] .wt-toast-join-btn {
+    background: var(--min-accent-primary) !important;
+    color: #000000 !important;
+    box-shadow: none !important;
     border-radius: var(--min-radius-md) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
+    font-weight: 700 !important;
+}
+
+html[data-ui-mode="minimal"] .wt-toast-close-btn {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    color: var(--min-text-muted) !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -1035,7 +1260,7 @@ html[data-ui-mode="minimal"] .call-btn-circle {
     height: 60px !important;
     border-radius: var(--min-radius-full) !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
-    transition: transform 0.1s ease;
+    transition: transform 0.08s ease;
 }
 
 html[data-ui-mode="minimal"] .call-btn-circle:active {
@@ -1075,6 +1300,11 @@ html[data-ui-mode="minimal"] .call-control-btn {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--min-border-strong) !important;
     box-shadow: none !important;
+    transition: transform 0.08s ease;
+}
+
+html[data-ui-mode="minimal"] .call-control-btn:active {
+    transform: scale(0.92);
 }
 
 html[data-ui-mode="minimal"] .call-control-btn.btn-end-call {
@@ -1094,7 +1324,7 @@ html[data-ui-mode="minimal"] .minimized-call-pill {
     border: 1px solid var(--border-accent) !important;
     border-radius: var(--min-radius-full) !important;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
-    bottom: calc(var(--min-bottom-nav-height) + 14px) !important;
+    bottom: calc(var(--min-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 14px) !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -1140,6 +1370,7 @@ html[data-ui-mode="minimal"] .upload-tab.active {
     background: var(--min-bg-surface-active) !important;
     color: var(--accent-gold) !important;
     box-shadow: none !important;
+    font-weight: 700;
 }
 
 html[data-ui-mode="minimal"] .selected-file-card,
@@ -1216,12 +1447,14 @@ html[data-ui-mode="minimal"] .admin-tabs-nav .admin-tab-btn {
     border: 1px solid var(--min-border) !important;
     color: var(--min-text-secondary) !important;
     border-radius: var(--min-radius-sm) !important;
+    font-weight: 500;
 }
 
 html[data-ui-mode="minimal"] .admin-tabs-nav .admin-tab-btn.active {
     background: var(--min-bg-surface-active) !important;
     border-color: var(--accent-gold) !important;
     color: var(--accent-gold) !important;
+    font-weight: 700;
 }
 
 /* --------------------------------------------------------------------------
@@ -1251,7 +1484,7 @@ html[data-ui-mode="minimal"] .input-wrapper input {
 
 html[data-ui-mode="minimal"] .login-btn {
     background: var(--accent-gold) !important;
-    color: #0a0b10 !important;
+    color: #090a0f !important;
     font-weight: 700 !important;
     border-radius: var(--min-radius-md) !important;
     box-shadow: none !important;
@@ -1461,8 +1694,65 @@ html[data-ui-mode="minimal"] .theme-modal {
 }
 
 /* --------------------------------------------------------------------------
-   14. Mobile Responsive Touch Adaptations (320px - 480px)
+   14. Desktop Floating Placement Overrides (Desktop has no bottom nav bar)
    -------------------------------------------------------------------------- */
+@media (min-width: 769px) {
+    html[data-ui-mode="minimal"] .msg-floating-launcher {
+        bottom: 20px !important;
+        right: 20px !important;
+    }
+
+    html[data-ui-mode="minimal"] .msg-floating-toast {
+        bottom: 20px !important;
+        right: 20px !important;
+        left: auto !important;
+        max-width: 360px !important;
+    }
+
+    html[data-ui-mode="minimal"] .wt-global-invite-toast {
+        bottom: 20px !important;
+        right: 20px !important;
+        left: auto !important;
+        max-width: 400px !important;
+    }
+
+    html[data-ui-mode="minimal"] .minimized-call-pill {
+        bottom: 20px !important;
+        right: 20px !important;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   15. Mobile Responsive Touch Adaptations (320px - 768px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    html[data-ui-mode="minimal"] .watch-page {
+        padding: 0 0 calc(var(--min-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 24px) 0 !important;
+    }
+
+    html[data-ui-mode="minimal"] .vp-cinema {
+        border-radius: 0 !important;
+        border-left: none !important;
+        border-right: none !important;
+        border-top: none !important;
+        margin-bottom: 8px !important;
+    }
+
+    html[data-ui-mode="minimal"] .video-info-section,
+    html[data-ui-mode="minimal"] .comments-section,
+    html[data-ui-mode="minimal"] .suggestions-panel,
+    html[data-ui-mode="minimal"] .thumbnail-manager,
+    html[data-ui-mode="minimal"] .wt-status-bar,
+    html[data-ui-mode="minimal"] .wt-invite-banner {
+        border-radius: 0 !important;
+        border-left: none !important;
+        border-right: none !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding: 12px 14px !important;
+    }
+}
+
 @media (max-width: 480px) {
     .ui-mode-options-grid {
         grid-template-columns: 1fr !important;
@@ -1482,6 +1772,10 @@ html[data-ui-mode="minimal"] .theme-modal {
 
     html[data-ui-mode="minimal"] .vps-metrics-grid {
         grid-template-columns: 1fr !important;
+    }
+
+    html[data-ui-mode="minimal"] .settings-modal-scroll-body {
+        padding: 14px 14px 20px 14px !important;
     }
 }
 

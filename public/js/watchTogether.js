@@ -244,8 +244,27 @@
         const videoTitle = data.videoTitle || 'a video';
         const hostName = data.host === 'muaj' ? 'Muaj' : (data.host === 'hajera' ? 'Hajera' : (data.host || 'Partner'));
 
-        if (globalWtToastTitle) {
+        const hostEl = document.getElementById('globalWtToastHost');
+        if (hostEl) hostEl.textContent = hostName;
+
+        const videoTitleEl = document.getElementById('globalWtToastVideoTitle');
+        if (videoTitleEl) videoTitleEl.textContent = videoTitle;
+
+        if (globalWtToastTitle && !hostEl) {
             globalWtToastTitle.textContent = `${hostName} invited you to watch "${videoTitle}" together!`;
+        }
+
+        // Populate host avatar image/letter
+        const avatarBox = document.getElementById('globalWtToastAvatar');
+        if (avatarBox) {
+            const avatarFile = (data.avatars && data.avatars[data.host]) || userAvatars[data.host];
+            if (avatarFile) {
+                avatarBox.innerHTML = `<img src="/avatars/${escapeHtml(avatarFile)}" alt="${escapeHtml(hostName)}" class="wt-toast-avatar-img" />`;
+            } else {
+                const letter = (data.host === 'muaj') ? 'M' : 'H';
+                const roleClass = (data.host === 'muaj') ? 'wt-avatar-host' : 'wt-avatar-guest';
+                avatarBox.innerHTML = `<div class="wt-toast-avatar-letter ${roleClass}">${letter}</div>`;
+            }
         }
 
         if (globalWtToastJoin) {
@@ -272,6 +291,19 @@
 
         const titleEl = wtInviteBanner.querySelector('.wt-invite-video-title');
         if (titleEl) titleEl.textContent = data.videoTitle || 'this video';
+
+        const avatarEl = document.getElementById('wtInviteBannerAvatar');
+        if (avatarEl) {
+            const avatarFile = (data.avatars && data.avatars[data.host]) || userAvatars[data.host];
+            if (avatarFile) {
+                avatarEl.innerHTML = `<img src="/avatars/${escapeHtml(avatarFile)}" alt="${escapeHtml(hostDisplayName)}" class="wt-invite-avatar-img" />`;
+            } else {
+                const letter = (data.host === 'muaj') ? 'M' : 'H';
+                const roleClass = (data.host === 'muaj') ? 'wt-avatar-host' : 'wt-avatar-guest';
+                avatarEl.innerHTML = `<div class="wt-msg-avatar ${roleClass}">${letter}</div>`;
+            }
+        }
+
         wtInviteBanner.classList.add('visible');
     }
 
@@ -1142,6 +1174,11 @@
             playerToast.classList.remove('visible');
             playerToast.style.display = 'none';
             return;
+        }
+
+        // Click outside chat drawer to close on desktop / mobile
+        if (chatOpen && wtChatPanel && !e.target.closest('#wtChatPanel') && !e.target.closest('.wt-chat-toggle-btn') && !e.target.closest('#wtPlayerChatToast') && !e.target.closest('.wt-emoji-btn')) {
+            toggleChat(false);
         }
     });
 

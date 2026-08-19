@@ -12,11 +12,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
-    <script src="/js/theme-init.js?v=10.3"></script>
-    <link rel="stylesheet" href="/css/style.css?v=10.3">
-    <link rel="stylesheet" href="/css/messages.css?v=10.3">
-    <link rel="stylesheet" href="/css/calling.css?v=10.3">
-    <link rel="stylesheet" href="/css/minimal.css?v=10.3">
+    <script src="/js/theme-init.js?v=10.5"></script>
+    <link rel="stylesheet" href="/css/style.css?v=10.5">
+    <link rel="stylesheet" href="/css/messages.css?v=10.5">
+    <link rel="stylesheet" href="/css/calling.css?v=10.5">
+    <link rel="stylesheet" href="/css/minimal.css?v=10.5">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -171,13 +171,32 @@
                 </div>
             </div>
 
-            <!-- Global Watch Together Invitation Toast (Pops up anywhere on the site for Hajera) -->
+            <!-- Global Watch Together Invitation Card -->
             <div class="wt-global-invite-toast" id="globalWtToast" style="display:none;" role="alert" aria-live="assertive">
-                <div class="wt-toast-pill">
-                    <div class="wt-toast-icon">🍿</div>
+                <div class="wt-toast-card">
+                    <div class="wt-toast-avatar-wrap" id="globalWtToastAvatarWrap">
+                        <div class="wt-toast-avatar-box" id="globalWtToastAvatar">
+                            <span class="wt-toast-avatar-letter">M</span>
+                        </div>
+                        <span class="wt-toast-live-dot" title="Live Session"></span>
+                    </div>
                     <div class="wt-toast-info">
-                        <span class="wt-toast-tag">Watch Together Invite</span>
-                        <h4 class="wt-toast-title" id="globalWtToastTitle">Muaj invited you to watch together!</h4>
+                        <div class="wt-toast-badge-row">
+                            <span class="wt-toast-badge">
+                                <span class="wt-badge-pulse"></span>
+                                🍿 Watch Together
+                            </span>
+                            <span class="wt-toast-status-pill">Live Now</span>
+                        </div>
+                        <h4 class="wt-toast-title" id="globalWtToastTitle">
+                            <span class="wt-toast-host" id="globalWtToastHost">Muaj</span> invited you to watch
+                        </h4>
+                        <p class="wt-toast-video" id="globalWtToastVideo">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            <span class="wt-toast-video-title" id="globalWtToastVideoTitle">Video Title</span>
+                        </p>
                     </div>
                     <div class="wt-toast-actions">
                         <a href="#" class="btn btn-primary btn-sm wt-toast-join-btn" id="globalWtToastJoin">
@@ -186,7 +205,12 @@
                             </svg>
                             <span>Join Stream</span>
                         </a>
-                        <button type="button" class="wt-toast-close-btn" id="globalWtToastClose" title="Dismiss">&times;</button>
+                        <button type="button" class="wt-toast-close-btn" id="globalWtToastClose" title="Dismiss" aria-label="Dismiss">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -649,10 +673,10 @@
             <audio id="remoteAudioTrack" autoplay playsinline style="display:none;"></audio>
             <% } %>
 
-            <script src="/js/app.js?v=10.3"></script>
-            <script src="/js/messages.js?v=10.3"></script>
-            <script src="/js/watchTogether.js?v=10.3"></script>
-            <script src="/js/calling.js?v=10.3"></script>
+            <script src="/js/app.js?v=10.5"></script>
+            <script src="/js/messages.js?v=10.5"></script>
+            <script src="/js/watchTogether.js?v=10.5"></script>
+            <script src="/js/calling.js?v=10.5"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').then(function(reg) {

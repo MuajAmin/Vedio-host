@@ -215,10 +215,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Dynamic navbar elevation on scroll
         const navbars = document.querySelectorAll('.navbar, .android-app-bar');
         if (navbars.length > 0) {
-            let lastScrollY = window.scrollY;
             const handleNavScroll = () => {
                 const isScrolled = window.scrollY > 12;
-                navbars.forEach(nav => {
+                document.querySelectorAll('.navbar, .android-app-bar').forEach(nav => {
                     if (isScrolled) {
                         nav.classList.add('is-scrolled');
                     } else {
@@ -226,43 +225,63 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             };
-            window.addEventListener('scroll', handleNavScroll, { passive: true });
+            if (!window.__NAVBAR_SCROLL_ATTACHED__) {
+                window.__NAVBAR_SCROLL_ATTACHED__ = true;
+                window.addEventListener('scroll', handleNavScroll, { passive: true });
+            }
             handleNavScroll();
         }
 
-    // Thumbnail error fallback — replaces inline onerror blocked by CSP
-    document.addEventListener('error', (e) => {
-        if (e.target.matches && e.target.matches('.thumb-img')) {
-            e.target.classList.add('thumb-error');
+        // Global listeners (registered once)
+        if (!window.__GLOBAL_APP_LISTENERS_ATTACHED__) {
+            window.__GLOBAL_APP_LISTENERS_ATTACHED__ = true;
+
+            // Thumbnail error fallback — replaces inline onerror blocked by CSP
+            document.addEventListener('error', (e) => {
+                if (e.target.matches && e.target.matches('.thumb-img')) {
+                    e.target.classList.add('thumb-error');
+                }
+            }, true); // capture phase — img error events don't bubble
+
+            document.addEventListener('submit', (e) => {
+                const form = e.target;
+                if (!(form instanceof HTMLFormElement)) return;
+
+                const message = form.getAttribute('data-confirm');
+                if (message && !window.confirm(message)) {
+                    e.preventDefault();
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                const el = e.target.closest('[data-confirm]');
+                if (!el || el.tagName === 'FORM') return;
+
+                const message = el.getAttribute('data-confirm');
+                if (message && !window.confirm(message)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+
+            // Consolidated Modal Escape Key Listener
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                const sm = document.getElementById('shortcutsModal');
+                if (sm && sm.classList.contains('active')) sm.classList.remove('active');
+                const dm = document.getElementById('downloadModal');
+                if (dm && dm.classList.contains('active')) dm.classList.remove('active');
+                const dvm = document.getElementById('deleteVideoModal');
+                if (dvm && dvm.classList.contains('active')) dvm.classList.remove('active');
+                const pm = document.getElementById('profileModal');
+                if (pm && pm.classList.contains('active')) {
+                    pm.classList.remove('active');
+                    setTimeout(() => { if (!pm.classList.contains('active')) pm.style.display = 'none'; }, 250);
+                }
+                const tm = document.getElementById('themeModalBackdrop');
+                if (tm && tm.classList.contains('active')) tm.classList.remove('active');
+            });
         }
-    }, true); // capture phase — img error events don't bubble
-
-    document.addEventListener('submit', (e) => {
-        const form = e.target;
-        if (!(form instanceof HTMLFormElement)) return;
-
-        const message = form.getAttribute('data-confirm');
-        if (message && !window.confirm(message)) {
-            e.preventDefault();
-        }
-    });
-
-    document.addEventListener('click', (e) => {
-        const el = e.target.closest('[data-confirm]');
-        if (!el || el.tagName === 'FORM') return;
-
-        const message = el.getAttribute('data-confirm');
-        if (message && !window.confirm(message)) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    });
-
-    document.querySelectorAll('.thumb-img').forEach((img) => {
-        img.addEventListener('error', () => {
-            img.classList.add('thumb-error');
-        });
-    });
 
     // ---- Inline Title Edit ----
     const titleWrap = document.getElementById('videoTitleWrap');
@@ -561,6 +580,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Custom Video Player Logic ----
     const vid = document.getElementById('vpVideo');
     if (vid) {
+        const playerAbort = new AbortController();
+        const playerSignal = { signal: playerAbort.signal };
+        window.addEventListener('page:cleanup', () => {
+            try { playerAbort.abort(); } catch (e) {}
+        }, { once: true });
+
         const videoId = vid.getAttribute('data-video-id');
         const container = document.getElementById('playerContainer');
         const controls = document.getElementById('vpControls');
@@ -1035,7 +1060,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 'Connect to the internet, then retry the stream.',
                 { showOverlay: true, canRetry: true, persistent: true }
             );
-        });
+        }, playerSignal);
 
         window.addEventListener('online', () => {
             setPlayerStatus(
@@ -1045,7 +1070,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 { showOverlay: true, canRetry: false, persistent: true }
             );
             retryStream(true);
-        });
+        }, playerSignal);
 
         if (retryBtn) {
             retryBtn.addEventListener('click', (e) => {
@@ -1093,7 +1118,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     queueRecovery();
                 }
             }
-        });
+        }, playerSignal);
 
         // Progress bar click/drag
         function seekFromEvent(e) {
@@ -1156,7 +1181,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (progressPlayed) progressPlayed.style.width = (pct * 100) + '%';
                 if (currentTimeEl) currentTimeEl.textContent = fmtTime(pct * vid.duration);
             }
-        });
+        }, playerSignal);
 
         document.addEventListener('mouseup', () => {
             if (isDragging) {
@@ -1168,7 +1193,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     vid.currentTime = pct * vid.duration;
                 }
             }
-        });
+        }, playerSignal);
 
         document.addEventListener('touchend', () => {
             if (isDragging) {
@@ -1179,7 +1204,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     vid.currentTime = pct * vid.duration;
                 }
             }
-        });
+        }, playerSignal);
 
         // --- Volume ---
         function updateVolIcons() {
@@ -1354,8 +1379,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (fullscreenBtn) fullscreenBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleFullscreen(); });
-        document.addEventListener('fullscreenchange', updateFsIcons);
-        document.addEventListener('webkitfullscreenchange', updateFsIcons);
+        document.addEventListener('fullscreenchange', updateFsIcons, playerSignal);
+        document.addEventListener('webkitfullscreenchange', updateFsIcons, playerSignal);
 
         // --- PiP ---
         if (pipBtn) {
@@ -1399,7 +1424,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!speedMenu.contains(e.target) && e.target !== speedBtn) {
                     speedMenu.classList.remove('vp-menu-open');
                 }
-            });
+            }, playerSignal);
         }
 
         // --- Click & Touch Double-Tap Gestures on Video Area ---
@@ -1648,7 +1673,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!vid.ended && vid.currentTime > 2) {
                     saveWatchProgress({ keepalive: true });
                 }
-            });
+            }, playerSignal);
         }
 
         // --- Keyboard Shortcuts ---
@@ -1689,7 +1714,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     adjustVolume(-0.05);
                     break;
             }
-        });
+        }, playerSignal);
 
         // Show controls initially
         showControls();
@@ -1720,12 +1745,6 @@ document.addEventListener('DOMContentLoaded', () => {
         shortcutsModal.addEventListener('click', (e) => {
             if (e.target === shortcutsModal) shortcutsModal.classList.remove('active');
         });
-        // Close shortcuts modal on Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && shortcutsModal.classList.contains('active')) {
-                shortcutsModal.classList.remove('active');
-            }
-        });
     }
 
     // ---- Download Confirmation Modal ----
@@ -1745,11 +1764,6 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadModal.addEventListener('click', (e) => {
             if (e.target === downloadModal) closeModal();
         });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && downloadModal.classList.contains('active')) {
-                closeModal();
-            }
-        });
     }
 
     // ---- Delete Video Confirmation Modal ----
@@ -1766,11 +1780,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         deleteVideoModal.addEventListener('click', (e) => {
             if (e.target === deleteVideoModal) closeDeleteModal();
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && deleteVideoModal.classList.contains('active')) {
-                closeDeleteModal();
-            }
         });
     }
 
@@ -1818,11 +1827,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (profileCloseBtn) profileCloseBtn.addEventListener('click', closeProfileModal);
         profileModal.addEventListener('click', (e) => {
             if (e.target === profileModal) closeProfileModal();
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && profileModal.classList.contains('active')) {
-                closeProfileModal();
-            }
         });
 
         if (profileChooseBtn && profileAvatarInput) {
@@ -2257,6 +2261,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Immediately sync UI Mode and Theme options on page init
+    syncActiveUiModeOption();
+    syncActiveThemeOption();
+
     function openThemeModal() {
         if (!themeModal) return;
         syncActiveUiModeOption();
@@ -2268,94 +2276,97 @@ document.addEventListener('DOMContentLoaded', () => {
         if (themeModal) themeModal.classList.remove('active');
     }
 
-    document.addEventListener('click', (e) => {
-        // Open Settings Modal Trigger
-        const openBtn = e.target.closest('#themeSwitcherBtn, #themeSwitcherNavBtn, #themeSwitcherBottomBtn, .open-settings-trigger, [data-open-settings]');
-        if (openBtn) {
-            e.preventDefault();
-            if (profileModal && profileModal.classList.contains('active') && typeof closeProfileModal === 'function') {
-                closeProfileModal();
+    if (!window.__THEME_CLICK_ATTACHED__) {
+        window.__THEME_CLICK_ATTACHED__ = true;
+        document.addEventListener('click', (e) => {
+            // Open Settings Modal Trigger
+            const openBtn = e.target.closest('#themeSwitcherBtn, #themeSwitcherNavBtn, #themeSwitcherBottomBtn, .open-settings-trigger, [data-open-settings]');
+            if (openBtn) {
+                e.preventDefault();
+                if (profileModal && profileModal.classList.contains('active') && typeof closeProfileModal === 'function') {
+                    closeProfileModal();
+                }
+                openThemeModal();
+                return;
             }
-            openThemeModal();
-            return;
-        }
 
-        // Close Settings Modal
-        const closeBtn = e.target.closest('#themeCloseBtn');
-        if (closeBtn || e.target === themeModal) {
-            closeThemeModal();
-            return;
-        }
-
-        // UI Mode Option Clicked
-        const uiModeBtn = e.target.closest('[data-set-ui-mode]');
-        if (uiModeBtn) {
-            e.preventDefault();
-            const mode = uiModeBtn.getAttribute('data-set-ui-mode');
-            if (mode === 'standard' || mode === 'minimal') {
-                document.documentElement.setAttribute('data-ui-mode', mode);
-                storage.setItem('videohosk_uimode', mode);
-                const user = (document.body && document.body.getAttribute('data-user')) ||
-                             document.documentElement.getAttribute('data-user');
-                if (user) {
-                    storage.setItem('videohosk_uimode_' + user, mode);
-                }
-                syncActiveUiModeOption();
-
-                // Persist to database in background
-                fetch('/api/settings/ui-mode', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ui_mode: mode })
-                }).catch(() => {});
-
-                // Show feedback toast
-                if (typeof showToast === 'function') {
-                    showToast(mode === 'minimal' ? '⚡ Minimal UI enabled (Fast & Lightweight)' : '✨ Standard UI enabled (Full Design)');
-                }
+            // Close Settings Modal
+            const closeBtn = e.target.closest('#themeCloseBtn');
+            if (closeBtn || e.target === themeModal) {
+                closeThemeModal();
+                return;
             }
-            return;
-        }
 
-        // Theme Option Clicked
-        const themeBtnOption = e.target.closest('[data-set-theme]');
-        if (themeBtnOption) {
-            e.preventDefault();
-            const theme = themeBtnOption.getAttribute('data-set-theme');
-            if (theme) {
-                document.documentElement.setAttribute('data-theme', theme);
-                storage.setItem('videohosk_theme', theme);
-                const user = (document.body && document.body.getAttribute('data-user')) ||
-                             document.documentElement.getAttribute('data-user');
-                if (user) {
-                    storage.setItem('videohosk_theme_' + user, theme);
-                }
-                const themeMetaColors = {
-                    cinematic: '#060609',
-                    cyberpunk: '#05050d',
-                    emerald: '#030806',
-                    sunset: '#0c040a'
-                };
-                const metaTheme = document.querySelector('meta[name="theme-color"]');
-                if (metaTheme) {
-                    metaTheme.setAttribute('content', themeMetaColors[theme] || '#060609');
-                }
-                syncActiveThemeOption();
+            // UI Mode Option Clicked
+            const uiModeBtn = e.target.closest('[data-set-ui-mode]');
+            if (uiModeBtn) {
+                e.preventDefault();
+                const mode = uiModeBtn.getAttribute('data-set-ui-mode');
+                if (mode === 'standard' || mode === 'minimal') {
+                    document.documentElement.setAttribute('data-ui-mode', mode);
+                    storage.setItem('videohosk_uimode', mode);
+                    const user = (document.body && document.body.getAttribute('data-user')) ||
+                                 document.documentElement.getAttribute('data-user');
+                    if (user) {
+                        storage.setItem('videohosk_uimode_' + user, mode);
+                    }
+                    syncActiveUiModeOption();
 
-                // Persist to database in background
-                fetch('/api/settings/theme', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ theme: theme })
-                }).catch(() => {});
+                    // Persist to database in background
+                    fetch('/api/settings/ui-mode', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ui_mode: mode })
+                    }).catch(() => {});
 
-                if (typeof showToast === 'function') {
-                    showToast('🎨 Theme changed to ' + theme.charAt(0).toUpperCase() + theme.slice(1));
+                    // Show feedback toast
+                    if (typeof showToast === 'function') {
+                        showToast(mode === 'minimal' ? '⚡ Minimal UI enabled (Fast & Lightweight)' : '✨ Standard UI enabled (Full Design)');
+                    }
                 }
+                return;
             }
-            return;
-        }
-    });
+
+            // Theme Option Clicked
+            const themeBtnOption = e.target.closest('[data-set-theme]');
+            if (themeBtnOption) {
+                e.preventDefault();
+                const theme = themeBtnOption.getAttribute('data-set-theme');
+                if (theme) {
+                    document.documentElement.setAttribute('data-theme', theme);
+                    storage.setItem('videohosk_theme', theme);
+                    const user = (document.body && document.body.getAttribute('data-user')) ||
+                                 document.documentElement.getAttribute('data-user');
+                    if (user) {
+                        storage.setItem('videohosk_theme_' + user, theme);
+                    }
+                    const themeMetaColors = {
+                        cinematic: '#060609',
+                        cyberpunk: '#05050d',
+                        emerald: '#030806',
+                        sunset: '#0c040a'
+                    };
+                    const metaTheme = document.querySelector('meta[name="theme-color"]');
+                    if (metaTheme) {
+                        metaTheme.setAttribute('content', themeMetaColors[theme] || '#060609');
+                    }
+                    syncActiveThemeOption();
+
+                    // Persist to database in background
+                    fetch('/api/settings/theme', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ theme: theme })
+                    }).catch(() => {});
+
+                    if (typeof showToast === 'function') {
+                        showToast('🎨 Theme changed to ' + theme.charAt(0).toUpperCase() + theme.slice(1));
+                    }
+                }
+                return;
+            }
+        });
+    }
 
     // ---- Upload Tabs ----
     const uploadTabs = document.querySelectorAll('.upload-tab');
@@ -3004,13 +3015,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 6000);
         }
 
-        // ---- 4. Touch Sparkle Burst (Android/Mobile) ----
-        const sparkleContainer = document.getElementById('sparkleTrailContainer');
-        if (sparkleContainer && !window.matchMedia('(pointer: fine)').matches) {
+        // ---- 4. Touch Sparkle Burst (Android/Mobile) & 5. Cursor Trail ----
+        if (!window.__SPARKLE_LISTENERS_ATTACHED__) {
+            window.__SPARKLE_LISTENERS_ATTACHED__ = true;
             const burstSymbols = ['✦', '♥', '✧', '💕', '✨'];
             let lastTouchBurst = 0;
 
             document.addEventListener('touchstart', (e) => {
+                const sparkleContainer = document.getElementById('sparkleTrailContainer');
+                if (!sparkleContainer || window.matchMedia('(pointer: fine)').matches) return;
                 if (document.documentElement.getAttribute('data-ui-mode') === 'minimal') return;
                 const now = Date.now();
                 if (now - lastTouchBurst < 400) return;
@@ -3043,14 +3056,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     setTimeout(() => spark.remove(), 900);
                 }
             }, { passive: true });
-        }
 
-        // ---- 5. Sparkle Cursor Trail (Desktop only) ----
-        if (sparkleContainer && window.matchMedia('(pointer: fine)').matches) {
+            // ---- 5. Sparkle Cursor Trail (Desktop only) ----
             const sparkleSymbols = ['✦', '✧', '♥', '✨'];
             let sparkleThrottle = 0;
 
             document.addEventListener('mousemove', (e) => {
+                const sparkleContainer = document.getElementById('sparkleTrailContainer');
+                if (!sparkleContainer || !window.matchMedia('(pointer: fine)').matches) return;
                 const now = Date.now();
                 if (now - sparkleThrottle < 60) return;
                 sparkleThrottle = now;
@@ -3083,8 +3096,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Real-Time Presence & Heartbeat Engine
     // ========================================
     function initPresenceTracker() {
+        if (window.__PRESENCE_TRACKER_INITIALIZED__) {
+            if (typeof window.__sendPresenceAction === 'function') {
+                window.__sendPresenceAction('page_navigate');
+            }
+            return;
+        }
         const currentUser = document.body.getAttribute('data-user') || '';
         if (!currentUser || window.location.pathname === '/' || window.location.pathname === '/login') return;
+        window.__PRESENCE_TRACKER_INITIALIZED__ = true;
 
         let isIdle = false;
         let idleTimer = null;

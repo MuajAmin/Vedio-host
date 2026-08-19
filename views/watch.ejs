@@ -260,13 +260,27 @@ const commentsHtml = comments.length === 0
         <div class="watch-layout-grid">
             <!-- Left / Main Column: Player, Video Info, Admin Panel, Comments -->
             <div class="watch-main-col">
-                <!-- Watch Together Invite Banner (shows when other user invites) -->
+                <!-- Watch Together In-Page Invite Banner -->
                 <div class="wt-invite-banner" id="wtInviteBanner">
                     <div class="wt-invite-content">
-                        <div class="wt-invite-avatar">🍿</div>
+                        <div class="wt-invite-avatar-wrap">
+                            <div class="wt-invite-avatar" id="wtInviteBannerAvatar">
+                                ${renderAvatar(isAdmin ? 'hajera' : 'muaj', 'wt-invite-avatar-img')}
+                            </div>
+                            <span class="wt-invite-live-dot" title="Live Stream"></span>
+                        </div>
                         <div class="wt-invite-text">
-                            <h4>Watch Together Invitation!</h4>
-                            <p><span class="wt-invite-host-name">${isAdmin ? 'Hajera' : 'Muaj'}</span> has started a synchronized Watch Together session on <strong class="wt-invite-video-title">${h(video.title)}</strong></p>
+                            <div class="wt-invite-badge-row">
+                                <span class="wt-invite-tag"><span class="wt-badge-pulse"></span>🍿 Watch Together Invite</span>
+                                <span class="wt-invite-sync-pill">Synchronized Session</span>
+                            </div>
+                            <h4><strong class="wt-invite-host-name">${isAdmin ? 'Hajera' : 'Muaj'}</strong> is watching together with you!</h4>
+                            <p class="wt-invite-sub">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
+                                    <polygon points="5 3 19 12 5 21 5 3"/>
+                                </svg>
+                                <span class="wt-invite-video-title">${h(video.title)}</span>
+                            </p>
                         </div>
                     </div>
                     <div class="wt-invite-actions">
@@ -892,68 +906,68 @@ const commentsHtml = comments.length === 0
             </button>
         </form>
     </nav>
+
+    <!-- Watch Together Slide-in Live Chat Drawer -->
+    <aside class="wt-chat-drawer" id="wtChatPanel" aria-label="Watch Together Live Chat">
+        <div class="wt-chat-header">
+            <div class="wt-chat-title-group">
+                <div class="wt-chat-avatar-duo">
+                    <div class="wt-mini-av-slot av-slot-host" title="Muaj (Host)">
+                        ${renderAvatar('muaj', 'wt-mini-av-img')}
+                    </div>
+                    <div class="wt-mini-av-slot av-slot-guest" title="Hajera (Guest)">
+                        ${renderAvatar('hajera', 'wt-mini-av-img')}
+                    </div>
+                </div>
+                <div>
+                    <h3 class="wt-chat-heading">Live Cinema Chat</h3>
+                    <span class="wt-chat-sub"><span class="wt-live-beacon"></span>Muaj &amp; Hajera • Real-time Sync</span>
+                </div>
+            </div>
+            <div class="wt-chat-header-actions">
+                <button type="button" class="wt-chat-stop-btn wt-stop-session-btn" id="wtChatStopBtn" title="Stop / Leave Session">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <rect x="6" y="6" width="12" height="12" rx="2"/>
+                    </svg>
+                    <span id="wtChatStopBtnText">${isAdmin ? 'Stop' : 'Leave'}</span>
+                </button>
+                <button type="button" class="wt-chat-close-btn" id="wtChatClose" title="Close chat">&times;</button>
+            </div>
+        </div>
+
+        <div class="wt-chat-messages" id="wtChatMessages">
+            <div class="wt-chat-welcome">
+                <div class="wt-welcome-icon">🍿</div>
+                <h4>Watch Together Chat</h4>
+                <p>Messages, reactions and video timeline are synchronized between both of you in real-time.</p>
+            </div>
+        </div>
+
+        <!-- Quick Emojis & Live Floating Reactions Bar -->
+        <div class="wt-emoji-bar" id="wtEmojiBar" title="Tap to send live reaction & message">
+            <button type="button" class="wt-emoji-btn" data-reaction="💖" title="Love (Tap to float)">💖</button>
+            <button type="button" class="wt-emoji-btn" data-reaction="😂" title="Laugh">😂</button>
+            <button type="button" class="wt-emoji-btn" data-reaction="😍" title="Heart eyes">😍</button>
+            <button type="button" class="wt-emoji-btn" data-reaction="🍿" title="Popcorn">🍿</button>
+            <button type="button" class="wt-emoji-btn" data-reaction="😮" title="Shock">😮</button>
+            <button type="button" class="wt-emoji-btn" data-reaction="🔥" title="Fire">🔥</button>
+            <button type="button" class="wt-emoji-btn" data-reaction="👏" title="Applause">👏</button>
+            <button type="button" class="wt-emoji-btn" data-reaction="🎉" title="Party">🎉</button>
+            <button type="button" class="wt-emoji-btn" data-reaction="💯" title="100">💯</button>
+        </div>
+
+        <div class="wt-chat-footer">
+            <div class="wt-input-wrap">
+                <input type="text" id="wtChatInput" class="wt-chat-input" placeholder="Type a message..." maxlength="500" autocomplete="off">
+                <button type="button" id="wtChatSendBtn" class="wt-chat-send-btn" title="Send message">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </aside>
 </div>
-
-<!-- Watch Together Slide-in Live Chat Drawer -->
-<aside class="wt-chat-drawer" id="wtChatPanel" aria-label="Watch Together Live Chat">
-    <div class="wt-chat-header">
-        <div class="wt-chat-title-group">
-            <div class="wt-chat-avatar-duo">
-                <div class="wt-mini-av-slot av-slot-host" title="Muaj (Host)">
-                    ${renderAvatar('muaj', 'wt-mini-av-img')}
-                </div>
-                <div class="wt-mini-av-slot av-slot-guest" title="Hajera (Guest)">
-                    ${renderAvatar('hajera', 'wt-mini-av-img')}
-                </div>
-            </div>
-            <div>
-                <h3 class="wt-chat-heading">Live Cinema Chat</h3>
-                <span class="wt-chat-sub"><span class="wt-live-beacon"></span>Muaj &amp; Hajera • Real-time Sync</span>
-            </div>
-        </div>
-        <div class="wt-chat-header-actions">
-            <button type="button" class="wt-chat-stop-btn wt-stop-session-btn" id="wtChatStopBtn" title="Stop / Leave Session">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                    <rect x="6" y="6" width="12" height="12" rx="2"/>
-                </svg>
-                <span id="wtChatStopBtnText">${isAdmin ? 'Stop' : 'Leave'}</span>
-            </button>
-            <button type="button" class="wt-chat-close-btn" id="wtChatClose" title="Close chat">&times;</button>
-        </div>
-    </div>
-
-    <div class="wt-chat-messages" id="wtChatMessages">
-        <div class="wt-chat-welcome">
-            <div class="wt-welcome-icon">🍿</div>
-            <h4>Watch Together Chat</h4>
-            <p>Messages, reactions and video timeline are synchronized between both of you in real-time.</p>
-        </div>
-    </div>
-
-    <!-- Quick Emojis & Live Floating Reactions Bar -->
-    <div class="wt-emoji-bar" id="wtEmojiBar" title="Tap to send live reaction & message">
-        <button type="button" class="wt-emoji-btn" data-reaction="💖" title="Love (Tap to float)">💖</button>
-        <button type="button" class="wt-emoji-btn" data-reaction="😂" title="Laugh">😂</button>
-        <button type="button" class="wt-emoji-btn" data-reaction="😍" title="Heart eyes">😍</button>
-        <button type="button" class="wt-emoji-btn" data-reaction="🍿" title="Popcorn">🍿</button>
-        <button type="button" class="wt-emoji-btn" data-reaction="😮" title="Shock">😮</button>
-        <button type="button" class="wt-emoji-btn" data-reaction="🔥" title="Fire">🔥</button>
-        <button type="button" class="wt-emoji-btn" data-reaction="👏" title="Applause">👏</button>
-        <button type="button" class="wt-emoji-btn" data-reaction="🎉" title="Party">🎉</button>
-        <button type="button" class="wt-emoji-btn" data-reaction="💯" title="100">💯</button>
-    </div>
-
-    <div class="wt-chat-footer">
-        <div class="wt-input-wrap">
-            <input type="text" id="wtChatInput" class="wt-chat-input" placeholder="Type a message..." maxlength="500" autocomplete="off">
-            <button type="button" id="wtChatSendBtn" class="wt-chat-send-btn" title="Send message">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
-                    <line x1="22" y1="2" x2="11" y2="13"/>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                </svg>
-            </button>
-        </div>
-    </div>
-</aside>
 ` }) %>
 

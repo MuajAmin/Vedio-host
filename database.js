@@ -1343,12 +1343,37 @@ function touchPushSubscription(endpoint) {
     } catch {}
 }
 
+function pruneActivityLogs(maxKeep = 1500) {
+    try {
+        const result = db.prepare(`
+            DELETE FROM activity_logs
+            WHERE id NOT IN (
+                SELECT id FROM activity_logs
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+            )
+        `).run(maxKeep);
+        if (result.changes > 0) {
+            console.log(`[db] Pruned ${result.changes} old activity logs.`);
+        }
+        return result.changes || 0;
+    } catch (err) {
+        console.error('[db] Error pruning activity logs:', err.message);
+        return 0;
+    }
+}
+
+// Prune activity logs every 30 minutes (unref so it doesn't block shutdown)
+setInterval(() => pruneActivityLogs(1500), 30 * 60 * 1000).unref();
+pruneActivityLogs(1500);
+
 db.savePushSubscription = savePushSubscription;
 db.getPushSubscriptions = getPushSubscriptions;
 db.deletePushSubscription = deletePushSubscription;
 db.deletePushSubscriptionsForUser = deletePushSubscriptionsForUser;
 db.cleanupStalePushSubscriptions = cleanupStalePushSubscriptions;
 db.touchPushSubscription = touchPushSubscription;
+db.pruneActivityLogs = pruneActivityLogs;
 
 module.exports = db;
 
