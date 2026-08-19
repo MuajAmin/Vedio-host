@@ -1052,6 +1052,20 @@ html[data-ui-mode="minimal"] .msg-time-stamp {
     margin-top: 4px;
 }
 
+/* Swipe-to-Reply Indicator in Minimal Mode */
+html[data-ui-mode="minimal"] .msg-swipe-reply-hint {
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-row.is-swipe-ready .msg-swipe-reply-hint {
+    background: var(--accent-gold) !important;
+    border-color: var(--accent-gold) !important;
+    color: #090a0f !important;
+    box-shadow: 0 0 12px rgba(229, 184, 90, 0.4) !important;
+}
+
 /* Quoted Reply Preview */
 html[data-ui-mode="minimal"] .msg-reply-bar,
 html[data-ui-mode="minimal"] .msg-quote-card {
@@ -1796,4 +1810,36 @@ html[data-ui-mode="minimal"] .theme-modal {
     html[data-ui-mode="minimal"] .nav-btn-text {
         display: none !important;
     }
+}
+
+/* --------------------------------------------------------------------------
+   16. Zero-CLS Skeleton Minimal UI Overrides
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] .skel-bone,
+html[data-ui-mode="minimal"] .skeleton-thumb,
+html[data-ui-mode="minimal"] .skeleton-avatar,
+html[data-ui-mode="minimal"] .skeleton-title-1,
+html[data-ui-mode="minimal"] .skeleton-title-2,
+html[data-ui-mode="minimal"] .skeleton-meta-row,
+html[data-ui-mode="minimal"] .skeleton-suggestion-thumb,
+html[data-ui-mode="minimal"] .skeleton-suggestion-title,
+html[data-ui-mode="minimal"] .skeleton-suggestion-meta,
+html[data-ui-mode="minimal"] .skeleton-comment-avatar,
+html[data-ui-mode="minimal"] .skeleton-comment-author,
+html[data-ui-mode="minimal"] .skeleton-comment-text {
+    background: var(--min-bg-surface-raised, #181a24) !important;
+    animation: skelPulseFast 1.5s ease-in-out infinite !important;
+}
+
+@keyframes skelPulseFast {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+html[data-ui-mode="minimal"] .skeleton-video-card,
+html[data-ui-mode="minimal"] .skeleton-suggestion-card,
+html[data-ui-mode="minimal"] .skeleton-comment-item {
+    background: var(--min-bg-surface, #11131a) !important;
+    border: 1px solid var(--min-border, rgba(255, 255, 255, 0.08)) !important;
+    box-shadow: none !important;
 }

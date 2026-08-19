@@ -12482,3 +12482,171 @@ h3,
     }
 }
 
+/* ==========================================================================
+   Zero-CLS Skeleton Loading Framework
+   ========================================================================== */
+.skel-bone {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm, 8px);
+    position: relative;
+    overflow: hidden;
+}
+
+@keyframes skelShimmerPulse {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 0.95; }
+}
+
+.skel-pulse {
+    animation: skelShimmerPulse 1.6s ease-in-out infinite;
+}
+
+/* Skeleton Video Card (Exact match for .video-card: zero layout shift) */
+.skeleton-video-card {
+    background: var(--bg-card, #11131a);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-md, 12px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    pointer-events: none;
+}
+
+.skeleton-thumb {
+    aspect-ratio: 16 / 9;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.skeleton-info {
+    padding: 10px 12px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.skeleton-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.skeleton-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.skeleton-title-1 {
+    height: 14px;
+    width: 85%;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.skeleton-title-2 {
+    height: 14px;
+    width: 55%;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.skeleton-meta-row {
+    height: 10px;
+    width: 45%;
+    border-radius: 3px;
+    margin-top: 2px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* Skeleton Continue Watching Card */
+.skeleton-continue-card {
+    flex: 0 0 220px;
+    min-width: 220px;
+}
+
+/* Skeleton Suggestion Card */
+.skeleton-suggestion-card {
+    display: flex;
+    gap: 10px;
+    padding: 6px;
+    border-radius: var(--radius-sm, 8px);
+    background: var(--bg-card, #11131a);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+    margin-bottom: 8px;
+}
+
+.skeleton-suggestion-thumb {
+    width: 100px;
+    aspect-ratio: 16 / 9;
+    flex-shrink: 0;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.skeleton-suggestion-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+}
+
+.skeleton-suggestion-title {
+    height: 12px;
+    width: 80%;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.skeleton-suggestion-meta {
+    height: 9px;
+    width: 50%;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* Skeleton Comment Item */
+.skeleton-comment-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm, 8px);
+    background: var(--bg-card, #11131a);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+    margin-bottom: 8px;
+}
+
+.skeleton-comment-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.skeleton-comment-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.skeleton-comment-author {
+    height: 11px;
+    width: 30%;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.skeleton-comment-text {
+    height: 13px;
+    width: 90%;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.07);
+}
+

@@ -1527,18 +1527,23 @@
         }
     });
 
-    // Touch events on messages for Long-Press and Swipe-to-Reply
+    // ------------------------------------------------------------
+    //  10.7. TOUCH GESTURES: LONG-PRESS ACTION SHEET & SWIPE-TO-REPLY
+    // ------------------------------------------------------------
+    let hasTriggeredSwipeHaptic = false;
+
     document.addEventListener('touchstart', (e) => {
         const row = e.target.closest('.msg-row');
         if (!row) return;
 
-        // Skip if touching interactive items inside message like buttons or links
-        if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.msg-quote-card')) return;
+        // Skip interactive elements
+        if (e.target.closest('button, a, .msg-quote-card, .msg-voice-control-btn, .msg-reaction-badge')) return;
 
         const touch = e.touches[0];
         touchStartX = touch.clientX;
         touchStartY = touch.clientY;
         swipedRow = row;
+        hasTriggeredSwipeHaptic = false;
 
         const msgId = parseInt(row.getAttribute('data-msg-id'), 10);
         const msgObj = State.messages.get(msgId) || {
@@ -1549,12 +1554,12 @@
 
         touchTimer = setTimeout(() => {
             if (navigator.vibrate) {
-                try { navigator.vibrate(35); } catch {}
+                try { navigator.vibrate(30); } catch {}
             }
             openMobileActionSheet(msgObj);
             touchTimer = null;
             swipedRow = null;
-        }, 450);
+        }, 480);
     }, { passive: true });
 
     document.addEventListener('touchmove', (e) => {
@@ -1568,23 +1573,60 @@
         const dx = touch.clientX - touchStartX;
         const dy = touch.clientY - touchStartY;
 
-        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+        // Cancel long press on movement
+        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
             clearTimeout(touchTimer);
             touchTimer = null;
         }
 
-        // Swipe right to reply
-        if (dx > 15 && Math.abs(dy) < 30) {
-            const dragDistance = Math.min(dx * 0.45, 65);
-            swipedRow.style.transform = `translateX(${dragDistance}px)`;
-            swipedRow.style.transition = 'none';
-            if (dragDistance > 45) {
-                swipedRow.classList.add('is-swipe-ready');
+        // Swipe right to reply (WhatsApp/Telegram style)
+        if (dx > 10 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+            const bubbleWrap = swipedRow.querySelector('.msg-bubble-wrap') || swipedRow;
+            const dragDistance = Math.min(dx * 0.48, 68);
+            
+            // Ensure swipe hint icon exists
+            let hint = swipedRow.querySelector('.msg-swipe-reply-hint');
+            if (!hint) {
+                hint = document.createElement('div');
+                hint.className = 'msg-swipe-reply-hint';
+                hint.innerHTML = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>`;
+                swipedRow.appendChild(hint);
+            }
+
+            swipedRow.classList.add('is-swiping');
+            bubbleWrap.style.transform = `translateX(${dragDistance}px)`;
+            bubbleWrap.style.transition = 'none';
+
+            // Positioning hint icon
+            hint.style.left = `${Math.min(dx * 0.35, 36) - 34}px`;
+
+            if (dragDistance >= 40) {
+                if (!swipedRow.classList.contains('is-swipe-ready')) {
+                    swipedRow.classList.add('is-swipe-ready');
+                    if (!hasTriggeredSwipeHaptic && navigator.vibrate) {
+                        hasTriggeredSwipeHaptic = true;
+                        try { navigator.vibrate(14); } catch {}
+                    }
+                }
             } else {
                 swipedRow.classList.remove('is-swipe-ready');
+                hasTriggeredSwipeHaptic = false;
             }
         }
     }, { passive: true });
+
+    function resetSwipedRow(row) {
+        if (!row) return;
+        const bubbleWrap = row.querySelector('.msg-bubble-wrap') || row;
+        bubbleWrap.style.transition = 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        bubbleWrap.style.transform = '';
+        row.classList.remove('is-swiping', 'is-swipe-ready');
+        setTimeout(() => {
+            bubbleWrap.style.transition = '';
+            const hint = row.querySelector('.msg-swipe-reply-hint');
+            if (hint) hint.remove();
+        }, 300);
+    }
 
     document.addEventListener('touchend', () => {
         clearTimeout(touchTimer);
@@ -1599,16 +1641,20 @@
                 text: swipedRow.querySelector('.msg-text-content')?.innerText || null
             };
 
-            swipedRow.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-            swipedRow.style.transform = '';
-            swipedRow.classList.remove('is-swipe-ready');
+            resetSwipedRow(swipedRow);
 
             if (wasReady && msgObj) {
-                if (navigator.vibrate) {
-                    try { navigator.vibrate(30); } catch {}
-                }
                 setReplyMessage(msgObj);
             }
+            swipedRow = null;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchcancel', () => {
+        clearTimeout(touchTimer);
+        touchTimer = null;
+        if (swipedRow) {
+            resetSwipedRow(swipedRow);
             swipedRow = null;
         }
     }, { passive: true });
