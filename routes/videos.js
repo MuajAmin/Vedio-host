@@ -867,18 +867,19 @@ async function handleStream(req, res) {
     }
 
     // Production: Nginx serves video directly via X-Accel-Redirect (zero Node.js overhead)
+    // Nginx handles Range/206 responses, Content-Length, and Accept-Ranges itself
+    // from the internal location block — we only pass through metadata headers.
     if (isProduction) {
         res.setHeader('X-Accel-Redirect', `/internal-videos/${filename}`);
         res.setHeader('Content-Type', mimeType);
         res.setHeader('Content-Disposition', formatContentDisposition(filename, 'inline'));
-        // Headers that Nginx will pass through to the client
-        res.setHeader('Accept-Ranges', 'bytes');
         res.setHeader('Cache-Control', 'private, max-age=86400, no-transform');
         res.setHeader('Last-Modified', stat.mtime.toUTCString());
         res.setHeader('ETag', etag);
-        res.setHeader('Content-Length', stat.size);
-        res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Content-Type-Options', 'nosniff');
+        // NOTE: Do NOT set Content-Length here — Nginx computes it from the
+        // actual byte range served (206) or the full file (200). Setting it
+        // to stat.size would be incorrect for range responses.
         return res.end();
     }
 
