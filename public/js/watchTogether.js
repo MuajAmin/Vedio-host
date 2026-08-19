@@ -11,23 +11,18 @@
     window.__WATCH_TOGETHER_INITIALIZED__ = true;
 
     // Detect logged in user
-    const currentUser = (document.body.dataset.user ||
-        (document.body.querySelector('.badge-admin') ? 'muaj' :
-            (document.body.querySelector('.badge-viewer') ? 'hajera' : ''))).toLowerCase();
+    function getCurrentUser() {
+        return (document.body.dataset.user ||
+            (document.body.querySelector('.badge-admin') ? 'muaj' :
+                (document.body.querySelector('.badge-viewer') ? 'hajera' : ''))).toLowerCase();
+    }
 
+    const currentUser = getCurrentUser();
     if (!currentUser) return; // Not logged in
-
-    const isHost = currentUser === 'muaj';
-    const isGuest = currentUser === 'hajera';
-
-    // Video & Player element (present only on watch pages)
-    const video = document.getElementById('vpVideo');
-    const playerContainer = document.getElementById('playerContainer');
-    const isWatchPage = !!video;
-    const currentVideoId = video ? video.dataset.videoId : null;
 
     // Internal State
     let roomId = null;
+    let isHost = false; // Dynamic: true if current user created the active room
     let eventSource = null;
     let syncActive = false;
     let ignoreNextSeek = false;
@@ -45,35 +40,87 @@
     const SYNC_TOLERANCE_SEC = 1.0;
 
     // Global DOM Elements (present in layout.ejs on ALL pages)
-    const globalWtToast = document.getElementById('globalWtToast');
-    const globalWtToastTitle = document.getElementById('globalWtToastTitle');
-    const globalWtToastJoin = document.getElementById('globalWtToastJoin');
-    const globalWtToastClose = document.getElementById('globalWtToastClose');
+    let globalWtToast = null;
+    let globalWtToastTitle = null;
+    let globalWtToastJoin = null;
+    let globalWtToastClose = null;
 
     // Watch Page DOM Elements (present only on /watch/:id)
-    const wtPanel = document.getElementById('wtPanel');
-    const wtChatPanel = document.getElementById('wtChatPanel');
-    const wtStartBtn = document.getElementById('wtStartBtn');
-    const wtStopBtn = document.getElementById('wtStopBtn');
-    const wtInviteBanner = document.getElementById('wtInviteBanner');
-    const wtJoinBtn = document.getElementById('wtJoinBtn');
-    const wtDismissBtn = document.getElementById('wtDismissBtn');
-    const wtStatusBar = document.getElementById('wtStatusBar');
-    const wtStatusText = document.getElementById('wtStatusText');
-    const wtResyncBtn = document.getElementById('wtResyncBtn');
-    const wtChatToggle = document.getElementById('wtChatToggle');
-    const wtChatClose = document.getElementById('wtChatClose');
-    const wtChatMessages = document.getElementById('wtChatMessages');
-    const wtChatInput = document.getElementById('wtChatInput');
-    const wtChatSendBtn = document.getElementById('wtChatSendBtn');
-    const wtUnreadBadge = document.getElementById('wtUnreadBadge');
-    const wtSyncOverlay = document.getElementById('wtSyncOverlay');
-    const wtFloatingReactions = document.getElementById('wtFloatingReactions');
-    const wtPlayerChatToast = document.getElementById('wtPlayerChatToast');
-    const wtToastAvatar = document.getElementById('wtToastAvatar');
-    const wtToastSender = document.getElementById('wtToastSender');
-    const wtToastMsg = document.getElementById('wtToastMsg');
-    const emojiBar = document.getElementById('wtEmojiBar');
+    let video = null;
+    let playerContainer = null;
+    let isWatchPage = false;
+    let currentVideoId = null;
+
+    let wtPanel = null;
+    let wtChatPanel = null;
+    let wtStartBtn = null;
+    let wtStopBtn = null;
+    let wtStopBtnGuest = null;
+    let wtChatToggleGuest = null;
+    let wtInviteBanner = null;
+    let wtJoinBtn = null;
+    let wtDismissBtn = null;
+    let wtStatusBar = null;
+    let wtStatusText = null;
+    let wtResyncBtn = null;
+    let wtChatToggle = null;
+    let wtChatClose = null;
+    let wtChatMessages = null;
+    let wtChatInput = null;
+    let wtChatSendBtn = null;
+    let wtUnreadBadge = null;
+    let wtSyncOverlay = null;
+    let wtFloatingReactions = null;
+    let wtPlayerChatToast = null;
+    let wtToastAvatar = null;
+    let wtToastSender = null;
+    let wtToastMsg = null;
+    let emojiBar = null;
+
+    // ============================================================
+    //  DOM QUERY & BINDING (Safe for initial load & SPA navigations)
+    // ============================================================
+    function queryDOM() {
+        globalWtToast = document.getElementById('globalWtToast');
+        globalWtToastTitle = document.getElementById('globalWtToastTitle');
+        globalWtToastJoin = document.getElementById('globalWtToastJoin');
+        globalWtToastClose = document.getElementById('globalWtToastClose');
+
+        video = document.getElementById('vpVideo');
+        playerContainer = document.getElementById('playerContainer');
+        isWatchPage = !!video || window.location.pathname.startsWith('/watch/');
+        currentVideoId = video ? (video.dataset.videoId || window.location.pathname.split('/watch/')[1]?.split('?')[0]) : null;
+
+        wtPanel = document.getElementById('wtPanel');
+        wtChatPanel = document.getElementById('wtChatPanel');
+        wtStartBtn = document.getElementById('wtStartBtn');
+        wtStopBtn = document.getElementById('wtStopBtn');
+        wtStopBtnGuest = document.getElementById('wtStopBtnGuest');
+        wtChatToggleGuest = document.getElementById('wtChatToggleGuest');
+        wtInviteBanner = document.getElementById('wtInviteBanner');
+        wtJoinBtn = document.getElementById('wtJoinBtn');
+        wtDismissBtn = document.getElementById('wtDismissBtn');
+        wtStatusBar = document.getElementById('wtStatusBar');
+        wtStatusText = document.getElementById('wtStatusText');
+        wtResyncBtn = document.getElementById('wtResyncBtn');
+        wtChatToggle = document.getElementById('wtChatToggle');
+        wtChatClose = document.getElementById('wtChatClose');
+        wtChatMessages = document.getElementById('wtChatMessages');
+        wtChatInput = document.getElementById('wtChatInput');
+        wtChatSendBtn = document.getElementById('wtChatSendBtn');
+        wtUnreadBadge = document.getElementById('wtUnreadBadge');
+        wtSyncOverlay = document.getElementById('wtSyncOverlay');
+        wtFloatingReactions = document.getElementById('wtFloatingReactions');
+        wtPlayerChatToast = document.getElementById('wtPlayerChatToast');
+        wtToastAvatar = document.getElementById('wtToastAvatar');
+        wtToastSender = document.getElementById('wtToastSender');
+        wtToastMsg = document.getElementById('wtToastMsg');
+        emojiBar = document.getElementById('wtEmojiBar');
+
+        if (video) {
+            bindVideoListeners(video);
+        }
+    }
 
     // ============================================================
     //  1. SYNTHETIC AUDIO FEEDBACK (Zero External Assets)
@@ -182,6 +229,7 @@
     }
 
     function showGlobalToast(data, playAudio = false) {
+        queryDOM();
         if (!globalWtToast || !data || !data.roomId) return;
         if (isInviteDismissed(data.roomId)) return;
 
@@ -194,7 +242,7 @@
         roomId = data.roomId;
 
         const videoTitle = data.videoTitle || 'a video';
-        const hostName = data.host === 'muaj' ? 'Muaj' : 'Hajera';
+        const hostName = data.host === 'muaj' ? 'Muaj' : (data.host === 'hajera' ? 'Hajera' : (data.host || 'Partner'));
 
         if (globalWtToastTitle) {
             globalWtToastTitle.textContent = `${hostName} invited you to watch "${videoTitle}" together!`;
@@ -214,8 +262,13 @@
     }
 
     function showInPageInvite(data) {
+        queryDOM();
         if (!wtInviteBanner || !data) return;
         if (isInviteDismissed(data.roomId)) return;
+
+        const hostDisplayName = data.host === 'muaj' ? 'Muaj' : (data.host === 'hajera' ? 'Hajera' : (data.host || 'Host'));
+        const hostEl = wtInviteBanner.querySelector('.wt-invite-host-name');
+        if (hostEl) hostEl.textContent = hostDisplayName;
 
         const titleEl = wtInviteBanner.querySelector('.wt-invite-video-title');
         if (titleEl) titleEl.textContent = data.videoTitle || 'this video';
@@ -223,40 +276,16 @@
     }
 
     function hideInvites() {
+        queryDOM();
         if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
         if (globalWtToast) {
             globalWtToast.classList.remove('visible');
             setTimeout(() => {
-                if (!globalWtToast.classList.contains('visible')) {
+                if (globalWtToast && !globalWtToast.classList.contains('visible')) {
                     globalWtToast.style.display = 'none';
                 }
             }, 300);
         }
-    }
-
-    // Dismiss Listeners
-    if (globalWtToastClose) {
-        globalWtToastClose.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (roomId) markInviteDismissed(roomId);
-            hideInvites();
-        });
-    }
-
-    if (wtDismissBtn) {
-        wtDismissBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (roomId) markInviteDismissed(roomId);
-            if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
-        });
-    }
-
-    if (wtJoinBtn) {
-        wtJoinBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            joinRoom();
-        });
     }
 
     // ============================================================
@@ -266,12 +295,14 @@
         const data = e.detail;
         if (!data) return;
 
-        wtDataReceivedViaSSE = true; // SSE already delivered WT data
+        wtDataReceivedViaSSE = true;
 
         if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
 
-        if (isGuest || (!isHost && data.host !== currentUser)) {
+        if (data.host !== currentUser) {
             roomId = data.roomId;
+            isHost = false;
+            queryDOM();
             if (isWatchPage && data.videoId === currentVideoId) {
                 showInPageInvite(data);
                 showGlobalToast(data, true);
@@ -288,12 +319,15 @@
             return;
         }
 
-        wtDataReceivedViaSSE = true; // SSE already delivered WT data
+        wtDataReceivedViaSSE = true;
 
         if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
 
+        queryDOM();
+
         // Host reconnecting on watch page
-        if (isHost && isWatchPage && data.role === 'host' && data.videoId === currentVideoId) {
+        if (data.host === currentUser && isWatchPage && data.videoId === currentVideoId) {
+            isHost = true;
             if (!roomId || !syncActive) {
                 roomId = data.roomId;
                 startSSE();
@@ -303,8 +337,9 @@
         }
 
         // Guest invited / active room present
-        if (isGuest || (!isHost && data.host !== currentUser)) {
+        if (data.host !== currentUser) {
             roomId = data.roomId;
+            isHost = false;
             if (isWatchPage && data.videoId === currentVideoId) {
                 if (syncActive) {
                     hideInvites();
@@ -352,7 +387,10 @@
 
             if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
 
-            if (isHost && isWatchPage && data.role === 'host' && data.videoId === currentVideoId) {
+            queryDOM();
+
+            if (data.host === currentUser && isWatchPage && data.videoId === currentVideoId) {
+                isHost = true;
                 if (!roomId || !syncActive) {
                     roomId = data.roomId;
                     startSSE();
@@ -361,8 +399,9 @@
                 return;
             }
 
-            if (isGuest || (!isHost && data.host !== currentUser)) {
+            if (data.host !== currentUser) {
                 roomId = data.roomId;
+                isHost = false;
                 if (isWatchPage && data.videoId === currentVideoId) {
                     const urlParams = new URLSearchParams(window.location.search);
                     if (urlParams.get('join') === '1' || urlParams.get('join') === 'true') {
@@ -379,43 +418,49 @@
     }
 
     // ============================================================
-    //  5. WATCH PAGE: HOST CREATE ROOM
+    //  5. WATCH PAGE: CREATE ROOM (Any authenticated user can Host)
     // ============================================================
-    if (wtStartBtn && isWatchPage && isHost) {
-        wtStartBtn.addEventListener('click', async () => {
-            try {
-                wtStartBtn.disabled = true;
-                const titleEl = document.getElementById('videoTitleText');
-                const videoTitle = titleEl ? titleEl.textContent.trim() : '';
+    async function handleStartSession() {
+        queryDOM();
+        if (!isWatchPage || !currentVideoId) return;
 
-                const initialCurrentTime = video ? video.currentTime : 0;
-                const initialPlaying = video ? !video.paused : false;
-                const initialPlaybackRate = video ? video.playbackRate : 1;
+        try {
+            if (wtStartBtn) wtStartBtn.disabled = true;
+            const titleEl = document.getElementById('videoTitleText');
+            const videoTitle = titleEl ? titleEl.textContent.trim() : '';
 
-                const data = await postJSON('/watch-together/create', {
-                    videoId: currentVideoId,
-                    videoTitle,
-                    currentTime: initialCurrentTime,
-                    playing: initialPlaying,
-                    playbackRate: initialPlaybackRate
-                });
+            const initialCurrentTime = video ? video.currentTime : 0;
+            const initialPlaying = video ? !video.paused : false;
+            const initialPlaybackRate = video ? video.playbackRate : 1;
 
-                if (data && data.roomId) {
-                    roomId = data.roomId;
-                    startSSE();
-                    showSyncActive();
-                    triggerSyncBadge('Session Live • Waiting for Hajera');
-                }
-            } catch (err) {
-                console.error('[WT] Create error:', err);
-            } finally {
-                wtStartBtn.disabled = false;
+            const otherName = currentUser === 'muaj' ? 'Hajera' : 'Muaj';
+
+            const data = await postJSON('/watch-together/create', {
+                videoId: currentVideoId,
+                videoTitle,
+                currentTime: initialCurrentTime,
+                playing: initialPlaying,
+                playbackRate: initialPlaybackRate
+            });
+
+            if (data && data.roomId) {
+                roomId = data.roomId;
+                isHost = true;
+                startSSE();
+                showSyncActive();
+                triggerSyncBadge(`Session Live • Waiting for ${otherName}`);
+            } else if (data && data.error) {
+                alert(data.error);
             }
-        });
+        } catch (err) {
+            console.error('[WT] Create error:', err);
+        } finally {
+            if (wtStartBtn) wtStartBtn.disabled = false;
+        }
     }
 
     // ============================================================
-    //  6. WATCH PAGE: GUEST JOIN ROOM
+    //  6. WATCH PAGE: JOIN ROOM
     // ============================================================
     async function joinRoom() {
         if (!roomId) {
@@ -436,6 +481,10 @@
 
                 if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
 
+                isHost = (data.host === currentUser) || (data.status === 'already-host');
+
+                queryDOM();
+
                 // If not currently on the session's video page, navigate directly
                 if (data.videoId && data.videoId !== currentVideoId) {
                     window.location.href = `/watch/${encodeURIComponent(data.videoId)}?join=1`;
@@ -453,7 +502,7 @@
                 }
 
                 // Apply initial playback state from Host
-                if (data.videoState && video) {
+                if (!isHost && data.videoState && video) {
                     applyVideoState(data.videoState, true);
                 }
 
@@ -463,7 +512,7 @@
                     data.chatHistory.forEach(msg => appendChatMessage(msg, false));
                 }
 
-                triggerSyncBadge('Connected with Host ⚡');
+                triggerSyncBadge(isHost ? 'Session Reconnected ⚡' : 'Connected with Host ⚡');
             }
         } catch (err) {
             console.error('[WT] Join error:', err);
@@ -492,13 +541,6 @@
         }
     }
 
-    document.querySelectorAll('.wt-stop-session-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            endOrLeaveSession();
-        });
-    });
-
     // ============================================================
     //  8. SSE ROOM CONNECTION & REAL-TIME DISPATCH
     // ============================================================
@@ -515,6 +557,9 @@
             try {
                 const data = JSON.parse(e.data);
                 syncActive = true;
+                if (data.host) {
+                    isHost = data.host === currentUser;
+                }
                 if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
                 updateStatusBar('connected', data.guest ? 2 : 1);
 
@@ -559,7 +604,8 @@
                 const data = JSON.parse(e.data);
                 if (data.avatars) userAvatars = Object.assign({}, userAvatars, data.avatars);
                 updateStatusBar('connected', 2);
-                appendSystemMessage(`${data.user === 'hajera' ? 'Hajera' : 'Muaj'} joined the session 🎉`);
+                const joinerName = data.user === 'hajera' ? 'Hajera' : (data.user === 'muaj' ? 'Muaj' : data.user);
+                appendSystemMessage(`${joinerName} joined the session 🎉`);
                 playChime('invite');
 
                 // Host syncs current state for the newly joined guest
@@ -573,7 +619,8 @@
             try {
                 const data = JSON.parse(e.data);
                 updateStatusBar('waiting', 1);
-                appendSystemMessage(`${data.user === 'hajera' ? 'Hajera' : 'Muaj'} left the session`);
+                const leaverName = data.user === 'hajera' ? 'Hajera' : (data.user === 'muaj' ? 'Muaj' : data.user);
+                appendSystemMessage(`${leaverName} left the session`);
             } catch {}
         });
 
@@ -603,16 +650,20 @@
     //  9. VIDEO SYNC ENGINE (SUB-SECOND PRECISION & LATENCY COMPENSATION)
     // ============================================================
     function triggerSyncBadge(customText) {
+        queryDOM();
         if (!wtSyncOverlay) return;
         if (customText) {
             const span = wtSyncOverlay.querySelector('span:not(.wt-sync-pulse-dot)');
             if (span) span.textContent = customText;
         }
         wtSyncOverlay.classList.add('visible');
-        setTimeout(() => wtSyncOverlay.classList.remove('visible'), 1600);
+        setTimeout(() => {
+            if (wtSyncOverlay) wtSyncOverlay.classList.remove('visible');
+        }, 1600);
     }
 
     function applyVideoState(state, force = false) {
+        queryDOM();
         if (!state || isHost || !video) return;
 
         // Latency offset compensation
@@ -650,6 +701,7 @@
     }
 
     function sendSync(action = 'update') {
+        queryDOM();
         if (!isHost || !roomId || !syncActive || !video) return;
 
         const now = Date.now();
@@ -664,54 +716,63 @@
         }).catch(() => {});
     }
 
-    // Host Playback Listeners
-    if (isHost && video) {
-        video.addEventListener('play', () => {
+    function bindVideoListeners(vid) {
+        if (!vid || vid.dataset.wtListenersBound === 'true') return;
+        vid.dataset.wtListenersBound = 'true';
+
+        vid.addEventListener('play', () => {
+            if (!isHost || !syncActive) return;
             if (ignoreNextPlay) { ignoreNextPlay = false; return; }
             sendSync('play');
         });
 
-        video.addEventListener('pause', () => {
+        vid.addEventListener('pause', () => {
+            if (!isHost || !syncActive) return;
             if (ignoreNextPause) { ignoreNextPause = false; return; }
             sendSync('pause');
         });
 
-        video.addEventListener('seeked', () => {
+        vid.addEventListener('seeked', () => {
+            if (!isHost || !syncActive) return;
             if (ignoreNextSeek) { ignoreNextSeek = false; return; }
             sendSync('seek');
         });
 
-        video.addEventListener('ratechange', () => {
+        vid.addEventListener('ratechange', () => {
+            if (!isHost || !syncActive) return;
             sendSync('ratechange');
         });
+    }
 
-        // Periodic alignment every 2.5s while playing
+    // Periodic host alignment every 2.5s while playing
+    if (!hostSyncInterval) {
         hostSyncInterval = setInterval(() => {
-            if (!video.paused && syncActive) {
+            queryDOM();
+            if (isHost && syncActive && video && !video.paused) {
                 sendSync('update');
             }
         }, 2500);
     }
 
     // Guest Manual Re-sync Button
-    if (wtResyncBtn) {
-        wtResyncBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            if (!roomId || isHost) return;
+    async function handleResync() {
+        queryDOM();
+        if (!roomId || isHost || !wtResyncBtn) return;
 
-            wtResyncBtn.classList.add('syncing');
-            try {
-                const data = await fetch(`/watch-together/sync-state/${roomId}`, { credentials: 'same-origin' }).then(r => r.json());
-                if (data && data.videoState) {
-                    applyVideoState(data.videoState, true);
-                    triggerSyncBadge('Re-synced with Host ⚡');
-                }
-            } catch (err) {
-                console.error('[WT] Re-sync error:', err);
-            } finally {
-                setTimeout(() => wtResyncBtn.classList.remove('syncing'), 800);
+        wtResyncBtn.classList.add('syncing');
+        try {
+            const data = await fetch(`/watch-together/sync-state/${roomId}`, { credentials: 'same-origin' }).then(r => r.json());
+            if (data && data.videoState) {
+                applyVideoState(data.videoState, true);
+                triggerSyncBadge('Re-synced with Host ⚡');
             }
-        });
+        } catch (err) {
+            console.error('[WT] Re-sync error:', err);
+        } finally {
+            setTimeout(() => {
+                if (wtResyncBtn) wtResyncBtn.classList.remove('syncing');
+            }, 800);
+        }
     }
 
     // Reconcile on Tab Focus & Network Online
@@ -736,6 +797,7 @@
     //  10. FLOATING LIVE REACTIONS
     // ============================================================
     function spawnFloatingReaction(emoji = '💖') {
+        queryDOM();
         const targetContainer = wtFloatingReactions || playerContainer || document.body;
         if (!targetContainer) return;
 
@@ -772,30 +834,15 @@
         });
     }
 
-    if (emojiBar) {
-        emojiBar.addEventListener('click', (e) => {
-            const btn = e.target.closest('.wt-emoji-btn');
-            if (!btn) return;
-
-            const emoji = btn.dataset.reaction || btn.textContent.trim();
-            if (emoji) {
-                sendLiveReaction(emoji);
-                if (wtChatInput && (document.activeElement === wtChatInput || wtChatInput.value.length > 0)) {
-                    wtChatInput.value += emoji;
-                    wtChatInput.focus();
-                }
-            }
-        });
-    }
-
     // ============================================================
     //  11. LIVE CINEMA CHAT
     // ============================================================
     function appendChatMessage(msg, animate = true) {
+        queryDOM();
         if (!wtChatMessages || !msg) return;
 
         const isMine = msg.user === currentUser;
-        const displayName = msg.user === 'muaj' ? 'Muaj' : 'Hajera';
+        const displayName = msg.user === 'muaj' ? 'Muaj' : (msg.user === 'hajera' ? 'Hajera' : msg.user);
         const avatarFile = msg.avatar || userAvatars[msg.user];
         const avatarHtml = renderAvatarElement(msg.user, avatarFile);
 
@@ -822,6 +869,7 @@
     }
 
     function appendSystemMessage(text) {
+        queryDOM();
         if (!wtChatMessages) return;
 
         const msgEl = document.createElement('div');
@@ -832,6 +880,7 @@
     }
 
     function sendChatMessage() {
+        queryDOM();
         if (!roomId || !wtChatInput) return;
         const text = wtChatInput.value.trim();
         if (!text) return;
@@ -843,20 +892,8 @@
         });
     }
 
-    if (wtChatSendBtn) {
-        wtChatSendBtn.addEventListener('click', sendChatMessage);
-    }
-
-    if (wtChatInput) {
-        wtChatInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendChatMessage();
-            }
-        });
-    }
-
     function toggleChat(forceState) {
+        queryDOM();
         chatOpen = typeof forceState === 'boolean' ? forceState : !chatOpen;
         if (wtChatPanel) wtChatPanel.classList.toggle('open', chatOpen);
         if (chatOpen) {
@@ -871,24 +908,8 @@
         }
     }
 
-    document.querySelectorAll('.wt-chat-toggle-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            toggleChat();
-        });
-    });
-
-    if (wtChatClose) {
-        wtChatClose.addEventListener('click', () => toggleChat(false));
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && chatOpen) {
-            toggleChat(false);
-        }
-    });
-
     function updateUnreadBadge() {
+        queryDOM();
         if (!wtUnreadBadge) return;
         if (unreadCount > 0) {
             wtUnreadBadge.textContent = unreadCount > 9 ? '9+' : unreadCount;
@@ -899,9 +920,10 @@
     }
 
     function showInPlayerChatToast(msg) {
+        queryDOM();
         if (chatOpen || !wtPlayerChatToast || !msg) return;
 
-        const senderName = msg.user === 'muaj' ? 'Muaj' : 'Hajera';
+        const senderName = msg.user === 'muaj' ? 'Muaj' : (msg.user === 'hajera' ? 'Hajera' : msg.user);
         if (wtToastSender) wtToastSender.textContent = senderName;
         if (wtToastMsg) wtToastMsg.textContent = msg.text || '';
 
@@ -931,29 +953,31 @@
         }, 4500);
     }
 
-    if (wtPlayerChatToast) {
-        wtPlayerChatToast.addEventListener('click', () => {
-            toggleChat(true);
-            wtPlayerChatToast.classList.remove('visible');
-            wtPlayerChatToast.style.display = 'none';
-        });
-    }
-
     // ============================================================
     //  12. UI STATE MANAGEMENT & CLEANUP
     // ============================================================
     function showSyncActive() {
         syncActive = true;
+        queryDOM();
+
         if (wtPanel) wtPanel.classList.add('wt-active');
 
         if (isHost) {
             if (wtStartBtn) wtStartBtn.style.display = 'none';
             if (wtStopBtn) wtStopBtn.style.display = '';
+            if (wtStopBtnGuest) wtStopBtnGuest.style.display = 'none';
+            if (wtChatToggleGuest) wtChatToggleGuest.style.display = '';
         } else {
-            const guestStop = document.getElementById('wtStopBtnGuest');
-            if (guestStop) guestStop.style.display = '';
+            if (wtStartBtn) wtStartBtn.style.display = 'none';
+            if (wtStopBtn) wtStopBtn.style.display = 'none';
+            if (wtStopBtnGuest) wtStopBtnGuest.style.display = '';
+            if (wtChatToggleGuest) wtChatToggleGuest.style.display = '';
             if (wtResyncBtn) wtResyncBtn.style.display = '';
         }
+
+        // Update stop button text inside drawer
+        const drawerStopText = document.getElementById('wtChatStopBtnText');
+        if (drawerStopText) drawerStopText.textContent = isHost ? 'Stop' : 'Leave';
 
         if (wtStatusBar) wtStatusBar.classList.add('visible');
         if (wtChatToggle) wtChatToggle.style.display = '';
@@ -962,9 +986,10 @@
     }
 
     function updateStatusBar(status, count) {
+        queryDOM();
         if (!wtStatusText) return;
 
-        const otherName = isHost ? 'Hajera' : 'Muaj';
+        const otherName = currentUser === 'muaj' ? 'Hajera' : 'Muaj';
         const statusMap = {
             'connected': `🟢 Watch Together • Connected (${count || 2}/2)`,
             'waiting': `🟡 Waiting for ${otherName}...`,
@@ -985,28 +1010,22 @@
     function cleanup() {
         syncActive = false;
         roomId = null;
+        isHost = false;
 
         if (eventSource) {
             eventSource.close();
             eventSource = null;
         }
 
-        // Clear host sync interval to prevent leaked timers
-        if (hostSyncInterval) {
-            clearInterval(hostSyncInterval);
-            hostSyncInterval = null;
-        }
+        queryDOM();
 
         if (wtPanel) wtPanel.classList.remove('wt-active');
 
-        if (isHost) {
-            if (wtStartBtn) { wtStartBtn.style.display = ''; wtStartBtn.disabled = false; }
-            if (wtStopBtn) wtStopBtn.style.display = 'none';
-        } else {
-            const guestStop = document.getElementById('wtStopBtnGuest');
-            if (guestStop) guestStop.style.display = 'none';
-            if (wtResyncBtn) wtResyncBtn.style.display = 'none';
-        }
+        if (wtStartBtn) { wtStartBtn.style.display = ''; wtStartBtn.disabled = false; }
+        if (wtStopBtn) wtStopBtn.style.display = 'none';
+        if (wtStopBtnGuest) wtStopBtnGuest.style.display = 'none';
+        if (wtChatToggleGuest) wtChatToggleGuest.style.display = 'none';
+        if (wtResyncBtn) wtResyncBtn.style.display = 'none';
 
         if (wtStatusBar) wtStatusBar.classList.remove('visible');
         if (wtChatToggle) wtChatToggle.style.display = 'none';
@@ -1023,8 +1042,126 @@
     }
 
     // ============================================================
-    //  13. INITIALIZATION & RECOVERY
+    //  13. DELEGATED EVENT LISTENERS (Work across all SPA transitions)
     // ============================================================
+    document.addEventListener('click', (e) => {
+        // Start Session
+        const startBtn = e.target.closest('#wtStartBtn');
+        if (startBtn) {
+            e.preventDefault();
+            handleStartSession();
+            return;
+        }
+
+        // Join Session
+        const joinBtn = e.target.closest('#wtJoinBtn');
+        if (joinBtn) {
+            e.preventDefault();
+            joinRoom();
+            return;
+        }
+
+        // Dismiss In-Page Banner
+        const dismissBtn = e.target.closest('#wtDismissBtn');
+        if (dismissBtn) {
+            e.preventDefault();
+            if (roomId) markInviteDismissed(roomId);
+            if (wtInviteBanner) wtInviteBanner.classList.remove('visible');
+            return;
+        }
+
+        // Global Toast Close
+        const toastClose = e.target.closest('#globalWtToastClose');
+        if (toastClose) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (roomId) markInviteDismissed(roomId);
+            hideInvites();
+            return;
+        }
+
+        // Stop / Leave Session
+        const stopBtn = e.target.closest('.wt-stop-session-btn');
+        if (stopBtn) {
+            e.preventDefault();
+            endOrLeaveSession();
+            return;
+        }
+
+        // Re-sync Button
+        const resyncBtn = e.target.closest('#wtResyncBtn');
+        if (resyncBtn) {
+            e.preventDefault();
+            handleResync();
+            return;
+        }
+
+        // Chat Toggle
+        const chatToggle = e.target.closest('.wt-chat-toggle-btn');
+        if (chatToggle) {
+            e.preventDefault();
+            toggleChat();
+            return;
+        }
+
+        // Chat Close
+        const chatClose = e.target.closest('#wtChatClose');
+        if (chatClose) {
+            e.preventDefault();
+            toggleChat(false);
+            return;
+        }
+
+        // Chat Send
+        const sendBtn = e.target.closest('#wtChatSendBtn');
+        if (sendBtn) {
+            e.preventDefault();
+            sendChatMessage();
+            return;
+        }
+
+        // Live Reaction Emoji Bar
+        const emojiBtn = e.target.closest('.wt-emoji-btn');
+        if (emojiBtn) {
+            e.preventDefault();
+            const emoji = emojiBtn.dataset.reaction || emojiBtn.textContent.trim();
+            if (emoji) {
+                sendLiveReaction(emoji);
+                if (wtChatInput && (document.activeElement === wtChatInput || wtChatInput.value.length > 0)) {
+                    wtChatInput.value += emoji;
+                    wtChatInput.focus();
+                }
+            }
+            return;
+        }
+
+        // Floating Toast inside player
+        const playerToast = e.target.closest('#wtPlayerChatToast');
+        if (playerToast) {
+            toggleChat(true);
+            playerToast.classList.remove('visible');
+            playerToast.style.display = 'none';
+            return;
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.target && e.target.id === 'wtChatInput') {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        }
+        if (e.key === 'Escape' && chatOpen) {
+            toggleChat(false);
+        }
+    });
+
+    // ============================================================
+    //  14. INITIALIZATION & RECOVERY
+    // ============================================================
+    queryDOM();
+
     // Delay checkActiveRoom to allow SSE connected event to deliver WT data first
     setTimeout(() => {
         if (!wtDataReceivedViaSSE) {
@@ -1040,14 +1177,17 @@
         }
     }
 
-    // Cleanup on page unload or navigation
+    // Cleanup on page unload
     window.addEventListener('beforeunload', cleanup);
     window.addEventListener('pagehide', cleanup);
 
-    // SPA Navigation Handler
+    // SPA Navigation Handlers
+    window.addEventListener('page:cleanup', () => {
+        queryDOM();
+    });
+
     window.addEventListener('page:navigate', () => {
-        isWatchPage = window.location.pathname.startsWith('/watch/');
-        video = document.getElementById('vpVideo') || document.querySelector('video');
+        queryDOM();
         if (isWatchPage && video) {
             checkActiveRoom();
             const urlParams = new URLSearchParams(window.location.search);

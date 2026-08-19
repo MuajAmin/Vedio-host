@@ -266,7 +266,7 @@ const commentsHtml = comments.length === 0
                         <div class="wt-invite-avatar">🍿</div>
                         <div class="wt-invite-text">
                             <h4>Watch Together Invitation!</h4>
-                            <p>Muaj has started a synchronized Watch Together session on <strong class="wt-invite-video-title">${h(video.title)}</strong></p>
+                            <p><span class="wt-invite-host-name">${isAdmin ? 'Hajera' : 'Muaj'}</span> has started a synchronized Watch Together session on <strong class="wt-invite-video-title">${h(video.title)}</strong></p>
                         </div>
                     </div>
                     <div class="wt-invite-actions">
@@ -558,8 +558,7 @@ const commentsHtml = comments.length === 0
                         <div class="video-action-buttons">
                             <!-- Watch Together Control Group -->
                             <div class="wt-action-group" id="wtPanel">
-                                ${isAdmin ? `
-                                <button type="button" class="btn btn-wt-start btn-sm" id="wtStartBtn" title="Start real-time Watch Together session with Hajera">
+                                <button type="button" class="btn btn-wt-start btn-sm" id="wtStartBtn" title="Start real-time Watch Together session with ${isAdmin ? 'Hajera' : 'Muaj'}">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                                         <circle cx="9" cy="7" r="4"/>
@@ -574,8 +573,7 @@ const commentsHtml = comments.length === 0
                                     </svg>
                                     <span>Stop Session</span>
                                 </button>
-                                ` : `
-                                <button type="button" class="btn btn-wt-chat btn-sm wt-chat-toggle-btn" id="wtChatToggleGuest" title="Open Live Chat">
+                                <button type="button" class="btn btn-wt-chat btn-sm wt-chat-toggle-btn" id="wtChatToggleGuest" style="display:none;" title="Open Live Chat">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                                     </svg>
@@ -587,7 +585,6 @@ const commentsHtml = comments.length === 0
                                     </svg>
                                     <span>Leave Session</span>
                                 </button>
-                                `}
                             </div>
 
                             <button type="button" class="btn btn-ghost btn-sm" id="btnShareToChat" data-video-id="${h(video.id)}" title="Share this video in Direct Chat">
@@ -919,7 +916,7 @@ const commentsHtml = comments.length === 0
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <rect x="6" y="6" width="12" height="12" rx="2"/>
                 </svg>
-                <span>${isAdmin ? 'Stop' : 'Leave'}</span>
+                <span id="wtChatStopBtnText">${isAdmin ? 'Stop' : 'Leave'}</span>
             </button>
             <button type="button" class="wt-chat-close-btn" id="wtChatClose" title="Close chat">&times;</button>
         </div>
