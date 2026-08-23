@@ -3852,47 +3852,75 @@ input, textarea, select {
 .vp-progress-wrap {
     position: relative;
     width: 100%;
-    height: 3px;
-    background: rgba(255, 255, 255, 0.25);
+    height: 4px;
+    padding: 8px 0;
+    background: transparent;
     cursor: pointer;
-    transition: height 0.12s ease;
+    box-sizing: content-box;
     touch-action: none;
     display: flex;
     align-items: center;
 }
 
-.vp-progress-wrap:hover,
-.vp-progress-wrap.vp-dragging {
+.vp-progress-wrap::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 3px;
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 2px;
+    transition: height 0.12s ease;
+}
+
+.vp-progress-wrap:hover::before,
+.vp-progress-wrap.vp-dragging::before {
     height: 5px;
 }
 
 .vp-progress-buffer {
     position: absolute;
-    top: 0;
+    top: 50%;
     left: 0;
-    height: 100%;
+    transform: translateY(-50%);
+    height: 3px;
     background: rgba(255, 255, 255, 0.4);
+    border-radius: 2px;
     pointer-events: none;
-    transition: width 0.15s ease;
+    transition: height 0.12s ease, width 0.15s ease;
+}
+
+.vp-progress-wrap:hover .vp-progress-buffer,
+.vp-progress-wrap.vp-dragging .vp-progress-buffer {
+    height: 5px;
 }
 
 .vp-progress-played {
     position: absolute;
-    top: 0;
+    top: 50%;
     left: 0;
-    height: 100%;
+    transform: translateY(-50%);
+    height: 3px;
     background: #e11d48;
+    border-radius: 2px;
     pointer-events: none;
-    transition: width 0.04s linear;
+    transition: height 0.12s ease, width 0.04s linear;
+}
+
+.vp-progress-wrap:hover .vp-progress-played,
+.vp-progress-wrap.vp-dragging .vp-progress-played {
+    height: 5px;
 }
 
 .vp-progress-thumb {
     position: absolute;
-    right: -6px;
+    right: -5px;
     top: 50%;
     transform: translateY(-50%) scale(0);
-    width: 13px;
-    height: 13px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: #e11d48;
     box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.3);

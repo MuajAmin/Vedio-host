@@ -220,12 +220,17 @@ html[data-ui-mode="minimal"] .app-bar-back-btn:active {
     transform: scale(0.96);
 }
 
-html[data-ui-mode="minimal"] .nav-right .btn-primary,
-html[data-ui-mode="minimal"] .btn-upload {
+html[data-ui-mode="minimal"] .nav-right .btn-primary {
     background: var(--accent-gold) !important;
     color: #090a0f !important;
     font-weight: 700 !important;
     border-color: var(--accent-gold) !important;
+}
+
+/* Hide top navbar upload button in minimal UI (Upload is placed in center of bottom nav bar) */
+html[data-ui-mode="minimal"] .navbar .btn-upload,
+html[data-ui-mode="minimal"] .nav-right .btn-upload {
+    display: none !important;
 }
 
 html[data-ui-mode="minimal"] .user-badge {
@@ -311,14 +316,27 @@ html[data-ui-mode="minimal"] .bottom-nav-label {
     margin-top: 2px;
 }
 
+html[data-ui-mode="minimal"] .bottom-nav-upload {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-top: -8px !important;
+    padding: 0 4px !important;
+}
+
 html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill {
-    width: 40px !important;
-    height: 40px !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
     background: var(--accent-gold) !important;
-    border-radius: var(--min-radius-md) !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45) !important;
+    border-radius: var(--min-radius-full) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55), 0 0 0 3px var(--min-bg-surface) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     will-change: transform;
-    transition: transform 0.1s ease;
+    transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-upload:active .upload-btn-pill {
@@ -327,8 +345,15 @@ html[data-ui-mode="minimal"] .bottom-nav-upload:active .upload-btn-pill {
 
 html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill svg {
     stroke: #090a0f !important;
-    width: 20px !important;
-    height: 20px !important;
+    width: 22px !important;
+    height: 22px !important;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-upload .bottom-nav-label {
+    font-size: 10.5px !important;
+    color: var(--accent-gold) !important;
+    font-weight: 700 !important;
+    margin-top: 1px !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -632,25 +657,80 @@ html[data-ui-mode="minimal"] .vp-controls {
 }
 
 html[data-ui-mode="minimal"] .vp-progress-wrap {
-    height: 3px !important;
-    padding: 10px 0 !important;
-    cursor: pointer;
+    position: relative !important;
+    width: 100% !important;
+    height: 4px !important;
+    padding: 8px 0 !important;
+    background: transparent !important;
     box-sizing: content-box !important;
-    touch-action: none;
+    cursor: pointer !important;
+    touch-action: none !important;
+    display: flex !important;
+    align-items: center !important;
 }
 
-html[data-ui-mode="minimal"] .vp-progress-wrap:hover,
-html[data-ui-mode="minimal"] .vp-progress-wrap.vp-dragging {
-    height: 5px !important;
+html[data-ui-mode="minimal"] .vp-progress-wrap::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    height: 3px !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-radius: 2px !important;
+    transition: height 0.12s ease !important;
+}
+
+html[data-ui-mode="minimal"] .vp-progress-buffer {
+    position: absolute !important;
+    top: 50% !important;
+    left: 0 !important;
+    transform: translateY(-50%) !important;
+    height: 3px !important;
+    background: rgba(255, 255, 255, 0.4) !important;
+    border-radius: 2px !important;
+    pointer-events: none !important;
+    transition: height 0.12s ease, width 0.15s ease !important;
 }
 
 html[data-ui-mode="minimal"] .vp-progress-played {
+    position: absolute !important;
+    top: 50% !important;
+    left: 0 !important;
+    transform: translateY(-50%) !important;
+    height: 3px !important;
     background: var(--accent-gold) !important;
+    border-radius: 2px !important;
+    pointer-events: none !important;
+    transition: height 0.12s ease !important;
+}
+
+html[data-ui-mode="minimal"] .vp-progress-wrap:hover::before,
+html[data-ui-mode="minimal"] .vp-progress-wrap.vp-dragging::before,
+html[data-ui-mode="minimal"] .vp-progress-wrap:hover .vp-progress-buffer,
+html[data-ui-mode="minimal"] .vp-progress-wrap.vp-dragging .vp-progress-buffer,
+html[data-ui-mode="minimal"] .vp-progress-wrap:hover .vp-progress-played,
+html[data-ui-mode="minimal"] .vp-progress-wrap.vp-dragging .vp-progress-played {
+    height: 5px !important;
 }
 
 html[data-ui-mode="minimal"] .vp-progress-thumb {
+    position: absolute !important;
+    right: -5px !important;
+    top: 50% !important;
+    transform: translateY(-50%) scale(0) !important;
+    width: 12px !important;
+    height: 12px !important;
+    border-radius: 50% !important;
     background: var(--accent-gold) !important;
     box-shadow: 0 0 6px rgba(0, 0, 0, 0.65) !important;
+    transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+html[data-ui-mode="minimal"] .vp-progress-wrap:hover .vp-progress-thumb,
+html[data-ui-mode="minimal"] .vp-progress-wrap.vp-dragging .vp-progress-thumb {
+    transform: translateY(-50%) scale(1) !important;
 }
 
 html[data-ui-mode="minimal"] .vp-btn {
@@ -1075,11 +1155,19 @@ html[data-ui-mode="minimal"] .wt-emoji-bar .wt-emoji-btn {
    7. Direct Messages (/messages & Floating Chat Drawer Widget)
    -------------------------------------------------------------------------- */
 
-/* ═══════════════════════════════════════════════════════════════
-   7a. HIDE EMOJI LINE IN MINIMAL MODE — permanently removed
-   ═══════════════════════════════════════════════════════════════ */
-html[data-ui-mode="minimal"] .msg-quick-emojis {
+html[data-ui-mode="minimal"] .msg-quick-emojis,
+html[data-ui-mode="minimal"] .msg-quick-emoji-btn,
+.msg-quick-emojis,
+.msg-quick-emoji-btn {
     display: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
 }
 
 /* Full Page /messages — Viewport Lock */
@@ -1555,10 +1643,16 @@ html[data-ui-mode="minimal"] .msg-recording-bar {
     border: 1px solid var(--min-border-strong) !important;
     border-radius: var(--min-radius-sm) !important;
     padding: 6px 10px !important;
-    display: flex !important;
+    display: none !important;
     align-items: center !important;
     justify-content: space-between !important;
     gap: 8px !important;
+}
+
+html[data-ui-mode="minimal"] .msg-recording-bar.is-recording {
+    display: flex !important;
+    background: rgba(239, 68, 68, 0.16) !important;
+    border-color: rgba(239, 68, 68, 0.5) !important;
 }
 
 html[data-ui-mode="minimal"] .msg-input-row {

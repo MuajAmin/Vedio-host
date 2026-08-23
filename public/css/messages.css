@@ -1384,17 +1384,13 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     z-index: 10;
 }
 
-/* Quick Emoji Bar */
+/* Quick Emoji Bar (Permanently hidden per design) */
 .msg-quick-emojis {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    overflow-x: auto;
-    padding: 6px 4px;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-    mask-image: linear-gradient(90deg, transparent 0%, black 4%, black 96%, transparent 100%);
-    -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 4%, black 96%, transparent 100%);
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
 }
 
 .msg-quick-emojis::-webkit-scrollbar {
@@ -1582,9 +1578,9 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
         inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
-/* Voice Recording Capsule HUD */
+/* Voice Recording Capsule HUD (Visible ONLY while recording) */
 .msg-recording-bar {
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;

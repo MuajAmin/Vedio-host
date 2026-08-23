@@ -614,26 +614,12 @@ const videoOptionsHtml = videoList.map(v => `
                     </div>
                 </div>
 
-                <!-- Quick Emojis -->
-                <div class="msg-quick-emojis">
-                    <button type="button" class="msg-quick-emoji-btn" data-emoji="❤️">❤️</button>
-                    <button type="button" class="msg-quick-emoji-btn" data-emoji="🔥">🔥</button>
-                    <button type="button" class="msg-quick-emoji-btn" data-emoji="😂">😂</button>
-                    <button type="button" class="msg-quick-emoji-btn" data-emoji="🥺">🥺</button>
-                    <button type="button" class="msg-quick-emoji-btn" data-emoji="🍿">🍿</button>
-                    <button type="button" class="msg-quick-emoji-btn" data-emoji="🎬">🎬</button>
-                    <button type="button" class="msg-quick-emoji-btn" data-emoji="✨">✨</button>
-                    <button type="button" class="msg-quick-emoji-btn" data-emoji="😍">😍</button>
-                    <button type="button" class="msg-quick-emoji-btn" data-emoji="💖">💖</button>
-                    <button type="button" class="msg-quick-emoji-btn" data-emoji="💯">💯</button>
-                </div>
-
-                <!-- Recording Bar -->
-                <div class="msg-recording-bar">
+                <!-- Recording Bar (Visible only when recording is active) -->
+                <div class="msg-recording-bar" style="display:none;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span class="msg-rec-dot"></span>
-                        <span class="msg-rec-label">🎙️ Tap mic to record</span>
-                        <span class="msg-rec-active-label" style="display:none;">Recording Voice Note... <span class="msg-rec-timer">0:00</span></span>
+                        <span class="msg-rec-label">🎙️ Recording...</span>
+                        <span class="msg-rec-active-label">Recording Voice Note... <span class="msg-rec-timer">0:00</span></span>
                     </div>
                     <div style="display: flex; gap: 6px;">
                         <button type="button" class="btn btn-ghost btn-sm msg-rec-cancel-btn">Cancel</button>
