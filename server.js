@@ -76,7 +76,7 @@ app.use((req, res, next) => {
     }
     res.setHeader(
         'Content-Security-Policy',
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; img-src 'self' data:; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'"
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob: https: https://*.r2.dev; img-src 'self' data: https: https://*.r2.dev; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'"
     );
     next();
 });
