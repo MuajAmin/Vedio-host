@@ -1,4 +1,5 @@
-const { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { Upload } = require('@aws-sdk/lib-storage');
 const fs = require('fs');
 const path = require('path');
 
@@ -74,15 +75,20 @@ async function uploadToR2(filePath, filename) {
     const stat = await fs.promises.stat(filePath);
     const contentType = getMimeType(filename);
 
-    const command = new PutObjectCommand({
-        Bucket: R2_BUCKET,
-        Key: filename,
-        Body: fs.createReadStream(filePath),
-        ContentType: contentType,
-        ContentLength: stat.size,
+    const parallelUpload = new Upload({
+        client: s3Client,
+        params: {
+            Bucket: R2_BUCKET,
+            Key: filename,
+            Body: fs.createReadStream(filePath),
+            ContentType: contentType,
+        },
+        partSize: 5 * 1024 * 1024, // 5MB chunks (minimal memory overhead)
+        queueSize: 1, // upload 1 chunk at a time for stable 1GB VPS RAM usage
+        leavePartsOnError: false,
     });
 
-    await s3Client.send(command);
+    await parallelUpload.done();
     console.log(`[R2] ✓ Uploaded: ${filename} (${(stat.size / 1024 / 1024).toFixed(1)} MB)`);
     return true;
 }

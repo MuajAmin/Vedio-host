@@ -124,7 +124,8 @@ html[data-ui-mode="minimal"] .incoming-call-shimmer-border,
 html[data-ui-mode="minimal"] .active-call-ambient-backdrop,
 html[data-ui-mode="minimal"] .active-call-avatar-glow-ring,
 html[data-ui-mode="minimal"] .badge-pulse-dot,
-html[data-ui-mode="minimal"] .bottom-nav-fab-ring,
+html[data-ui-mode="minimal"] .bottom-nav-fab-ring::before,
+html[data-ui-mode="minimal"] .bottom-nav-fab-ring::after,
 html[data-ui-mode="minimal"] .msg-floating-launcher::before,
 html[data-ui-mode="minimal"] .aperture-ring,
 html[data-ui-mode="minimal"] .mobile-bottom-bar::before,
@@ -332,45 +333,132 @@ html[data-ui-mode="minimal"] .bottom-nav-label {
     margin-top: 2px;
 }
 
+/* Upload Center Floating Action Button (Minimal Mode) */
 html[data-ui-mode="minimal"] .bottom-nav-upload {
     flex: 1 1 0% !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
     justify-content: center !important;
-    margin-top: -10px !important;
+    margin-top: -14px !important;
     padding: 0 2px !important;
+    position: relative !important;
+    z-index: 10 !important;
+    text-decoration: none !important;
 }
 
-html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill {
-    width: 44px !important;
-    height: 44px !important;
-    min-width: 44px !important;
-    background: var(--accent-gold) !important;
-    border-radius: var(--min-radius-full) !important;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55), 0 0 0 3px var(--min-bg-surface) !important;
+html[data-ui-mode="minimal"] .bottom-nav-upload .bottom-nav-fab-ring {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    will-change: transform;
-    transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    position: relative !important;
 }
 
-html[data-ui-mode="minimal"] .bottom-nav-upload:active .upload-btn-pill {
-    transform: scale(0.9);
+html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill {
+    width: 46px !important;
+    height: 46px !important;
+    min-width: 46px !important;
+    border-radius: 50% !important;
+    background: linear-gradient(135deg, var(--min-accent-primary, #e5b85a) 0%, var(--min-accent-bubble, #b88d3e) 100%) !important;
+    border: 3.5px solid var(--min-bg-surface) !important;
+    box-shadow: 
+        0 4px 14px rgba(0, 0, 0, 0.55),
+        0 2px 10px var(--min-accent-muted, rgba(229, 184, 90, 0.3)),
+        inset 0 1.5px 1.5px rgba(255, 255, 255, 0.45),
+        inset 0 -1.5px 2px rgba(0, 0, 0, 0.25) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: relative !important;
+    overflow: hidden !important;
+    will-change: transform, box-shadow;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.22s ease,
+                border-color 0.2s ease !important;
 }
 
+/* Glass shine on the top hemisphere of the upload button */
+html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill::after {
+    content: '' !important;
+    position: absolute !important;
+    top: 2px !important;
+    left: 6px !important;
+    right: 6px !important;
+    height: 13px !important;
+    border-radius: 20px 20px 6px 6px !important;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0) 100%) !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+}
+
+/* Upload SVG Arrow Icon */
 html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill svg {
-    stroke: #090a0f !important;
+    stroke: #08090e !important;
+    color: #08090e !important;
+    fill: none !important;
     width: 22px !important;
     height: 22px !important;
+    stroke-width: 2.5px !important;
+    stroke-linecap: round !important;
+    stroke-linejoin: round !important;
+    filter: drop-shadow(0 1px 1px rgba(255, 255, 255, 0.25)) !important;
+    position: relative !important;
+    z-index: 2 !important;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 
+/* Hover State (Desktop) */
+@media (hover: hover) {
+    html[data-ui-mode="minimal"] .bottom-nav-upload:hover .upload-btn-pill {
+        transform: translateY(-2px) scale(1.06) !important;
+        box-shadow: 
+            0 6px 20px rgba(0, 0, 0, 0.6),
+            0 0 16px var(--min-accent-primary, #e5b85a),
+            inset 0 1.5px 1.5px rgba(255, 255, 255, 0.6) !important;
+    }
+    html[data-ui-mode="minimal"] .bottom-nav-upload:hover .upload-btn-pill svg {
+        transform: translateY(-1.5px) !important;
+    }
+}
+
+/* Active / Press State (Tactile Spring Press) */
+html[data-ui-mode="minimal"] .bottom-nav-upload:active .upload-btn-pill {
+    transform: scale(0.91) translateY(2px) !important;
+    box-shadow: 
+        0 2px 6px rgba(0, 0, 0, 0.5),
+        inset 0 1px 1px rgba(255, 255, 255, 0.3) !important;
+    transition: transform 0.08s ease !important;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-upload:active .upload-btn-pill svg {
+    transform: rotate(45deg) scale(0.92) !important;
+}
+
+/* Active Page State (/upload route active) */
+html[data-ui-mode="minimal"] .bottom-nav-upload.active .upload-btn-pill {
+    box-shadow: 
+        0 0 0 3.5px var(--min-bg-surface),
+        0 0 0 5.5px var(--min-accent-primary, #e5b85a),
+        0 4px 18px rgba(0, 0, 0, 0.65),
+        inset 0 1.5px 1.5px rgba(255, 255, 255, 0.55) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Upload Bottom Label */
 html[data-ui-mode="minimal"] .bottom-nav-upload .bottom-nav-label {
     font-size: 10.5px !important;
-    color: var(--accent-gold) !important;
+    color: var(--min-accent-primary, #e5b85a) !important;
     font-weight: 700 !important;
-    margin-top: 1px !important;
+    letter-spacing: 0.2px !important;
+    margin-top: 2px !important;
+    transition: color 0.15s ease, transform 0.15s ease !important;
 }
 
 /* --------------------------------------------------------------------------
