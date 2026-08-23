@@ -861,9 +861,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Use connection-aware timeout: slower networks get more patience
             const connType = (connection && connection.effectiveType) || '4g';
-            let timeout = 8000; // default 8s
-            if (connType === 'slow-2g' || connType === '2g') timeout = 15000;
-            else if (connType === '3g') timeout = 12000;
+            let timeout = 12000; // default 12s (increased to reduce false positives on loaded VPS)
+            if (connType === 'slow-2g' || connType === '2g') timeout = 22000;
+            else if (connType === '3g') timeout = 18000;
 
             recoveryTimer = window.setTimeout(() => {
                 // Check if buffer grew since we started waiting
@@ -873,7 +873,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // If buffer is growing (even slowly), don't retry — let it continue
                 if (bufferNow > bufferBefore + 0.3) return;
 
-                if (retryCount < 1) {
+                if (retryCount < 2) {
                     retryCount += 1;
                     retryStream(true);
                     return;

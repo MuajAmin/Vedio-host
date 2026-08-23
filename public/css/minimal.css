@@ -1,5 +1,5 @@
 /* ==========================================================================
-   VideoHost — Minimal UI Mode (Android-Optimized High-Performance Design)
+   VideoHost — Minimal UI Mode (Rewritten: High-Performance Android-First Design)
    Activated exclusively when html[data-ui-mode="minimal"]
    Zero impact on Standard UI when data-ui-mode="standard"
    ========================================================================== */
@@ -8,22 +8,25 @@
    1. Design Tokens & Surface Variables (Minimal UI Mode)
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] {
-    /* Fast, solid, low-overhead dark theme surfaces */
-    --min-bg-root: #090a0f;
-    --min-bg-surface: #11131a;
-    --min-bg-surface-raised: #181a24;
-    --min-bg-surface-active: #222533;
-    --min-bg-input: #0c0d14;
-    --min-bg-overlay: rgba(9, 10, 15, 0.92);
+    /* Deep, solid, GPU-friendly dark surfaces — zero transparency overhead */
+    --min-bg-root: #08090e;
+    --min-bg-surface: #101218;
+    --min-bg-surface-raised: #171921;
+    --min-bg-surface-active: #1f222e;
+    --min-bg-input: #0b0c12;
+    --min-bg-overlay: rgba(8, 9, 14, 0.94);
 
-    --min-border: rgba(255, 255, 255, 0.08);
-    --min-border-strong: rgba(255, 255, 255, 0.16);
-    --min-border-subtle: rgba(255, 255, 255, 0.05);
+    /* Three-tier border system for visual depth */
+    --min-border: rgba(255, 255, 255, 0.07);
+    --min-border-strong: rgba(255, 255, 255, 0.14);
+    --min-border-subtle: rgba(255, 255, 255, 0.04);
 
-    --min-text-primary: #f8fafc;
-    --min-text-secondary: #94a3b8;
-    --min-text-muted: #64748b;
+    /* Text hierarchy */
+    --min-text-primary: #f4f6fb;
+    --min-text-secondary: #8d99b0;
+    --min-text-muted: #5b6578;
 
+    /* Radius scale */
     --min-radius-xs: 4px;
     --min-radius-sm: 8px;
     --min-radius-md: 12px;
@@ -31,11 +34,12 @@ html[data-ui-mode="minimal"] {
     --min-radius-xl: 24px;
     --min-radius-full: 9999px;
 
+    /* Touch & layout constants */
     --min-touch-target: 48px;
     --min-header-height: 56px;
     --min-bottom-nav-height: 58px;
 
-    /* Override base tokens with high-performance solid values */
+    /* Override base tokens for all child components */
     --bg-deep: var(--min-bg-root);
     --bg-primary: var(--min-bg-surface);
     --bg-card: var(--min-bg-surface);
@@ -45,54 +49,58 @@ html[data-ui-mode="minimal"] {
 
     --border-subtle: var(--min-border);
     --border-glass: var(--min-border);
-    --border-accent: rgba(229, 184, 90, 0.35);
+    --border-accent: rgba(229, 184, 90, 0.32);
 
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+    /* Solid shadows — no blur-heavy effects */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.65);
     --shadow-glow: none;
 
+    /* Accent palette */
     --accent-gold: #e5b85a;
     --min-accent-primary: #e5b85a;
     --min-accent-bubble: #b88d3e;
-    --min-accent-muted: rgba(229, 184, 90, 0.14);
-}
-
-/* Palette Overrides in Minimal Mode */
-html[data-ui-mode="minimal"][data-theme="cinematic"] {
-    --border-accent: rgba(229, 184, 90, 0.35);
-    --accent-gold: #e5b85a;
-    --min-accent-primary: #e5b85a;
-    --min-accent-bubble: #b88d3e;
-    --min-accent-muted: rgba(229, 184, 90, 0.14);
-}
-
-html[data-ui-mode="minimal"][data-theme="cyberpunk"] {
-    --border-accent: rgba(0, 240, 255, 0.35);
-    --accent-gold: #00f0ff;
-    --min-accent-primary: #00f0ff;
-    --min-accent-bubble: #0284c7;
-    --min-accent-muted: rgba(0, 240, 255, 0.14);
-}
-
-html[data-ui-mode="minimal"][data-theme="emerald"] {
-    --border-accent: rgba(16, 185, 129, 0.35);
-    --accent-gold: #10b981;
-    --min-accent-primary: #10b981;
-    --min-accent-bubble: #059669;
-    --min-accent-muted: rgba(16, 185, 129, 0.14);
-}
-
-html[data-ui-mode="minimal"][data-theme="sunset"] {
-    --border-accent: rgba(244, 63, 94, 0.35);
-    --accent-gold: #f43f5e;
-    --min-accent-primary: #f43f5e;
-    --min-accent-bubble: #e11d48;
-    --min-accent-muted: rgba(244, 63, 94, 0.14);
+    --min-accent-muted: rgba(229, 184, 90, 0.12);
 }
 
 /* --------------------------------------------------------------------------
-   2. Performance Optimization: Strip Expensive Filters & Heavy Animations
+   1b. Theme Palette Overrides (Minimal Mode)
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"][data-theme="cinematic"] {
+    --border-accent: rgba(229, 184, 90, 0.32);
+    --accent-gold: #e5b85a;
+    --min-accent-primary: #e5b85a;
+    --min-accent-bubble: #b88d3e;
+    --min-accent-muted: rgba(229, 184, 90, 0.12);
+}
+
+html[data-ui-mode="minimal"][data-theme="cyberpunk"] {
+    --border-accent: rgba(0, 240, 255, 0.32);
+    --accent-gold: #00f0ff;
+    --min-accent-primary: #00f0ff;
+    --min-accent-bubble: #0284c7;
+    --min-accent-muted: rgba(0, 240, 255, 0.12);
+}
+
+html[data-ui-mode="minimal"][data-theme="emerald"] {
+    --border-accent: rgba(16, 185, 129, 0.32);
+    --accent-gold: #10b981;
+    --min-accent-primary: #10b981;
+    --min-accent-bubble: #059669;
+    --min-accent-muted: rgba(16, 185, 129, 0.12);
+}
+
+html[data-ui-mode="minimal"][data-theme="sunset"] {
+    --border-accent: rgba(244, 63, 94, 0.32);
+    --accent-gold: #f43f5e;
+    --min-accent-primary: #f43f5e;
+    --min-accent-bubble: #e11d48;
+    --min-accent-muted: rgba(244, 63, 94, 0.12);
+}
+
+/* --------------------------------------------------------------------------
+   2. Performance: Strip Expensive Filters & Heavy Animations
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] * {
     -webkit-backdrop-filter: none !important;
@@ -101,7 +109,7 @@ html[data-ui-mode="minimal"] * {
     -webkit-tap-highlight-color: transparent !important;
 }
 
-/* Hide CPU/GPU-heavy ambient background orbs, particles & loop animations */
+/* Kill GPU-heavy ambient backgrounds, particles, pulse loops */
 html[data-ui-mode="minimal"] .ambient-background,
 html[data-ui-mode="minimal"] .ambient-orb,
 html[data-ui-mode="minimal"] .floating-hearts-container,
@@ -135,7 +143,7 @@ html[data-ui-mode="minimal"] body {
 }
 
 /* --------------------------------------------------------------------------
-   3. Android Top App Bar & Navigation (Standard Navbar & Admin App Bar)
+   3. Top App Bar & Navbar
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] .navbar,
 html[data-ui-mode="minimal"] .android-app-bar {
@@ -143,12 +151,14 @@ html[data-ui-mode="minimal"] .android-app-bar {
     min-height: calc(var(--min-header-height) + env(safe-area-inset-top, 0px)) !important;
     background: var(--min-bg-surface) !important;
     border-bottom: 1px solid var(--min-border) !important;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;
     padding: max(env(safe-area-inset-top, 0px), 0px) 14px 0 14px !important;
     position: sticky;
     top: 0;
     z-index: 100;
     box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
 }
 
 html[data-ui-mode="minimal"] .nav-logo {
@@ -198,7 +208,8 @@ html[data-ui-mode="minimal"] .app-bar-back-btn {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    will-change: transform;
 }
 
 html[data-ui-mode="minimal"] .nav-right .btn:active,
@@ -224,7 +235,8 @@ html[data-ui-mode="minimal"] .user-badge {
     padding: 4px 10px 4px 4px !important;
     box-shadow: none !important;
     cursor: pointer;
-    transition: background 0.12s ease, transform 0.08s ease;
+    transition: background 0.15s ease;
+    will-change: transform;
 }
 
 html[data-ui-mode="minimal"] .user-badge:active {
@@ -237,14 +249,14 @@ html[data-ui-mode="minimal"] .bottom-nav-badge {
     background: #ef4444 !important;
     color: #ffffff !important;
     border: 1.5px solid var(--min-bg-surface) !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45) !important;
     animation: none !important;
     font-size: 9.5px !important;
     font-weight: 800 !important;
 }
 
 /* --------------------------------------------------------------------------
-   4. Android Material 3 Bottom Navigation Bar
+   4. Material 3 Bottom Navigation Bar
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] .mobile-bottom-bar {
     position: fixed !important;
@@ -258,24 +270,28 @@ html[data-ui-mode="minimal"] .mobile-bottom-bar {
     border-top: 1px solid var(--min-border) !important;
     border-radius: 0 !important;
     margin: 0 !important;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.4) !important;
+    box-shadow: 0 -1px 8px rgba(0, 0, 0, 0.45) !important;
     padding: 2px 6px calc(env(safe-area-inset-bottom, 0px)) 6px !important;
     z-index: 1000 !important;
     animation: none !important;
     box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-around !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item {
     padding: 4px 6px !important;
     border-radius: var(--min-radius-md) !important;
-    transition: background 0.12s ease, color 0.12s ease;
+    transition: color 0.15s ease;
     color: var(--min-text-muted) !important;
     min-height: 48px !important;
     justify-content: center !important;
+    will-change: transform;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item:active {
-    transform: scale(0.96);
+    transform: scale(0.94);
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item.active {
@@ -300,12 +316,13 @@ html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill {
     height: 40px !important;
     background: var(--accent-gold) !important;
     border-radius: var(--min-radius-md) !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
-    transition: transform 0.08s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45) !important;
+    will-change: transform;
+    transition: transform 0.1s ease;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-upload:active .upload-btn-pill {
-    transform: scale(0.92);
+    transform: scale(0.9);
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill svg {
@@ -328,10 +345,10 @@ html[data-ui-mode="minimal"] .main-content {
     padding: 14px 16px 24px 16px !important;
 }
 
-/* Minimal Love Banner (Hajera) */
+/* Love Banner (Hajera) */
 html[data-ui-mode="minimal"] .love-banner-card {
     background: var(--min-bg-surface) !important;
-    border: 1px solid rgba(244, 63, 94, 0.25) !important;
+    border: 1px solid rgba(244, 63, 94, 0.2) !important;
     border-left: 4px solid var(--accent-gold) !important;
     border-radius: var(--min-radius-md) !important;
     box-shadow: none !important;
@@ -391,7 +408,7 @@ html[data-ui-mode="minimal"] .header-titles .subtitle {
     color: var(--min-text-secondary) !important;
 }
 
-/* Fixed Search Box: Clean relative wrapper with solid input styling */
+/* Search Box — clean relative wrapper */
 html[data-ui-mode="minimal"] .search-box {
     position: relative !important;
     width: 100% !important;
@@ -414,13 +431,14 @@ html[data-ui-mode="minimal"] .search-input {
     font-size: 14px !important;
     color: var(--min-text-primary) !important;
     box-shadow: none !important;
-    transition: border-color 0.12s ease, background 0.12s ease;
+    box-sizing: border-box !important;
+    transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 html[data-ui-mode="minimal"] .search-input:focus {
     border-color: var(--accent-gold) !important;
     background: var(--min-bg-surface-raised) !important;
-    box-shadow: none !important;
+    box-shadow: 0 0 0 3px var(--min-accent-muted) !important;
     outline: none !important;
 }
 
@@ -464,7 +482,8 @@ html[data-ui-mode="minimal"] .continue-card {
     flex: 0 0 220px !important;
     min-width: 220px !important;
     scroll-snap-align: start !important;
-    transition: transform 0.08s ease !important;
+    will-change: transform;
+    transition: transform 0.1s ease !important;
 }
 
 html[data-ui-mode="minimal"] .continue-card:active {
@@ -484,9 +503,10 @@ html[data-ui-mode="minimal"] .video-card {
     border-radius: var(--min-radius-md) !important;
     box-shadow: none !important;
     overflow: hidden;
-    transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease;
     display: flex;
     flex-direction: column;
+    will-change: transform;
+    transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
 html[data-ui-mode="minimal"] .video-card:active {
@@ -509,8 +529,8 @@ html[data-ui-mode="minimal"] .thumb-img {
 }
 
 html[data-ui-mode="minimal"] .card-duration {
-    background: rgba(0, 0, 0, 0.82) !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    background: rgba(0, 0, 0, 0.84) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
     border-radius: var(--min-radius-xs) !important;
     font-size: 11px !important;
     font-weight: 600 !important;
@@ -541,7 +561,7 @@ html[data-ui-mode="minimal"] .card-badge.badge-resume {
 
 html[data-ui-mode="minimal"] .card-watch-progress {
     height: 3px !important;
-    background: rgba(255, 255, 255, 0.2) !important;
+    background: rgba(255, 255, 255, 0.15) !important;
 }
 
 html[data-ui-mode="minimal"] .card-watch-progress span {
@@ -574,7 +594,7 @@ html[data-ui-mode="minimal"] .card-meta {
     margin-top: 4px;
 }
 
-/* Empty State in Minimal Mode */
+/* Empty State */
 html[data-ui-mode="minimal"] .empty-state,
 html[data-ui-mode="minimal"] .admin-empty,
 html[data-ui-mode="minimal"] .no-comments-box,
@@ -602,13 +622,13 @@ html[data-ui-mode="minimal"] .vp-cinema {
     background: #000 !important;
     border: 1px solid var(--min-border) !important;
     border-radius: var(--min-radius-md) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65) !important;
     overflow: hidden;
     margin-bottom: 12px !important;
 }
 
 html[data-ui-mode="minimal"] .vp-controls {
-    background: linear-gradient(to top, rgba(9, 10, 15, 0.95), transparent) !important;
+    background: linear-gradient(to top, rgba(8, 9, 14, 0.96), transparent) !important;
 }
 
 html[data-ui-mode="minimal"] .vp-progress-wrap {
@@ -616,6 +636,7 @@ html[data-ui-mode="minimal"] .vp-progress-wrap {
     padding: 10px 0 !important;
     cursor: pointer;
     box-sizing: content-box !important;
+    touch-action: none;
 }
 
 html[data-ui-mode="minimal"] .vp-progress-wrap:hover,
@@ -629,22 +650,23 @@ html[data-ui-mode="minimal"] .vp-progress-played {
 
 html[data-ui-mode="minimal"] .vp-progress-thumb {
     background: var(--accent-gold) !important;
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.6) !important;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.65) !important;
 }
 
 html[data-ui-mode="minimal"] .vp-btn {
     min-width: 44px !important;
     min-height: 44px !important;
-    color: #f8fafc !important;
+    color: #f4f6fb !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     border-radius: var(--min-radius-sm) !important;
-    transition: transform 0.08s ease, background 0.12s ease !important;
+    will-change: transform;
+    transition: transform 0.1s ease, background 0.15s ease !important;
 }
 
 html[data-ui-mode="minimal"] .vp-btn:active {
-    transform: scale(0.92);
+    transform: scale(0.9);
     background: var(--min-bg-surface-active) !important;
 }
 
@@ -652,12 +674,13 @@ html[data-ui-mode="minimal"] .vp-speed-menu {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--min-border-strong) !important;
     border-radius: var(--min-radius-sm) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65) !important;
 }
 
 html[data-ui-mode="minimal"] .vp-speed-option {
     color: var(--min-text-primary) !important;
     padding: 8px 12px !important;
+    transition: background 0.12s ease;
 }
 
 html[data-ui-mode="minimal"] .vp-speed-option:hover,
@@ -686,7 +709,7 @@ html[data-ui-mode="minimal"] .video-title {
     color: var(--min-text-primary) !important;
 }
 
-/* Inline Title Rename Form */
+/* Inline Title Rename */
 html[data-ui-mode="minimal"] .title-edit-form {
     gap: 6px !important;
 }
@@ -724,7 +747,8 @@ html[data-ui-mode="minimal"] .video-action-buttons .btn {
     border: 1px solid var(--min-border) !important;
     font-size: 13px !important;
     box-shadow: none !important;
-    transition: background 0.12s ease, transform 0.08s ease;
+    will-change: transform;
+    transition: background 0.15s ease, transform 0.1s ease;
 }
 
 html[data-ui-mode="minimal"] .video-action-buttons .btn:active {
@@ -739,7 +763,7 @@ html[data-ui-mode="minimal"] .btn-wt-start {
     font-weight: 700 !important;
 }
 
-/* Thumbnail Manager in Minimal Mode */
+/* Thumbnail Manager */
 html[data-ui-mode="minimal"] .thumbnail-manager {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border) !important;
@@ -756,7 +780,7 @@ html[data-ui-mode="minimal"] .thumbnail-input {
     color: var(--min-text-primary) !important;
 }
 
-/* Suggested Videos Panel & Text Containment */
+/* Suggested Videos Panel */
 html[data-ui-mode="minimal"] .suggestions-panel {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border) !important;
@@ -778,7 +802,7 @@ html[data-ui-mode="minimal"] .suggestion-chips .chip-btn {
     padding: 4px 10px !important;
     font-size: 11px !important;
     box-shadow: none !important;
-    transition: background 0.12s ease, color 0.12s ease;
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
 html[data-ui-mode="minimal"] .suggestion-chips .chip-btn.active {
@@ -798,8 +822,9 @@ html[data-ui-mode="minimal"] .suggestion-card {
     border-radius: var(--min-radius-sm) !important;
     box-shadow: none !important;
     margin-bottom: 8px !important;
-    transition: background 0.12s ease, transform 0.08s ease;
     overflow: hidden;
+    will-change: transform;
+    transition: background 0.15s ease, transform 0.1s ease;
 }
 
 html[data-ui-mode="minimal"] .suggestion-card:active {
@@ -835,11 +860,13 @@ html[data-ui-mode="minimal"] .suggestion-title {
     -webkit-box-orient: vertical !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    word-break: break-word !important;
 }
 
 html[data-ui-mode="minimal"] .suggestion-meta {
     font-size: 11px !important;
     color: var(--min-text-muted) !important;
+    margin-top: 2px !important;
 }
 
 /* Comments Section */
@@ -880,12 +907,12 @@ html[data-ui-mode="minimal"] .comment-item {
     box-shadow: none !important;
 }
 
-/* Autoplay Toast Notification */
+/* Autoplay Toast */
 html[data-ui-mode="minimal"] .autoplay-toast {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--border-accent) !important;
     border-radius: var(--min-radius-md) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65) !important;
 }
 
 /* Watch Together Stage & Cinema Chat Drawer */
@@ -903,7 +930,7 @@ html[data-ui-mode="minimal"] .wt-invite-banner {
     border: 1px solid var(--min-border-strong) !important;
     border-radius: var(--min-radius-lg) !important;
     padding: 14px 16px !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
@@ -960,7 +987,7 @@ html[data-ui-mode="minimal"] .wt-btn-dismiss {
 html[data-ui-mode="minimal"] .wt-chat-drawer {
     background: var(--min-bg-surface) !important;
     border-left: 1px solid var(--min-border-strong) !important;
-    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.6) !important;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.65) !important;
     display: flex !important;
     flex-direction: column !important;
 }
@@ -993,7 +1020,7 @@ html[data-ui-mode="minimal"] .wt-input-wrap {
     display: flex !important;
     align-items: center !important;
     gap: 8px !important;
-    transition: border-color 0.12s ease, background 0.12s ease !important;
+    transition: border-color 0.15s ease, background 0.15s ease !important;
 }
 
 html[data-ui-mode="minimal"] .wt-input-wrap:focus-within {
@@ -1025,12 +1052,13 @@ html[data-ui-mode="minimal"] .wt-chat-send-btn {
     justify-content: center !important;
     cursor: pointer !important;
     font-weight: 700 !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
-    transition: transform 0.08s ease !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
+    will-change: transform;
+    transition: transform 0.1s ease !important;
 }
 
 html[data-ui-mode="minimal"] .wt-chat-send-btn:active {
-    transform: scale(0.92) !important;
+    transform: scale(0.9) !important;
 }
 
 html[data-ui-mode="minimal"] .wt-chat-send-btn svg {
@@ -1046,7 +1074,15 @@ html[data-ui-mode="minimal"] .wt-emoji-bar .wt-emoji-btn {
 /* --------------------------------------------------------------------------
    7. Direct Messages (/messages & Floating Chat Drawer Widget)
    -------------------------------------------------------------------------- */
-/* Full Page /messages Pinned Viewport Container Lock */
+
+/* ═══════════════════════════════════════════════════════════════
+   7a. HIDE EMOJI LINE IN MINIMAL MODE — permanently removed
+   ═══════════════════════════════════════════════════════════════ */
+html[data-ui-mode="minimal"] .msg-quick-emojis {
+    display: none !important;
+}
+
+/* Full Page /messages — Viewport Lock */
 html[data-ui-mode="minimal"] body[data-page="messages"],
 html[data-ui-mode="minimal"] body:has(.msg-fullpage-container) {
     height: 100vh !important;
@@ -1084,6 +1120,11 @@ html[data-ui-mode="minimal"] body:has(.msg-fullpage-container) .navbar {
     width: 100% !important;
 }
 
+/* Hide bottom nav on messages page */
+html[data-ui-mode="minimal"] body[data-page="messages"] .mobile-bottom-bar {
+    display: none !important;
+}
+
 html[data-ui-mode="minimal"] .msg-fullpage-container {
     background: var(--min-bg-root) !important;
     padding: 0 !important;
@@ -1108,6 +1149,7 @@ html[data-ui-mode="minimal"] .msg-fullpage-sidebar {
     min-height: 0 !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: contain !important;
     border-radius: 0 !important;
     padding: 16px !important;
     box-shadow: none !important;
@@ -1146,6 +1188,7 @@ html[data-ui-mode="minimal"] .msg-media-tab-btn {
     border: 1px solid var(--min-border) !important;
     border-radius: var(--min-radius-sm) !important;
     color: var(--min-text-secondary) !important;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 html[data-ui-mode="minimal"] .msg-media-tab-btn.is-active {
@@ -1154,10 +1197,11 @@ html[data-ui-mode="minimal"] .msg-media-tab-btn.is-active {
     color: var(--min-text-primary) !important;
 }
 
+/* Chat Header */
 html[data-ui-mode="minimal"] .msg-header {
     background: var(--min-bg-surface) !important;
     border-bottom: 1px solid var(--min-border) !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
     padding: 8px 14px !important;
     min-height: 52px !important;
     height: auto !important;
@@ -1180,6 +1224,7 @@ html[data-ui-mode="minimal"] .msg-header-presence-sub {
     color: var(--min-text-secondary) !important;
 }
 
+/* In-Chat Search */
 html[data-ui-mode="minimal"] .msg-inchat-search-bar {
     background: var(--min-bg-surface-raised) !important;
     border-bottom: 1px solid var(--min-border) !important;
@@ -1193,6 +1238,7 @@ html[data-ui-mode="minimal"] .msg-inchat-search-input {
     border-radius: var(--min-radius-sm) !important;
 }
 
+/* Message Body Container */
 html[data-ui-mode="minimal"] .msg-body-container {
     background: var(--min-bg-root) !important;
     padding: 14px 14px 10px 14px !important;
@@ -1233,10 +1279,10 @@ html[data-ui-mode="minimal"] .msg-bubble-wrap {
     min-width: 0 !important;
 }
 
-/* Lightweight Chat Bubbles */
+/* Chat Bubbles */
 html[data-ui-mode="minimal"] .msg-bubble {
     border-radius: 18px !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
     padding: 10px 14px !important;
     max-width: 100% !important;
     width: fit-content !important;
@@ -1244,6 +1290,8 @@ html[data-ui-mode="minimal"] .msg-bubble {
     font-size: 14.5px !important;
     line-height: 1.45 !important;
     border: 1px solid var(--min-border) !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
 }
 
 html[data-ui-mode="minimal"] .msg-row-incoming .msg-bubble {
@@ -1280,11 +1328,11 @@ html[data-ui-mode="minimal"] .msg-time {
     opacity: 0.85 !important;
 }
 
-/* Swipe-to-Reply Indicator in Minimal Mode */
+/* Swipe-to-Reply Indicator */
 html[data-ui-mode="minimal"] .msg-swipe-reply-hint {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--min-border-strong) !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45) !important;
 }
 
 html[data-ui-mode="minimal"] .msg-row.is-swipe-ready .msg-swipe-reply-hint {
@@ -1315,7 +1363,7 @@ html[data-ui-mode="minimal"] .msg-reply-bar-snippet {
     font-size: 12px !important;
 }
 
-/* Chat Media: Shared Videos, Voice Notes, Call Events */
+/* Chat Media: Shared Videos */
 html[data-ui-mode="minimal"] .msg-video-card {
     background: var(--min-bg-input) !important;
     border: 1px solid var(--min-border-strong) !important;
@@ -1325,7 +1373,8 @@ html[data-ui-mode="minimal"] .msg-video-card {
     display: flex !important;
     flex-direction: column !important;
     text-decoration: none !important;
-    transition: transform 0.08s ease, border-color 0.12s ease !important;
+    will-change: transform;
+    transition: transform 0.1s ease, border-color 0.15s ease !important;
 }
 
 html[data-ui-mode="minimal"] .msg-video-card:active {
@@ -1353,7 +1402,7 @@ html[data-ui-mode="minimal"] .msg-video-card-play-pill {
     transform: translate(-50%, -50%) !important;
     width: 36px !important;
     height: 36px !important;
-    background: rgba(9, 10, 15, 0.8) !important;
+    background: rgba(8, 9, 14, 0.82) !important;
     border: 1.5px solid var(--accent-gold) !important;
     border-radius: var(--min-radius-full) !important;
     display: flex !important;
@@ -1375,8 +1424,10 @@ html[data-ui-mode="minimal"] .msg-video-card-title {
     -webkit-box-orient: vertical !important;
     overflow: hidden !important;
     line-height: 1.3 !important;
+    word-break: break-word !important;
 }
 
+/* Voice Notes */
 html[data-ui-mode="minimal"] .msg-voice-player {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--min-border-subtle) !important;
@@ -1401,12 +1452,13 @@ html[data-ui-mode="minimal"] .msg-voice-control-btn {
     justify-content: center !important;
     border: none !important;
     cursor: pointer !important;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
-    transition: transform 0.08s ease !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+    will-change: transform;
+    transition: transform 0.1s ease !important;
 }
 
 html[data-ui-mode="minimal"] .msg-voice-control-btn:active {
-    transform: scale(0.92) !important;
+    transform: scale(0.9) !important;
 }
 
 html[data-ui-mode="minimal"] .msg-voice-waveform {
@@ -1439,6 +1491,7 @@ html[data-ui-mode="minimal"] .msg-voice-speed-btn {
     cursor: pointer !important;
 }
 
+/* Date Dividers */
 html[data-ui-mode="minimal"] .msg-date-divider {
     display: flex !important;
     align-items: center !important;
@@ -1456,6 +1509,7 @@ html[data-ui-mode="minimal"] .msg-date-divider span {
     font-weight: 600 !important;
 }
 
+/* Call Event Cards */
 html[data-ui-mode="minimal"] .msg-call-event-card {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--min-border) !important;
@@ -1464,6 +1518,7 @@ html[data-ui-mode="minimal"] .msg-call-event-card {
     padding: 8px 12px !important;
 }
 
+/* Reaction Badges */
 html[data-ui-mode="minimal"] .msg-reaction-badge {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--min-border) !important;
@@ -1476,50 +1531,12 @@ html[data-ui-mode="minimal"] .msg-reaction-badge.is-user-reacted {
     background: var(--min-bg-surface-active) !important;
 }
 
-/* Messages Quick Emojis & Footer Composer Suite */
-html[data-ui-mode="minimal"] .msg-quick-emojis {
-    display: flex !important;
-    align-items: center !important;
-    gap: 4px !important;
-    padding: 4px 2px !important;
-    background: transparent !important;
-    border: none !important;
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    scrollbar-width: none !important;
-}
-
-html[data-ui-mode="minimal"] .msg-quick-emojis::-webkit-scrollbar {
-    display: none !important;
-}
-
-html[data-ui-mode="minimal"] .msg-quick-emoji-btn {
-    width: 32px !important;
-    height: 32px !important;
-    min-width: 32px !important;
-    font-size: 16px !important;
-    background: var(--min-bg-surface-raised) !important;
-    border: 1px solid var(--min-border) !important;
-    border-radius: var(--min-radius-full) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    flex-shrink: 0 !important;
-    padding: 0 !important;
-    cursor: pointer !important;
-    transition: transform 0.08s ease, background 0.12s ease !important;
-}
-
-html[data-ui-mode="minimal"] .msg-quick-emoji-btn:active {
-    transform: scale(0.9) !important;
-    background: var(--min-bg-surface-active) !important;
-}
-
+/* Footer Composer */
 html[data-ui-mode="minimal"] .msg-footer {
     background: var(--min-bg-surface) !important;
     border-top: 1px solid var(--min-border) !important;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)) 12px !important;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.4) !important;
+    box-shadow: 0 -1px 6px rgba(0, 0, 0, 0.4) !important;
     flex-shrink: 0 !important;
     position: sticky !important;
     bottom: 0 !important;
@@ -1564,12 +1581,13 @@ html[data-ui-mode="minimal"] .msg-input-wrap {
     align-items: center !important;
     gap: 6px !important;
     box-sizing: border-box !important;
-    transition: border-color 0.12s ease, background 0.12s ease !important;
+    transition: border-color 0.15s ease, background 0.15s ease !important;
 }
 
 html[data-ui-mode="minimal"] .msg-input-wrap:focus-within {
     border-color: var(--accent-gold) !important;
     background: var(--min-bg-surface-raised) !important;
+    box-shadow: 0 0 0 3px var(--min-accent-muted) !important;
 }
 
 html[data-ui-mode="minimal"] .msg-textarea {
@@ -1610,12 +1628,13 @@ html[data-ui-mode="minimal"] .msg-composer-btn {
     flex-shrink: 0 !important;
     box-shadow: none !important;
     cursor: pointer !important;
-    transition: background 0.12s ease, transform 0.08s ease, color 0.12s ease !important;
+    will-change: transform;
+    transition: background 0.15s ease, transform 0.1s ease, color 0.15s ease !important;
 }
 
 html[data-ui-mode="minimal"] .msg-composer-btn:active {
     background: var(--min-bg-surface-active) !important;
-    transform: scale(0.93) !important;
+    transform: scale(0.9) !important;
     color: var(--min-text-primary) !important;
 }
 
@@ -1632,13 +1651,14 @@ html[data-ui-mode="minimal"] .msg-send-btn {
     justify-content: center !important;
     flex-shrink: 0 !important;
     font-weight: 700 !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
     cursor: pointer !important;
-    transition: transform 0.08s ease, background 0.12s ease !important;
+    will-change: transform;
+    transition: transform 0.1s ease, background 0.15s ease !important;
 }
 
 html[data-ui-mode="minimal"] .msg-send-btn:active {
-    transform: scale(0.93) !important;
+    transform: scale(0.9) !important;
 }
 
 html[data-ui-mode="minimal"] .msg-send-btn svg {
@@ -1653,7 +1673,7 @@ html[data-ui-mode="minimal"] .msg-drawer-widget {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border-strong) !important;
     border-radius: var(--min-radius-lg) !important;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.75) !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
@@ -1670,23 +1690,23 @@ html[data-ui-mode="minimal"] .msg-attach-video-modal {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border-strong) !important;
     border-radius: var(--min-radius-md) !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65) !important;
 }
 
 html[data-ui-mode="minimal"] .msg-mobile-actions-sheet {
     background: var(--min-bg-surface) !important;
     border-top: 1px solid var(--min-border-strong) !important;
-    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.7) !important;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.75) !important;
 }
 
-/* Floating Launcher & Global Toast Positions */
+/* Floating Launcher & Toast Positions */
 html[data-ui-mode="minimal"] .msg-floating-launcher {
     bottom: calc(var(--min-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 14px) !important;
     right: 14px !important;
     width: 50px !important;
     height: 50px !important;
     background: var(--accent-gold) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
     border-radius: var(--min-radius-full) !important;
 }
 
@@ -1701,10 +1721,11 @@ html[data-ui-mode="minimal"] .msg-floating-toast-card {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--border-accent) !important;
     border-radius: var(--min-radius-md) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55) !important;
     padding: 10px 12px !important;
 }
 
+/* Watch Together Global Invite Toast */
 html[data-ui-mode="minimal"] .wt-global-invite-toast {
     position: fixed !important;
     top: 14px !important;
@@ -1798,12 +1819,13 @@ html[data-ui-mode="minimal"] .call-btn-circle {
     width: 60px !important;
     height: 60px !important;
     border-radius: var(--min-radius-full) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
-    transition: transform 0.08s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45) !important;
+    will-change: transform;
+    transition: transform 0.1s ease;
 }
 
 html[data-ui-mode="minimal"] .call-btn-circle:active {
-    transform: scale(0.92);
+    transform: scale(0.9);
 }
 
 html[data-ui-mode="minimal"] .active-call-modal {
@@ -1839,11 +1861,12 @@ html[data-ui-mode="minimal"] .call-control-btn {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--min-border-strong) !important;
     box-shadow: none !important;
-    transition: transform 0.08s ease;
+    will-change: transform;
+    transition: transform 0.1s ease;
 }
 
 html[data-ui-mode="minimal"] .call-control-btn:active {
-    transform: scale(0.92);
+    transform: scale(0.9);
 }
 
 html[data-ui-mode="minimal"] .call-control-btn.btn-end-call {
@@ -1862,12 +1885,12 @@ html[data-ui-mode="minimal"] .minimized-call-pill {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--border-accent) !important;
     border-radius: var(--min-radius-full) !important;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55) !important;
     bottom: calc(var(--min-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 14px) !important;
 }
 
 /* --------------------------------------------------------------------------
-   9. Upload Studio Page (/upload)
+   9. Upload Studio (/upload)
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] .upload-container {
     background: var(--min-bg-surface) !important;
@@ -1883,6 +1906,7 @@ html[data-ui-mode="minimal"] .upload-dropzone {
     border-radius: var(--min-radius-md) !important;
     box-shadow: none !important;
     padding: 24px 16px !important;
+    transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 html[data-ui-mode="minimal"] .upload-dropzone.dragover {
@@ -1903,6 +1927,7 @@ html[data-ui-mode="minimal"] .upload-tab {
     color: var(--min-text-secondary) !important;
     font-size: 13px !important;
     font-weight: 500 !important;
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
 html[data-ui-mode="minimal"] .upload-tab.active {
@@ -1961,7 +1986,8 @@ html[data-ui-mode="minimal"] .stat-tile {
     border: 1px solid var(--min-border-subtle) !important;
     border-radius: var(--min-radius-sm) !important;
     box-shadow: none !important;
-    transition: background 0.12s ease, transform 0.08s ease !important;
+    will-change: transform;
+    transition: background 0.15s ease, transform 0.1s ease !important;
 }
 
 html[data-ui-mode="minimal"] .stat-tile:active {
@@ -1999,6 +2025,7 @@ html[data-ui-mode="minimal"] .admin-tabs-nav .admin-tab-btn {
     color: var(--min-text-secondary) !important;
     border-radius: var(--min-radius-sm) !important;
     font-weight: 500;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 html[data-ui-mode="minimal"] .admin-tabs-nav .admin-tab-btn.active {
@@ -2019,13 +2046,19 @@ html[data-ui-mode="minimal"] .login-card {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border-strong) !important;
     border-radius: var(--min-radius-lg) !important;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.75) !important;
 }
 
 html[data-ui-mode="minimal"] .input-wrapper {
     background: var(--min-bg-input) !important;
     border: 1px solid var(--min-border-strong) !important;
     border-radius: var(--min-radius-md) !important;
+    transition: border-color 0.15s ease;
+}
+
+html[data-ui-mode="minimal"] .input-wrapper:focus-within {
+    border-color: var(--accent-gold) !important;
+    box-shadow: 0 0 0 3px var(--min-accent-muted) !important;
 }
 
 html[data-ui-mode="minimal"] .input-wrapper input {
@@ -2039,10 +2072,16 @@ html[data-ui-mode="minimal"] .login-btn {
     font-weight: 700 !important;
     border-radius: var(--min-radius-md) !important;
     box-shadow: none !important;
+    will-change: transform;
+    transition: transform 0.1s ease;
+}
+
+html[data-ui-mode="minimal"] .login-btn:active {
+    transform: scale(0.98);
 }
 
 /* --------------------------------------------------------------------------
-   12. Error & Forbidden Pages (/error, /forbidden)
+   12. Error & Forbidden Pages
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] .error-container {
     background: var(--min-bg-root) !important;
@@ -2052,11 +2091,11 @@ html[data-ui-mode="minimal"] .error-content {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border-strong) !important;
     border-radius: var(--min-radius-lg) !important;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.75) !important;
 }
 
 /* --------------------------------------------------------------------------
-   13. Settings & Appearance Modal Styling
+   13. Settings & Appearance Modal
    -------------------------------------------------------------------------- */
 .settings-modal-box {
     max-width: 520px !important;
@@ -2073,7 +2112,7 @@ html[data-ui-mode="minimal"] .theme-modal {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border-strong) !important;
     border-radius: var(--min-radius-lg) !important;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.75) !important;
 }
 
 .settings-modal-title-group {
@@ -2155,7 +2194,7 @@ html[data-ui-mode="minimal"] .theme-modal {
     border-radius: var(--radius-md);
     cursor: pointer;
     text-align: left;
-    transition: all 0.15s ease;
+    transition: border-color 0.15s ease, background 0.15s ease;
     color: var(--text-primary);
     min-height: 130px;
 }
@@ -2245,7 +2284,7 @@ html[data-ui-mode="minimal"] .theme-modal {
 }
 
 /* --------------------------------------------------------------------------
-   14. Desktop Floating Placement Overrides (Desktop has no bottom nav bar)
+   14. Desktop Floating Placement Overrides
    -------------------------------------------------------------------------- */
 @media (min-width: 769px) {
     html[data-ui-mode="minimal"] .msg-floating-launcher {
@@ -2274,12 +2313,13 @@ html[data-ui-mode="minimal"] .theme-modal {
 }
 
 /* --------------------------------------------------------------------------
-   15. Mobile Responsive Touch Adaptations (320px - 900px)
+   15. Mobile Responsive Touch Adaptations (320px – 900px)
    -------------------------------------------------------------------------- */
 @media (max-width: 900px) {
     html[data-ui-mode="minimal"] .msg-fullpage-container {
         display: flex !important;
         flex-direction: column !important;
+        grid-template-columns: unset !important;
         height: calc(100dvh - var(--min-header-height)) !important;
         max-height: calc(100dvh - var(--min-header-height)) !important;
         overflow: hidden !important;
@@ -2340,7 +2380,7 @@ html[data-ui-mode="minimal"] .theme-modal {
         padding: 12px 14px !important;
     }
 
-    /* Android Native Bottom Sheet Modals */
+    /* Bottom Sheet Modals */
     html[data-ui-mode="minimal"] .settings-modal-box,
     html[data-ui-mode="minimal"] .theme-modal,
     html[data-ui-mode="minimal"] .profile-modal-card,
@@ -2415,7 +2455,7 @@ html[data-ui-mode="minimal"] .theme-modal {
 }
 
 /* --------------------------------------------------------------------------
-   16. Zero-CLS Skeleton Minimal UI Overrides
+   16. Zero-CLS Skeleton Overrides
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] .skel-bone,
 html[data-ui-mode="minimal"] .skeleton-thumb,
@@ -2429,19 +2469,19 @@ html[data-ui-mode="minimal"] .skeleton-suggestion-meta,
 html[data-ui-mode="minimal"] .skeleton-comment-avatar,
 html[data-ui-mode="minimal"] .skeleton-comment-author,
 html[data-ui-mode="minimal"] .skeleton-comment-text {
-    background: var(--min-bg-surface-raised, #181a24) !important;
-    animation: skelPulseFast 1.5s ease-in-out infinite !important;
+    background: var(--min-bg-surface-raised, #171921) !important;
+    animation: minSkelPulse 1.4s ease-in-out infinite !important;
 }
 
-@keyframes skelPulseFast {
-    0%, 100% { opacity: 0.6; }
+@keyframes minSkelPulse {
+    0%, 100% { opacity: 0.55; }
     50% { opacity: 1; }
 }
 
 html[data-ui-mode="minimal"] .skeleton-video-card,
 html[data-ui-mode="minimal"] .skeleton-suggestion-card,
 html[data-ui-mode="minimal"] .skeleton-comment-item {
-    background: var(--min-bg-surface, #11131a) !important;
-    border: 1px solid var(--min-border, rgba(255, 255, 255, 0.08)) !important;
+    background: var(--min-bg-surface, #101218) !important;
+    border: 1px solid var(--min-border, rgba(255, 255, 255, 0.07)) !important;
     box-shadow: none !important;
 }

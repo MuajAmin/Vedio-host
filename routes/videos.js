@@ -874,6 +874,7 @@ async function handleStream(req, res) {
     // from the internal location block — we only pass through metadata headers.
     if (isProduction) {
         res.setHeader('X-Accel-Redirect', `/internal-videos/${filename}`);
+        res.setHeader('Accept-Ranges', 'bytes');
         res.setHeader('Content-Type', mimeType);
         res.setHeader('Content-Disposition', formatContentDisposition(filename, 'inline'));
         res.setHeader('Cache-Control', 'private, max-age=86400, no-transform');
