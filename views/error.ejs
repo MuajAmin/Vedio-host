@@ -1,8 +1,8 @@
 <%
-const h = escapeHtml;
-const isHajera = user === 'hajera';
-const destination = user ? '/dashboard' : '/';
-const label = user ? 'Go to Dashboard' : 'Go to Login';
+const h = typeof escapeHtml === 'function' ? escapeHtml : (str => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
+const isHajera = typeof user !== 'undefined' && user === 'hajera';
+const destination = (typeof user !== 'undefined' && user) ? '/dashboard' : '/';
+const label = (typeof user !== 'undefined' && user) ? 'Go to Dashboard' : 'Go to Login';
 %>
 <%- include('layout', { pageTitle: 'Error', body: `
 <div class="app-container ${isHajera ? 'hajera-mode' : ''}">

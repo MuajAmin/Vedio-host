@@ -1,4 +1,4 @@
-<% const h = escapeHtml; %>
+<% const h = typeof escapeHtml === 'function' ? escapeHtml : (str => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')); %>
 <%- include('layout', { pageTitle: 'Forbidden', body: `
 <div class="error-container">
     <div class="error-content">
