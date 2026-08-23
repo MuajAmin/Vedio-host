@@ -1584,22 +1584,41 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
 
 /* Voice Recording Capsule HUD */
 .msg-recording-bar {
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    background: rgba(239, 68, 68, 0.14);
-    border: 1px solid rgba(239, 68, 68, 0.4);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 16px;
-    color: #f87171;
+    color: var(--msg-text-muted, rgba(255, 255, 255, 0.45));
     font-size: 13px;
     font-weight: 700;
-    box-shadow: 0 4px 18px rgba(239, 68, 68, 0.2);
-    animation: msgRowFadeIn 0.25s ease;
+    box-shadow: none;
+    animation: none;
+    transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.msg-recording-bar .msg-rec-cancel-btn,
+.msg-recording-bar .msg-rec-send-btn {
+    opacity: 0.4;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
 }
 
 .msg-recording-bar.is-recording {
     display: flex;
+    background: rgba(239, 68, 68, 0.14);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #f87171;
+    box-shadow: 0 4px 18px rgba(239, 68, 68, 0.2);
+    animation: msgRowFadeIn 0.25s ease;
+}
+
+.msg-recording-bar.is-recording .msg-rec-cancel-btn,
+.msg-recording-bar.is-recording .msg-rec-send-btn {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .msg-rec-dot {
@@ -1609,6 +1628,11 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     background: #ef4444;
     box-shadow: 0 0 10px #ef4444;
     animation: msgStatusPulse 1s infinite;
+    display: none;
+}
+
+.msg-recording-bar.is-recording .msg-rec-dot {
+    display: inline-block;
 }
 
 /* ------------------------------------------------------------

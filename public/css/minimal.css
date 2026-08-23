@@ -296,8 +296,8 @@ html[data-ui-mode="minimal"] .bottom-nav-label {
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill {
-    width: 44px !important;
-    height: 44px !important;
+    width: 40px !important;
+    height: 40px !important;
     background: var(--accent-gold) !important;
     border-radius: var(--min-radius-md) !important;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
@@ -310,8 +310,8 @@ html[data-ui-mode="minimal"] .bottom-nav-upload:active .upload-btn-pill {
 
 html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill svg {
     stroke: #090a0f !important;
-    width: 22px !important;
-    height: 22px !important;
+    width: 20px !important;
+    height: 20px !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -591,7 +591,7 @@ html[data-ui-mode="minimal"] .no-suggestions-card {
    6. Video Player Page (/watch/:id)
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] .watch-page {
-    padding: 8px 12px 48px 12px !important;
+    padding: 8px 12px calc(var(--min-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 12px) 12px !important;
 }
 
 html[data-ui-mode="minimal"] .watch-layout-grid {
@@ -612,10 +612,15 @@ html[data-ui-mode="minimal"] .vp-controls {
 }
 
 html[data-ui-mode="minimal"] .vp-progress-wrap {
-    height: 24px !important;
-    padding: 8px 0 !important;
+    height: 3px !important;
+    padding: 10px 0 !important;
     cursor: pointer;
-    box-sizing: border-box !important;
+    box-sizing: content-box !important;
+}
+
+html[data-ui-mode="minimal"] .vp-progress-wrap:hover,
+html[data-ui-mode="minimal"] .vp-progress-wrap.vp-dragging {
+    height: 5px !important;
 }
 
 html[data-ui-mode="minimal"] .vp-progress-played {

@@ -1762,6 +1762,10 @@
                 mediaRecorder.start();
                 recordSeconds = 0;
                 recordingBar.classList.add('is-recording');
+                const idleLabel = recordingBar.querySelector('.msg-rec-label');
+                const activeLabel = recordingBar.querySelector('.msg-rec-active-label');
+                if (idleLabel) idleLabel.style.display = 'none';
+                if (activeLabel) activeLabel.style.display = '';
                 const timerEl = recordingBar.querySelector('.msg-rec-timer');
                 if (timerEl) timerEl.textContent = '0:00';
 
@@ -1786,6 +1790,10 @@
                 clearInterval(recordInterval);
                 audioChunks = [];
                 recordingBar.classList.remove('is-recording');
+                const idleLabel = recordingBar.querySelector('.msg-rec-label');
+                const activeLabel = recordingBar.querySelector('.msg-rec-active-label');
+                if (idleLabel) idleLabel.style.display = '';
+                if (activeLabel) activeLabel.style.display = 'none';
             });
         }
 
@@ -1797,6 +1805,10 @@
                     cleanupMicrophoneStream();
                     clearInterval(recordInterval);
                     recordingBar.classList.remove('is-recording');
+                    const idleLabel = recordingBar.querySelector('.msg-rec-label');
+                    const activeLabel = recordingBar.querySelector('.msg-rec-active-label');
+                    if (idleLabel) idleLabel.style.display = '';
+                    if (activeLabel) activeLabel.style.display = 'none';
 
                     const blob = new Blob(audioChunks, { type: 'audio/webm' });
                     if (blob.size < 800) return; // Too short

@@ -632,7 +632,8 @@ const videoOptionsHtml = videoList.map(v => `
                 <div class="msg-recording-bar">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span class="msg-rec-dot"></span>
-                        <span>Recording Voice Note... <span class="msg-rec-timer">0:00</span></span>
+                        <span class="msg-rec-label">🎙️ Tap mic to record</span>
+                        <span class="msg-rec-active-label" style="display:none;">Recording Voice Note... <span class="msg-rec-timer">0:00</span></span>
                     </div>
                     <div style="display: flex; gap: 6px;">
                         <button type="button" class="btn btn-ghost btn-sm msg-rec-cancel-btn">Cancel</button>

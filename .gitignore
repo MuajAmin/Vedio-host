@@ -35,3 +35,7 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Agent Customizations & Local Skills (Contains VPS deploy scripts & keys)
+.agents/
+_agents/
