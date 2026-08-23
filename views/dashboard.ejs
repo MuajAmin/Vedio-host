@@ -122,6 +122,7 @@ const continueSection = continueItems.length === 0
         <div class="continue-rail">${continueItems.map(v => renderVideoCard(v, 'continue-card')).join('')}</div>
     </section>`;
 
+const INITIAL_VISIBLE = 12;
 const videoGrid = videos.length === 0
     ? `<div class="empty-state">
         <div class="empty-icon">
@@ -133,7 +134,15 @@ const videoGrid = videos.length === 0
         <h2>No videos in library</h2>
         <p>Click Upload above to add your first private video.</p>
        </div>`
-    : `<div class="video-grid" id="videoGrid">${videos.map(v => renderVideoCard(v)).join('')}</div>`;
+    : `<div class="video-grid" id="videoGrid">${videos.map((v, i) => {
+            const card = renderVideoCard(v);
+            return i < INITIAL_VISIBLE ? card : card.replace('class="video-card', 'class="video-card dash-hidden');
+        }).join('')}</div>${videos.length > INITIAL_VISIBLE ? `
+        <div style="text-align:center; padding: 16px 0;">
+            <button type="button" class="btn btn-ghost" id="dashShowMoreBtn" onclick="document.querySelectorAll('.dash-hidden').forEach(el=>{el.classList.remove('dash-hidden')});this.remove();">
+                Show All ${videos.length} Videos
+            </button>
+        </div>` : ''}`;
 %>
 <%- include('layout', { pageTitle: 'Dashboard', body: `
 <div class="app-container ${isHajera ? 'hajera-mode' : ''}">

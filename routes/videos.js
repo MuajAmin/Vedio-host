@@ -257,23 +257,14 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
         'SELECT position_seconds, duration_seconds, updated_at FROM watch_progress WHERE video_id = ? AND user = ?'
     ).get(req.params.id, req.session.user) || null;
 
-    try {
-        db.prepare(
-            `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
-             VALUES (?, ?, 1, 0, CURRENT_TIMESTAMP)
-             ON CONFLICT(video_id, user) DO NOTHING`
-        ).run(req.params.id, req.session.user);
-    } catch (e) {
-        // ignore
-    }
-
-    // Next/Previous video navigation (ordered by uploaded_at DESC)
-    const prevVideo = db.prepare(
-        'SELECT id FROM videos WHERE uploaded_at > ? ORDER BY uploaded_at ASC LIMIT 1'
-    ).get(video.uploaded_at);
-    const nextVideo = db.prepare(
-        'SELECT id FROM videos WHERE uploaded_at < ? ORDER BY uploaded_at DESC LIMIT 1'
-    ).get(video.uploaded_at);
+    // Combined prev/next video navigation (single query instead of two)
+    const prevNextRows = db.prepare(
+        `SELECT id, 'prev' AS dir FROM videos WHERE uploaded_at > ? ORDER BY uploaded_at ASC LIMIT 1
+         UNION ALL
+         SELECT id, 'next' AS dir FROM videos WHERE uploaded_at < ? ORDER BY uploaded_at DESC LIMIT 1`
+    ).all(video.uploaded_at, video.uploaded_at);
+    const prevVideo = prevNextRows.find(r => r.dir === 'prev') || null;
+    const nextVideo = prevNextRows.find(r => r.dir === 'next') || null;
 
     // Suggested videos (all other videos ordered by newest, with watch progress)
     const suggestedVideos = db.prepare(
@@ -305,6 +296,17 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
         prevVideoId: prevVideo ? prevVideo.id : null,
         nextVideoId: nextVideo ? nextVideo.id : null
     });
+
+    // Mark video as seen AFTER response is sent (non-blocking)
+    try {
+        db.prepare(
+            `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
+             VALUES (?, ?, 1, 0, CURRENT_TIMESTAMP)
+             ON CONFLICT(video_id, user) DO NOTHING`
+        ).run(req.params.id, req.session.user);
+    } catch (e) {
+        // ignore
+    }
 });
 
 // POST /rename/:id — Rename video title (any authenticated user)
@@ -507,7 +509,8 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
             updated_at = CURRENT_TIMESTAMP`
     ).run(req.params.id, user, savePosition, Math.floor(safeDuration));
 
-    db.recordWatchPulse(user, req.params.id, savePosition, safeDuration, true, 5);
+    // Note: recordWatchPulse is only called on watch_complete (above) to reduce DB writes.
+    // Normal progress saves only update watch_progress, not the watch_time_ledger.
 
     res.json({ success: true });
 });

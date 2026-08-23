@@ -101,10 +101,13 @@ const deleteForm = `<button type="button" class="btn btn-danger btn-sm" id="btnD
 
 const suggestions = Array.isArray(suggestedVideos) ? suggestedVideos : [];
 
-function renderSuggestionCard(v) {
+function renderSuggestionCard(v, index) {
     const watchUrl = '/watch/' + encodeURIComponent(v.id);
+    // First 4 suggestions load immediately, rest use deferred lazy loading
     const thumbImg = v.thumbnail
-        ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="suggestion-thumb-img" loading="lazy" />`
+        ? (index < 4
+            ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="suggestion-thumb-img" loading="lazy" />`
+            : `<img data-src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="suggestion-thumb-img lazy-thumb" />`)
         : '';
     const isNew = isNewVideo(v);
     const vUploader = v.uploaded_by || 'muaj';

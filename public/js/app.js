@@ -1647,7 +1647,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let lastPositionSave = 0;
             vid.addEventListener('timeupdate', () => {
                 const now = Date.now();
-                if (vid.currentTime > 2 && !vid.ended && now - lastPositionSave > 5000) {
+                if (vid.currentTime > 2 && !vid.ended && now - lastPositionSave > 15000) {
                     lastPositionSave = now;
                     saveWatchProgress();
                 }
@@ -3806,6 +3806,35 @@ document.addEventListener('DOMContentLoaded', () => {
     initPageModules();
     if (typeof syncActiveUiModeOption === 'function') syncActiveUiModeOption();
     if (typeof syncActiveThemeOption === 'function') syncActiveThemeOption();
+
+    // --- Lazy-load suggestion thumbnails via IntersectionObserver ---
+    (function initLazyThumbs() {
+        const lazyImages = document.querySelectorAll('img.lazy-thumb[data-src]');
+        if (!lazyImages.length) return;
+
+        if ('IntersectionObserver' in window) {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        img.src = img.getAttribute('data-src');
+                        img.removeAttribute('data-src');
+                        img.classList.remove('lazy-thumb');
+                        observer.unobserve(img);
+                    }
+                });
+            }, { rootMargin: '200px' });
+
+            lazyImages.forEach(img => observer.observe(img));
+        } else {
+            // Fallback: load all immediately if IntersectionObserver not supported
+            lazyImages.forEach(img => {
+                img.src = img.getAttribute('data-src');
+                img.removeAttribute('data-src');
+                img.classList.remove('lazy-thumb');
+            });
+        }
+    })();
 
 });
 
