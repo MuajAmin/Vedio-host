@@ -9,6 +9,7 @@ const { isAuthenticated, isMuaj } = require('../middleware/auth');
 const { requireCsrf } = require('../utils/security');
 const db = require('../database');
 const { parseUserAgent, getClientIp } = require('../utils/device');
+const r2 = require('../utils/r2');
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads', 'videos');
@@ -847,6 +848,18 @@ async function handleStream(req, res) {
         setCachedVideoFilename(videoKey, filename);
     }
 
+    // R2 CDN: Redirect to Cloudflare edge — zero VPS bandwidth usage.
+    // R2 handles Range/206 requests natively, so seeking works out of the box.
+    // The browser follows the 302 redirect and streams directly from Cloudflare.
+    if (r2.isR2Enabled()) {
+        const cdnUrl = r2.getPublicUrl(filename);
+        if (cdnUrl) {
+            res.setHeader('Cache-Control', 'private, no-cache');
+            return res.redirect(302, cdnUrl);
+        }
+    }
+
+    // Fallback: serve from VPS disk (when R2 is not configured or URL unavailable)
     const filePath = getSafeVideoPath(filename);
     if (!filePath) {
         return res.status(404).send('File not found');
