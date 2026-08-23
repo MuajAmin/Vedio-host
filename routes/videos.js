@@ -90,6 +90,10 @@ const thumbnailUpload = multer({
 });
 const STREAM_HIGH_WATER_MARK = 256 * 1024;
 
+// In-memory Set tracking filenames confirmed to exist on R2.
+// Prevents a HEAD request on every 206 range request during playback.
+const _r2ConfirmedFiles = new Set();
+
 // Lightweight LRU cache for video filename lookups.
 // Prevents a DB query on every single 206 range request during playback.
 // Max 200 entries (~20KB memory) — more than enough for a private video host.
@@ -235,6 +239,13 @@ router.post('/upload', isAuthenticated, (req, res) => {
             return fail(500, 'Could not save video metadata.');
         }
 
+        // Upload to R2 CDN in background (non-blocking — user sees dashboard immediately)
+        if (r2.isR2Enabled()) {
+            const videoPath = path.join(uploadsDir, req.file.filename);
+            r2.uploadToR2(videoPath, req.file.filename)
+                .catch(err => console.error(`[R2] Upload failed for ${req.file.filename}:`, err.message));
+        }
+
         res.redirect('/dashboard');
     });
 });
@@ -338,6 +349,12 @@ router.post('/delete/:id', isAuthenticated, (req, res) => {
             const filePath = getSafeVideoPath(video.filename);
             if (filePath && fs.existsSync(filePath)) {
                 fs.promises.unlink(filePath).catch(() => {});
+            }
+
+            // Delete from R2 CDN
+            if (r2.isR2Enabled()) {
+                r2.deleteFromR2(video.filename)
+                    .catch(err => console.error(`[R2] Delete failed for ${video.filename}:`, err.message));
             }
 
             // Delete thumbnail file if exists
@@ -850,12 +867,26 @@ async function handleStream(req, res) {
 
     // R2 CDN: Redirect to Cloudflare edge — zero VPS bandwidth usage.
     // R2 handles Range/206 requests natively, so seeking works out of the box.
-    // The browser follows the 302 redirect and streams directly from Cloudflare.
+    // Uses an in-memory Set to track confirmed R2 files (avoids HEAD on every request).
     if (r2.isR2Enabled()) {
         const cdnUrl = r2.getPublicUrl(filename);
         if (cdnUrl) {
-            res.setHeader('Cache-Control', 'private, no-cache');
-            return res.redirect(302, cdnUrl);
+            // Fast path: already confirmed on R2
+            if (_r2ConfirmedFiles.has(filename)) {
+                res.setHeader('Cache-Control', 'private, no-cache');
+                return res.redirect(302, cdnUrl);
+            }
+            // Slow path: check R2 once, cache result
+            try {
+                const exists = await r2.existsOnR2(filename);
+                if (exists) {
+                    _r2ConfirmedFiles.add(filename);
+                    res.setHeader('Cache-Control', 'private, no-cache');
+                    return res.redirect(302, cdnUrl);
+                }
+            } catch {
+                // R2 check failed — fall through to VPS streaming
+            }
         }
     }
 

@@ -10,6 +10,7 @@ const { spawn } = require('child_process');
 const { isAuthenticated } = require('../middleware/auth');
 const { requireCsrf } = require('../utils/security');
 const db = require('../database');
+const r2 = require('../utils/r2');
 
 const denoBinPaths = [
     path.join(os.homedir(), '.deno', 'bin'),
@@ -946,6 +947,14 @@ async function startDownload(job) {
 
                     // Clean up any other leftover stream chunks for this job
                     await cleanupJobExtraFiles(job.id, downloaded.finalFilename);
+
+                    // Upload to R2 CDN in background
+                    if (r2.isR2Enabled()) {
+                        const videoPath = path.join(uploadsDir, downloaded.finalFilename);
+                        r2.uploadToR2(videoPath, downloaded.finalFilename)
+                            .then(() => console.log(`[R2] Import upload done: ${downloaded.finalFilename}`))
+                            .catch(err => console.error(`[R2] Import upload failed: ${err.message}`));
+                    }
 
                     job.status = 'done';
                     job.progress = 100;
