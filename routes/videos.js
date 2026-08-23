@@ -269,14 +269,9 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
         'SELECT position_seconds, duration_seconds, updated_at FROM watch_progress WHERE video_id = ? AND user = ?'
     ).get(req.params.id, req.session.user) || null;
 
-    // Combined prev/next video navigation (single query instead of two)
-    const prevNextRows = db.prepare(
-        `SELECT id, 'prev' AS dir FROM videos WHERE uploaded_at > ? ORDER BY uploaded_at ASC LIMIT 1
-         UNION ALL
-         SELECT id, 'next' AS dir FROM videos WHERE uploaded_at < ? ORDER BY uploaded_at DESC LIMIT 1`
-    ).all(video.uploaded_at, video.uploaded_at);
-    const prevVideo = prevNextRows.find(r => r.dir === 'prev') || null;
-    const nextVideo = prevNextRows.find(r => r.dir === 'next') || null;
+    // Prev / Next video navigation
+    const prevVideo = db.prepare('SELECT id FROM videos WHERE uploaded_at > ? ORDER BY uploaded_at ASC LIMIT 1').get(video.uploaded_at) || null;
+    const nextVideo = db.prepare('SELECT id FROM videos WHERE uploaded_at < ? ORDER BY uploaded_at DESC LIMIT 1').get(video.uploaded_at) || null;
 
     // Suggested videos (all other videos ordered by newest, with watch progress)
     const suggestedVideos = db.prepare(
