@@ -1384,33 +1384,23 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     z-index: 10;
 }
 
-/* Quick Emoji Bar (Permanently hidden per design) */
-.msg-quick-emojis {
+/* Quick Emoji Bar & Labels (Permanently hidden for minimal sleek input bar) */
+.msg-quick-emojis,
+.msg-quick-emoji-btn,
+.msg-emoji-label,
+.msg-emoji-header,
+.emoji-picker-label,
+.emoji-picker-header,
+.msg-composer-emoji-label {
     display: none !important;
     height: 0 !important;
+    max-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
-}
-
-.msg-quick-emojis::-webkit-scrollbar {
-    display: none;
-}
-
-.msg-quick-emoji-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    font-size: 18px;
-    padding: 6px 10px;
-    cursor: pointer;
-    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
-                background 0.2s ease,
-                border-color 0.2s ease,
-                box-shadow 0.2s ease;
-    flex-shrink: 0;
-    line-height: 1;
-    position: relative;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
 }
 
 .msg-quick-emoji-btn:hover {
@@ -1535,7 +1525,7 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     color: #08090f;
     border: none;
     cursor: pointer;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
@@ -1578,7 +1568,7 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
         inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
-/* Voice Recording Capsule HUD (Visible ONLY while recording) */
+/* Voice Recording Capsule HUD (Visible ONLY while recording is active) */
 .msg-recording-bar {
     display: none;
     align-items: center;
@@ -1603,7 +1593,7 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
 }
 
 .msg-recording-bar.is-recording {
-    display: flex;
+    display: flex !important;
     background: rgba(239, 68, 68, 0.14);
     border: 1px solid rgba(239, 68, 68, 0.4);
     color: #f87171;
@@ -1615,6 +1605,13 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
 .msg-recording-bar.is-recording .msg-rec-send-btn {
     opacity: 1;
     pointer-events: auto;
+}
+
+/* While recording voice, hide regular input row for a clean dedicated voice recording HUD */
+.msg-composer-wrap.is-voice-recording .msg-input-row,
+.msg-composer-wrap.is-voice-recording .msg-reply-bar,
+.msg-composer-wrap.is-voice-recording .msg-attach-video-modal {
+    display: none !important;
 }
 
 .msg-rec-dot {

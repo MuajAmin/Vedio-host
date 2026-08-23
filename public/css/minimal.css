@@ -286,13 +286,29 @@ html[data-ui-mode="minimal"] .mobile-bottom-bar {
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item {
-    padding: 4px 6px !important;
+    flex: 1 1 0% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    padding: 4px 2px !important;
     border-radius: var(--min-radius-md) !important;
     transition: color 0.15s ease;
     color: var(--min-text-muted) !important;
     min-height: 48px !important;
     justify-content: center !important;
     will-change: transform;
+    background: transparent !important;
+    border: none !important;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-form {
+    flex: 1 1 0% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100% !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item:active {
@@ -317,12 +333,13 @@ html[data-ui-mode="minimal"] .bottom-nav-label {
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-upload {
+    flex: 1 1 0% !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
     justify-content: center !important;
-    margin-top: -8px !important;
-    padding: 0 4px !important;
+    margin-top: -10px !important;
+    padding: 0 2px !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill {
@@ -659,8 +676,8 @@ html[data-ui-mode="minimal"] .vp-controls {
 html[data-ui-mode="minimal"] .vp-progress-wrap {
     position: relative !important;
     width: 100% !important;
-    height: 4px !important;
-    padding: 8px 0 !important;
+    height: 2px !important;
+    padding: 6px 0 !important;
     background: transparent !important;
     box-sizing: content-box !important;
     cursor: pointer !important;
@@ -676,9 +693,9 @@ html[data-ui-mode="minimal"] .vp-progress-wrap::before {
     right: 0 !important;
     top: 50% !important;
     transform: translateY(-50%) !important;
-    height: 3px !important;
+    height: 2px !important;
     background: rgba(255, 255, 255, 0.2) !important;
-    border-radius: 2px !important;
+    border-radius: 1px !important;
     transition: height 0.12s ease !important;
 }
 
@@ -687,9 +704,9 @@ html[data-ui-mode="minimal"] .vp-progress-buffer {
     top: 50% !important;
     left: 0 !important;
     transform: translateY(-50%) !important;
-    height: 3px !important;
+    height: 2px !important;
     background: rgba(255, 255, 255, 0.4) !important;
-    border-radius: 2px !important;
+    border-radius: 1px !important;
     pointer-events: none !important;
     transition: height 0.12s ease, width 0.15s ease !important;
 }
@@ -699,9 +716,9 @@ html[data-ui-mode="minimal"] .vp-progress-played {
     top: 50% !important;
     left: 0 !important;
     transform: translateY(-50%) !important;
-    height: 3px !important;
+    height: 2px !important;
     background: var(--accent-gold) !important;
-    border-radius: 2px !important;
+    border-radius: 1px !important;
     pointer-events: none !important;
     transition: height 0.12s ease !important;
 }
@@ -712,19 +729,19 @@ html[data-ui-mode="minimal"] .vp-progress-wrap:hover .vp-progress-buffer,
 html[data-ui-mode="minimal"] .vp-progress-wrap.vp-dragging .vp-progress-buffer,
 html[data-ui-mode="minimal"] .vp-progress-wrap:hover .vp-progress-played,
 html[data-ui-mode="minimal"] .vp-progress-wrap.vp-dragging .vp-progress-played {
-    height: 5px !important;
+    height: 3.5px !important;
 }
 
 html[data-ui-mode="minimal"] .vp-progress-thumb {
     position: absolute !important;
-    right: -5px !important;
+    right: -4.5px !important;
     top: 50% !important;
     transform: translateY(-50%) scale(0) !important;
-    width: 12px !important;
-    height: 12px !important;
+    width: 9px !important;
+    height: 9px !important;
     border-radius: 50% !important;
     background: var(--accent-gold) !important;
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.65) !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.65) !important;
     transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 
@@ -1157,8 +1174,18 @@ html[data-ui-mode="minimal"] .wt-emoji-bar .wt-emoji-btn {
 
 html[data-ui-mode="minimal"] .msg-quick-emojis,
 html[data-ui-mode="minimal"] .msg-quick-emoji-btn,
+html[data-ui-mode="minimal"] .msg-emoji-label,
+html[data-ui-mode="minimal"] .msg-emoji-header,
+html[data-ui-mode="minimal"] .emoji-picker-label,
+html[data-ui-mode="minimal"] .emoji-picker-header,
+html[data-ui-mode="minimal"] .msg-composer-emoji-label,
 .msg-quick-emojis,
-.msg-quick-emoji-btn {
+.msg-quick-emoji-btn,
+.msg-emoji-label,
+.msg-emoji-header,
+.emoji-picker-label,
+.emoji-picker-header,
+.msg-composer-emoji-label {
     display: none !important;
     height: 0 !important;
     max-height: 0 !important;
@@ -1655,6 +1682,12 @@ html[data-ui-mode="minimal"] .msg-recording-bar.is-recording {
     border-color: rgba(239, 68, 68, 0.5) !important;
 }
 
+html[data-ui-mode="minimal"] .msg-composer-wrap.is-voice-recording .msg-input-row,
+html[data-ui-mode="minimal"] .msg-composer-wrap.is-voice-recording .msg-reply-bar,
+html[data-ui-mode="minimal"] .msg-composer-wrap.is-voice-recording .msg-attach-video-modal {
+    display: none !important;
+}
+
 html[data-ui-mode="minimal"] .msg-input-row {
     display: flex !important;
     align-items: flex-end !important;
@@ -1740,7 +1773,7 @@ html[data-ui-mode="minimal"] .msg-send-btn {
     width: 38px !important;
     height: 38px !important;
     min-width: 38px !important;
-    display: flex !important;
+    display: none;
     align-items: center !important;
     justify-content: center !important;
     flex-shrink: 0 !important;

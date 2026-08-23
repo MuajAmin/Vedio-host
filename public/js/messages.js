@@ -1744,6 +1744,25 @@
     function setupVoiceRecording(recordBtn, recordingBar, cancelBtn, sendVoiceBtn) {
         if (!recordBtn || !recordingBar) return;
 
+        const composerWrap = recordingBar.closest('.msg-composer-wrap');
+
+        function endVoiceRecordingState() {
+            if (composerWrap) composerWrap.classList.remove('is-voice-recording');
+            recordingBar.classList.remove('is-recording');
+            recordingBar.style.display = 'none';
+            const idleLabel = recordingBar.querySelector('.msg-rec-label');
+            const activeLabel = recordingBar.querySelector('.msg-rec-active-label');
+            if (idleLabel) idleLabel.style.display = '';
+            if (activeLabel) activeLabel.style.display = 'none';
+            
+            // Re-evaluate button visibility
+            const textarea = composerWrap ? composerWrap.querySelector('.msg-textarea') : null;
+            const sendBtn = composerWrap ? composerWrap.querySelector('.msg-send-btn') : null;
+            const hasText = textarea && textarea.value.trim().length > 0;
+            if (sendBtn) sendBtn.style.display = hasText ? 'inline-flex' : 'none';
+            if (recordBtn) recordBtn.style.display = hasText ? 'none' : 'inline-flex';
+        }
+
         recordBtn.addEventListener('click', async () => {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1761,7 +1780,9 @@
 
                 mediaRecorder.start();
                 recordSeconds = 0;
+                if (composerWrap) composerWrap.classList.add('is-voice-recording');
                 recordingBar.classList.add('is-recording');
+                recordingBar.style.display = 'flex';
                 const idleLabel = recordingBar.querySelector('.msg-rec-label');
                 const activeLabel = recordingBar.querySelector('.msg-rec-active-label');
                 if (idleLabel) idleLabel.style.display = 'none';
@@ -1789,11 +1810,7 @@
                 cleanupMicrophoneStream();
                 clearInterval(recordInterval);
                 audioChunks = [];
-                recordingBar.classList.remove('is-recording');
-                const idleLabel = recordingBar.querySelector('.msg-rec-label');
-                const activeLabel = recordingBar.querySelector('.msg-rec-active-label');
-                if (idleLabel) idleLabel.style.display = '';
-                if (activeLabel) activeLabel.style.display = 'none';
+                endVoiceRecordingState();
             });
         }
 
@@ -1804,11 +1821,7 @@
                 mediaRecorder.onstop = () => {
                     cleanupMicrophoneStream();
                     clearInterval(recordInterval);
-                    recordingBar.classList.remove('is-recording');
-                    const idleLabel = recordingBar.querySelector('.msg-rec-label');
-                    const activeLabel = recordingBar.querySelector('.msg-rec-active-label');
-                    if (idleLabel) idleLabel.style.display = '';
-                    if (activeLabel) activeLabel.style.display = 'none';
+                    endVoiceRecordingState();
 
                     const blob = new Blob(audioChunks, { type: 'audio/webm' });
                     if (blob.size < 800) return; // Too short
@@ -1838,6 +1851,7 @@
                     mediaRecorder.stop();
                 } catch {
                     cleanupMicrophoneStream();
+                    endVoiceRecordingState();
                 }
             });
         }
@@ -2144,14 +2158,29 @@
 
         const textarea = formOrWrap.querySelector('.msg-textarea');
         const sendBtn = formOrWrap.querySelector('.msg-send-btn');
+        const recordBtn = formOrWrap.querySelector('.msg-mic-btn');
         const emojiBtns = formOrWrap.querySelectorAll('.msg-quick-emoji-btn');
         const attachBtn = formOrWrap.querySelector('.msg-attach-btn');
         const attachModal = formOrWrap.querySelector('.msg-attach-video-modal');
+
+        function updateComposerControls() {
+            const hasText = !!(textarea && textarea.value.trim().length > 0);
+            if (sendBtn) {
+                sendBtn.style.display = hasText ? 'inline-flex' : 'none';
+            }
+            if (recordBtn) {
+                recordBtn.style.display = hasText ? 'none' : 'inline-flex';
+            }
+        }
+
+        // Initialize button visibility
+        updateComposerControls();
 
         if (textarea) {
             textarea.addEventListener('input', () => {
                 textarea.style.height = 'auto';
                 textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+                updateComposerControls();
 
                 sendTypingState(true);
                 clearTimeout(typingTimeout);
@@ -2180,6 +2209,7 @@
                     if (!text.trim() && !State.isSending) return;
                     textarea.value = '';
                     textarea.style.height = 'auto';
+                    updateComposerControls();
                     sendMessage(text);
                 }
             });
@@ -2191,6 +2221,7 @@
                 if (!text.trim() && !State.isSending) return;
                 textarea.value = '';
                 textarea.style.height = 'auto';
+                updateComposerControls();
                 sendMessage(text);
                 textarea.focus();
             });
@@ -2247,7 +2278,6 @@
         }
 
         // Voice Recording Setup
-        const recordBtn = formOrWrap.querySelector('.msg-mic-btn');
         const recordingBar = formOrWrap.querySelector('.msg-recording-bar');
         const cancelVoiceBtn = formOrWrap.querySelector('.msg-rec-cancel-btn');
         const sendVoiceBtn = formOrWrap.querySelector('.msg-rec-send-btn');

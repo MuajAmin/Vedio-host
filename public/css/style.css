@@ -3852,8 +3852,8 @@ input, textarea, select {
 .vp-progress-wrap {
     position: relative;
     width: 100%;
-    height: 4px;
-    padding: 8px 0;
+    height: 2px;
+    padding: 6px 0;
     background: transparent;
     cursor: pointer;
     box-sizing: content-box;
@@ -3869,15 +3869,15 @@ input, textarea, select {
     right: 0;
     top: 50%;
     transform: translateY(-50%);
-    height: 3px;
+    height: 2px;
     background: rgba(255, 255, 255, 0.22);
-    border-radius: 2px;
+    border-radius: 1px;
     transition: height 0.12s ease;
 }
 
 .vp-progress-wrap:hover::before,
 .vp-progress-wrap.vp-dragging::before {
-    height: 5px;
+    height: 3.5px;
 }
 
 .vp-progress-buffer {
@@ -3885,16 +3885,16 @@ input, textarea, select {
     top: 50%;
     left: 0;
     transform: translateY(-50%);
-    height: 3px;
+    height: 2px;
     background: rgba(255, 255, 255, 0.4);
-    border-radius: 2px;
+    border-radius: 1px;
     pointer-events: none;
     transition: height 0.12s ease, width 0.15s ease;
 }
 
 .vp-progress-wrap:hover .vp-progress-buffer,
 .vp-progress-wrap.vp-dragging .vp-progress-buffer {
-    height: 5px;
+    height: 3.5px;
 }
 
 .vp-progress-played {
@@ -3902,28 +3902,28 @@ input, textarea, select {
     top: 50%;
     left: 0;
     transform: translateY(-50%);
-    height: 3px;
+    height: 2px;
     background: #e11d48;
-    border-radius: 2px;
+    border-radius: 1px;
     pointer-events: none;
     transition: height 0.12s ease, width 0.04s linear;
 }
 
 .vp-progress-wrap:hover .vp-progress-played,
 .vp-progress-wrap.vp-dragging .vp-progress-played {
-    height: 5px;
+    height: 3.5px;
 }
 
 .vp-progress-thumb {
     position: absolute;
-    right: -5px;
+    right: -4.5px;
     top: 50%;
     transform: translateY(-50%) scale(0);
-    width: 12px;
-    height: 12px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     background: #e11d48;
-    box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.3);
+    box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.3);
     transition: transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
