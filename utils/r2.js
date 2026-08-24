@@ -87,8 +87,8 @@ async function uploadToR2(filePath, filename) {
             ContentType: contentType,
             CacheControl: 'public, max-age=2592000, immutable', // 30 days — videos are UUID-named & never change
         },
-        partSize: 5 * 1024 * 1024, // 5MB chunks (minimal memory overhead)
-        queueSize: 2, // 2 concurrent chunks — safe for 1GB VPS (max 10MB in-flight)
+        partSize: 15 * 1024 * 1024, // 15MB chunks (fast throughput)
+        queueSize: 5, // 5 concurrent chunks for high upload speed (max ~75MB in-flight)
         leavePartsOnError: false,
     });
 
