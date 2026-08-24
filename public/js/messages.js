@@ -219,10 +219,10 @@
             return rawEmoji;
         }
         try {
-            const code = window.twemoji.convert.toCodePoint(rawEmoji, false);
-            const fallbackCode = window.twemoji.convert.toCodePoint(rawEmoji, true);
+            const code = window.twemoji.convert.toCodePoint(rawEmoji, '-');
+            const codeNoFE0F = code.replace(/-fe0f/g, '');
             const appleUrl = `${WA_APPLE_EMOJI_BASE}${code}.png`;
-            const fallbackUrl = `${WA_TWEMOJI_FALLBACK_BASE}${fallbackCode}.svg`;
+            const fallbackUrl = `${WA_TWEMOJI_FALLBACK_BASE}${codeNoFE0F}.svg`;
             return `<img class="wa-emoji" draggable="false" alt="${escapeHtml(rawEmoji)}" data-code="${code}" src="${appleUrl}" loading="lazy" onerror="this.onerror=null;this.src='${fallbackUrl}'" />`;
         } catch {
             return rawEmoji;
@@ -267,6 +267,12 @@
                 } else if (node.tagName === 'BR') {
                     // allow line breaks
                 } else {
+                    hasOtherContent = true;
+                    break;
+                }
+            }
+        }
+
         const bubble = msgTextEl.closest('.msg-bubble');
         if (!hasOtherContent && emojiCount >= 1 && emojiCount <= 3) {
             msgTextEl.classList.add(`msg-jumbo-${emojiCount}`);
@@ -286,10 +292,13 @@
         const temp = document.createElement('div');
         temp.innerHTML = emojiFormatted;
         const emojiImgs = temp.querySelectorAll('.wa-emoji, img.emoji');
-        const textWithoutEmojis = temp.innerText.trim();
+        
+        const clone = temp.cloneNode(true);
+        clone.querySelectorAll('.wa-emoji, img.emoji').forEach(img => img.remove());
+        const otherText = clone.textContent.replace(/[\s\r\n]+/g, '').trim();
 
         let jumboClass = '';
-        if (textWithoutEmojis.length === 0 && emojiImgs.length >= 1 && emojiImgs.length <= 3) {
+        if (otherText.length === 0 && emojiImgs.length >= 1 && emojiImgs.length <= 3) {
             jumboClass = ` msg-jumbo-${emojiImgs.length}`;
         }
 
