@@ -79,6 +79,19 @@ function timeAgo(dateString) {
 
 const importJobs = (stats && Array.isArray(stats.importJobs)) ? stats.importJobs : [];
 const videoList = (stats && Array.isArray(stats.videos)) ? stats.videos : [];
+const cfSavings = (stats && stats.cloudflareSavings) ? stats.cloudflareSavings : {
+    enabled: false,
+    workerUrl: null,
+    zoneConfigured: false,
+    zoneId: null,
+    totalOffloadedBytes: 0,
+    totalOffloadedFormatted: '0 MB',
+    totalWatchSeconds: 0,
+    totalWatchFormatted: '0m',
+    vpsQuotaBytes: 1000 * 1024 * 1024 * 1024,
+    vpsQuotaPreservedPercent: '0.00',
+    edgeOffloadEfficiency: 0
+};
 const activeJobs = importJobs.filter(job => ['queued', 'starting', 'downloading'].includes(job.status));
 const failedJobs = importJobs.filter(job => ['error', 'canceled'].includes(job.status)).slice(0, 8);
 const recentVideos = videoList.slice(0, 12);
@@ -557,20 +570,6 @@ if (sys) {
         </div>
     </section>`;
 }
-
-const cfSavings = (stats && stats.cloudflareSavings) ? stats.cloudflareSavings : {
-    enabled: false,
-    workerUrl: null,
-    zoneConfigured: false,
-    zoneId: null,
-    totalOffloadedBytes: 0,
-    totalOffloadedFormatted: '0 MB',
-    totalWatchSeconds: 0,
-    totalWatchFormatted: '0m',
-    vpsQuotaBytes: 1000 * 1024 * 1024 * 1024,
-    vpsQuotaPreservedPercent: '0.00',
-    edgeOffloadEfficiency: 0
-};
 
 const r2Stats = (stats && stats.r2Stats) ? stats.r2Stats : {
     enabled: false,

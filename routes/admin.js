@@ -107,6 +107,8 @@ function formatDataSize(bytes) {
     return `${b} B`;
 }
 
+const formatBytes = formatDataSize;
+
 function formatSpeed(bytesPerSec) {
     const b = Number(bytesPerSec || 0);
     if (b >= 1024 * 1024) return (b / (1024 * 1024)).toFixed(1) + ' MB/s';
