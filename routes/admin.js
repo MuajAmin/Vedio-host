@@ -107,7 +107,9 @@ function formatDataSize(bytes) {
     return `${b} B`;
 }
 
-const formatBytes = formatDataSize;
+function formatBytes(bytes) {
+    return formatDataSize(bytes);
+}
 
 function formatSpeed(bytesPerSec) {
     const b = Number(bytesPerSec || 0);

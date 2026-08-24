@@ -30,11 +30,11 @@ async function runAuditTests() {
     assert('Cloudflare Worker URL configured', !!process.env.CF_WORKER_URL, process.env.CF_WORKER_URL);
     assert('SESSION_SECRET is configured', !!process.env.SESSION_SECRET);
 
-    // Create a temporary test video file
-    const testDir = path.join(__dirname, '..', 'uploads', 'videos');
+    const { v4: uuidv4 } = require('uuid');
+    const testDir = path.join(__dirname, 'uploads', 'videos');
     if (!fs.existsSync(testDir)) fs.mkdirSync(testDir, { recursive: true });
     
-    const testVideoId = 'audit_test_' + crypto.randomBytes(6).toString('hex');
+    const testVideoId = uuidv4();
     const testFilename = `${testVideoId}.mp4`;
     const testFilePath = path.join(testDir, testFilename);
     
@@ -87,7 +87,7 @@ async function runAuditTests() {
 
         // --- TEST 5: Upload-vs-Delete Race Condition & In-Flight Abort ---
         console.log('\n--- TEST 5: Upload-vs-Delete Race Condition & In-Flight Abort ---');
-        const raceVideoId = 'race_test_' + crypto.randomBytes(6).toString('hex');
+        const raceVideoId = uuidv4();
         const raceFilename = `${raceVideoId}.mp4`;
         const raceFilePath = path.join(testDir, raceFilename);
         fs.writeFileSync(raceFilePath, Buffer.alloc(5 * 1024 * 1024, 'B'));

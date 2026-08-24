@@ -175,15 +175,18 @@ function registerProgressListener(filename, callback) {
  * @param {string} filename - The filename to use as the R2 object key
  * @returns {Promise<boolean>} true if upload succeeded
  */
-async function uploadToR2(filePath, filename) {
-    if (!r2Enabled) return false;
-    if (!filePath || !filename) return false;
+function uploadToR2(filePath, filename) {
+    if (!r2Enabled) return Promise.resolve(false);
+    if (!filePath || !filename) return Promise.resolve(false);
 
     // Concurrency Deduplication: If this exact file is already uploading, share the same Promise
     if (inFlightUploads.has(filename)) {
         console.log(`[R2] ⚡ Deduplicating upload: ${filename} is already in-flight.`);
         return inFlightUploads.get(filename);
     }
+
+    const controller = { upload: null, aborted: false };
+    activeUploadControllers.set(filename, controller);
 
     const uploadPromise = (async () => {
         try {
@@ -193,20 +196,26 @@ async function uploadToR2(filePath, filename) {
                 return false;
             }
 
+            if (controller.aborted) return false;
+
             // Pre-upload Faststart Optimization: Ensure moov atom is at file start for instant CDN playback
             const ext = path.extname(filename).toLowerCase();
             if (ext === '.mp4' || ext === '.m4v') {
                 try {
                     const { isFaststartOptimized, optimizeFaststart } = require('./faststart');
                     const isOpt = await isFaststartOptimized(filePath);
+                    if (controller.aborted) return false;
                     if (!isOpt) {
                         console.log(`[R2] 🚀 Faststart optimizing ${filename} prior to R2 upload...`);
                         await optimizeFaststart(filePath);
+                        if (controller.aborted) return false;
                     }
                 } catch (fsErr) {
                     console.warn(`[R2] Faststart check before upload skipped:`, fsErr.message);
                 }
             }
+
+            if (controller.aborted) return false;
 
             const stat = await fs.promises.stat(filePath);
             const contentType = getMimeType(filename);
@@ -298,8 +307,12 @@ async function uploadToR2(filePath, filename) {
                 leavePartsOnError: false,
             });
 
-            const controller = { upload: parallelUpload, aborted: false };
-            activeUploadControllers.set(filename, controller);
+            controller.upload = parallelUpload;
+
+            if (controller.aborted) {
+                try { parallelUpload.abort(); } catch {}
+                return false;
+            }
 
             await parallelUpload.done();
 
@@ -326,8 +339,8 @@ async function uploadToR2(filePath, filename) {
             setTimeout(() => activeUploads.delete(filename), 5 * 60 * 1000).unref();
             return true;
         } catch (err) {
-            const controller = activeUploadControllers.get(filename);
-            if (controller && controller.aborted) {
+            const c = activeUploadControllers.get(filename);
+            if ((c && c.aborted) || (controller && controller.aborted)) {
                 console.log(`[R2] Upload aborted cleanly for: ${filename}`);
                 return false;
             }
@@ -348,6 +361,10 @@ async function uploadToR2(filePath, filename) {
             activeUploadControllers.delete(filename);
         }
     })();
+
+    inFlightUploads.set(filename, uploadPromise);
+    return uploadPromise;
+}
 
     inFlightUploads.set(filename, uploadPromise);
     return uploadPromise;
