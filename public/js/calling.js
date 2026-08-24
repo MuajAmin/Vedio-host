@@ -635,6 +635,14 @@
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             CallState.localStream = stream;
 
+            // Apply content hints for mobile hardware encoder acceleration
+            stream.getAudioTracks().forEach(t => {
+                if ('contentHint' in t) t.contentHint = 'speech';
+            });
+            stream.getVideoTracks().forEach(t => {
+                if ('contentHint' in t) t.contentHint = 'motion';
+            });
+
             callLog('MEDIA_ACQUIRED', { audio: true, video: isVideo });
 
             // Connect local stream to sound visualizer if audio call
@@ -679,8 +687,17 @@
             });
         }
 
-        // Handle remote stream tracks
+        // Handle remote stream tracks with zero artificial jitter buffer delay (<50ms audio/video)
         pc.ontrack = (event) => {
+            if (event.receiver) {
+                if ('playoutDelayHint' in event.receiver) {
+                    event.receiver.playoutDelayHint = 0;
+                }
+                if ('jitterBufferTarget' in event.receiver) {
+                    event.receiver.jitterBufferTarget = 0;
+                }
+            }
+
             // Reset remoteStream for fresh tracks to prevent accumulation
             if (!CallState.remoteStream) {
                 CallState.remoteStream = new MediaStream();
@@ -975,6 +992,12 @@
         try {
             stopRingtone();
             hideIncomingCallModal();
+
+            // Prime audio playback & Web Audio context within direct user gesture (bypasses mobile autoplay policies)
+            getAudioContext();
+            if (DOM.remoteAudio) {
+                DOM.remoteAudio.play().catch(() => {});
+            }
 
             if (!transitionState('connecting')) return;
             CallState.isCaller = false;
@@ -1382,6 +1405,25 @@
         showIncomingCallModal(data);
     }
 
+    function optimizeSdp(sdp) {
+        if (!sdp) return sdp;
+        let modified = sdp;
+        // 1. Opus voice ultra-low latency packetization (ptime=10ms, maxaveragebitrate=64000, cbr=1)
+        if (modified.includes('opus/48000')) {
+            modified = modified.replace(
+                /(a=fmtp:\d+ .*?minptime=\d+;useinbandfec=1[^\r\n]*)/g,
+                '$1;ptime=10;minptime=10;maxaveragebitrate=64000;cbr=1;usedtx=1'
+            );
+            if (!modified.includes('ptime=10')) {
+                modified = modified.replace(
+                    /(a=rtpmap:(\d+) opus\/48000\/2[^\r\n]*)/g,
+                    '$1\r\na=fmtp:$2 ptime=10;minptime=10;maxaveragebitrate=64000;stereo=0;sprop-stereo=0;useinbandfec=1;usedtx=1;cbr=1'
+                );
+            }
+        }
+        return modified;
+    }
+
     async function handleCallAcceptedEvent(data) {
         if (!CallState.isCaller || CallState.callId !== data.callId) return;
         if (CallState.state !== 'calling') {
@@ -1404,13 +1446,17 @@
         // Caller initiates WebRTC offer
         try {
             const pc = createPeerConnection();
-            const offer = await pc.createOffer({
+            const rawOffer = await pc.createOffer({
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: CallState.callType === 'video'
             });
+            const offer = {
+                type: rawOffer.type,
+                sdp: optimizeSdp(rawOffer.sdp)
+            };
             await pc.setLocalDescription(offer);
 
-            callLog('WEBRTC_OFFER_SENT');
+            callLog('WEBRTC_OFFER_SENT', { sdpOptimized: true });
             sendSignalingMessage('offer', offer);
         } catch (err) {
             callLog('WEBRTC_OFFER_ERROR', { error: err.message });
@@ -1450,9 +1496,13 @@
                     await pc.addIceCandidate(new RTCIceCandidate(candidate));
                 }
 
-                const answer = await pc.createAnswer();
+                const rawAnswer = await pc.createAnswer();
+                const answer = {
+                    type: rawAnswer.type,
+                    sdp: optimizeSdp(rawAnswer.sdp)
+                };
                 await pc.setLocalDescription(answer);
-                callLog('WEBRTC_ANSWER_SENT');
+                callLog('WEBRTC_ANSWER_SENT', { sdpOptimized: true });
                 sendSignalingMessage('answer', answer);
 
             } else if (signal.type === 'answer') {

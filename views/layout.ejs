@@ -12,11 +12,15 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
-    <script src="/js/theme-init.js?v=12.3"></script>
-    <link rel="stylesheet" href="/css/style.css?v=12.3">
-    <link rel="stylesheet" href="/css/messages.css?v=12.3">
-    <link rel="stylesheet" href="/css/calling.css?v=12.3">
-    <link rel="stylesheet" href="/css/minimal.css?v=12.3">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+    <script src="/js/theme-init.js?v=12.4"></script>
+    <link rel="stylesheet" href="/css/style.css?v=12.4">
+    <link rel="stylesheet" href="/css/messages.css?v=12.4">
+    <link rel="stylesheet" href="/css/calling.css?v=12.4">
+    <link rel="stylesheet" href="/css/minimal.css?v=12.4">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -117,6 +121,14 @@
 
                     <!-- Input Row -->
                     <div class="msg-input-row">
+                        <button type="button" class="msg-composer-btn msg-emoji-toggle-btn" title="Open Emoji Picker" aria-label="Open Emoji Picker">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="18" height="18" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                                <line x1="9" y1="9" x2="9.01" y2="9" stroke-width="3"/>
+                                <line x1="15" y1="9" x2="15.01" y2="9" stroke-width="3"/>
+                            </svg>
+                        </button>
                         <div class="msg-input-wrap">
                             <textarea class="msg-textarea" placeholder="Message <%= partnerName %>..." rows="1"></textarea>
                         </div>
@@ -661,10 +673,11 @@
             <audio id="remoteAudioTrack" autoplay playsinline style="display:none;"></audio>
             <% } %>
 
-            <script src="/js/app.js?v=12.3"></script>
-            <script defer src="/js/messages.js?v=12.3"></script>
-            <script defer src="/js/watchTogether.js?v=12.3"></script>
-            <script defer src="/js/calling.js?v=12.3"></script>
+            <script src="/js/twemoji.min.js?v=12.4"></script>
+            <script src="/js/app.js?v=12.4"></script>
+            <script defer src="/js/messages.js?v=12.4"></script>
+            <script defer src="/js/watchTogether.js?v=12.4"></script>
+            <script defer src="/js/calling.js?v=12.4"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').then(function(reg) {

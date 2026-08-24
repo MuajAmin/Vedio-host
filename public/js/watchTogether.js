@@ -887,7 +887,7 @@
                     <span class="wt-msg-author">${escapeHtml(displayName)}</span>
                     <span class="wt-msg-time">${timeAgo(msg.timestamp || Date.now())}</span>
                 </div>
-                <div class="wt-msg-text">${escapeHtml(msg.text || '')}</div>
+                <div class="wt-msg-text">${typeof window.parseWhatsAppEmoji === 'function' ? window.parseWhatsAppEmoji(escapeHtml(msg.text || '')) : escapeHtml(msg.text || '')}</div>
             </div>
         `;
 

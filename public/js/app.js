@@ -67,7 +67,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        function closeAllOpenModals() {
+            const modals = ['shortcutsModal', 'downloadModal', 'deleteVideoModal', 'profileModal', 'themeModalBackdrop'];
+            modals.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('active', 'is-open');
+                    if (id === 'profileModal') {
+                        el.style.display = 'none';
+                    }
+                }
+            });
+            document.body.classList.remove('modal-open');
+            document.documentElement.classList.remove('modal-open');
+        }
+
         function cleanupCurrentPage() {
+            // Close any open modals and reset backdrop/scroll locks
+            closeAllOpenModals();
+
             // Clean video player memory
             const vid = document.getElementById('vpVideo');
             if (vid) {
@@ -1800,6 +1818,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         screen.orientation.unlock();
                     }
                 } catch (e) { /* not supported */ }
+                // Trigger viewport and safe-area reflow on mobile browsers
+                window.dispatchEvent(new Event('resize'));
             }
         }
 
@@ -2078,6 +2098,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
+            vid.addEventListener('seeked', () => {
+                if (!vid.ended && vid.currentTime > 2) {
+                    storage.setItem(savedPosKey, String(Math.floor(vid.currentTime)));
+                }
+            });
+
             vid.addEventListener('pause', () => {
                 if (!vid.ended && vid.currentTime > 2) {
                     saveWatchProgress();
@@ -2099,6 +2125,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     saveWatchProgress({ keepalive: true });
                 }
             }, playerSignal);
+
+            window.addEventListener('pagehide', () => {
+                if (!vid.ended && vid.currentTime > 2) {
+                    saveWatchProgress({ keepalive: true });
+                }
+            }, playerSignal);
+
+            window.addEventListener('page:cleanup', () => {
+                if (!vid.ended && vid.currentTime > 2) {
+                    saveWatchProgress({ keepalive: true });
+                }
+            }, { once: true });
         }
 
         // --- Keyboard Shortcuts ---

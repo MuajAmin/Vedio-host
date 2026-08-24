@@ -36,9 +36,10 @@ html[data-theme="cinematic"] {
     --shadow-lg: 0 16px 50px rgba(0, 0, 0, 0.7);
     --shadow-glow: 0 0 40px rgba(229, 184, 90, 0.15);
 
-    --font-display: 'Bahnschrift', 'Aptos Display', 'Trebuchet MS', sans-serif;
-    --font-body: 'Aptos', 'Segoe UI', Tahoma, sans-serif;
+    --font-display: 'Bahnschrift', 'Aptos Display', 'Trebuchet MS', 'Noto Color Emoji', 'Apple Color Emoji', sans-serif;
+    --font-body: 'Aptos', 'Segoe UI', 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', Tahoma, sans-serif;
     --font-accent: Georgia, 'Times New Roman', serif;
+    --font-emoji: 'Apple Color Emoji', 'Noto Color Emoji', 'Segoe UI Emoji', 'Android Emoji', sans-serif;
 
     --radius-sm: 8px;
     --radius-md: 14px;

@@ -162,6 +162,185 @@
         }
     }
 
+    // ------------------------------------------------------------
+    //  4.1. WHATSAPP / APPLE EMOJI PACK CONVERTER & JUMBO SYSTEM
+    // ------------------------------------------------------------
+    const WA_APPLE_EMOJI_BASE = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/';
+    const WA_TWEMOJI_FALLBACK_BASE = 'https://unpkg.com/twemoji@14.0.2/dist/svg/';
+
+    const WA_EMOJI_CATEGORIES = {
+        smileys: {
+            name: 'Smileys & Emotion',
+            emojis: [
+                '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃',
+                '😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😋',
+                '😛','😜','🤪','😝','🤗','🤭','🤫','🤔','🤐','🤨',
+                '😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔',
+                '😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵',
+                '🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐',
+                '😕','😟','🙁','😮','😯','😲','😳','🥺','😦','😧',
+                '😨','😰','😥','😢','😭','😱','😖','😣','😞','😓',
+                '😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀'
+            ]
+        },
+        love: {
+            name: 'Love & Gestures',
+            emojis: [
+                '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔',
+                '❣️','💕','💞','💓','💗','💖','💘','💝','💟','💌',
+                '💋','🫂','🫶','👍','👎','👏','🙌','👐','🤲','🤝',
+                '🙏','✍️','💅','🤳','💪','👊','✊','🤛','🤜','✌️',
+                '🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👋',
+                '🫡','👀','👁️','👅','👄','🧠','🫀','🫁','🔥','✨'
+            ]
+        },
+        fun: {
+            name: 'Cinema & Entertainment',
+            emojis: [
+                '🍿','🎬','🎥','📽️','📺','📷','📸','📹','📼','🎧',
+                '🎤','🎵','🎶','🎸','🎹','🥁','🎮','🕹️','🎲','🎯',
+                '🎨','🎭','🎪','🎟️','🎫','🏆','🥇','🥈','🥉','⚽',
+                '🏀','🏈','⚾','🎾','🏐','🎱','🏓','🏸','🎳','🥊'
+            ]
+        },
+        party: {
+            name: 'Party & Lifestyle',
+            emojis: [
+                '🍕','🍔','🍟','🌭','🍿','🍩','🍪','🎂','🍰','🍫',
+                '🍬','🍭','☕','🍵','🧋','🍺','🍻','🥂','🍷','🍸',
+                '🍹','🍾','🎁','🎉','🎊','🎈','🌹','🌸','🌺','🌻',
+                '🌼','💐','🧸','👑','💎','⚡','🌟','💫','🌈','☀️'
+            ]
+        }
+    };
+
+    function toAppleEmojiImg(rawEmoji) {
+        if (!window.twemoji || !window.twemoji.convert) {
+            return rawEmoji;
+        }
+        try {
+            const code = window.twemoji.convert.toCodePoint(rawEmoji, false);
+            const fallbackCode = window.twemoji.convert.toCodePoint(rawEmoji, true);
+            const appleUrl = `${WA_APPLE_EMOJI_BASE}${code}.png`;
+            const fallbackUrl = `${WA_TWEMOJI_FALLBACK_BASE}${fallbackCode}.svg`;
+            return `<img class="wa-emoji" draggable="false" alt="${escapeHtml(rawEmoji)}" data-code="${code}" src="${appleUrl}" loading="lazy" onerror="this.onerror=null;this.src='${fallbackUrl}'" />`;
+        } catch {
+            return rawEmoji;
+        }
+    }
+
+    function parseWhatsAppEmoji(str) {
+        if (!str) return '';
+        if (!window.twemoji || typeof window.twemoji.replace !== 'function') {
+            return str;
+        }
+        try {
+            return window.twemoji.replace(String(str), function (rawEmoji) {
+                return toAppleEmojiImg(rawEmoji);
+            });
+        } catch {
+            return str;
+        }
+    }
+
+    // Expose helpers globally
+    window.toAppleEmojiImg = toAppleEmojiImg;
+    window.parseWhatsAppEmoji = parseWhatsAppEmoji;
+    window.applyWhatsAppEmojis = applyWhatsAppEmojis;
+
+    function detectAndApplyJumbo(msgTextEl) {
+        if (!msgTextEl) return;
+        msgTextEl.classList.remove('msg-jumbo-1', 'msg-jumbo-2', 'msg-jumbo-3');
+        const childNodes = Array.from(msgTextEl.childNodes);
+        let emojiCount = 0;
+        let hasOtherContent = false;
+
+        for (const node of childNodes) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                if (node.textContent.trim().length > 0) {
+                    hasOtherContent = true;
+                    break;
+                }
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.classList.contains('wa-emoji') || node.classList.contains('emoji')) {
+                    emojiCount++;
+                } else if (node.tagName === 'BR') {
+                    // allow line breaks
+                } else {
+                    hasOtherContent = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasOtherContent && emojiCount >= 1 && emojiCount <= 3) {
+            msgTextEl.classList.add(`msg-jumbo-${emojiCount}`);
+        }
+    }
+
+    function formatMessageTextHtml(rawText) {
+        if (!rawText) return '';
+        const escaped = escapeHtml(rawText);
+        const emojiFormatted = parseWhatsAppEmoji(escaped.replace(/\n/g, '<br>'));
+        
+        const temp = document.createElement('div');
+        temp.innerHTML = emojiFormatted;
+        const emojiImgs = temp.querySelectorAll('.wa-emoji, img.emoji');
+        const textWithoutEmojis = temp.innerText.trim();
+
+        let jumboClass = '';
+        if (textWithoutEmojis.length === 0 && emojiImgs.length >= 1 && emojiImgs.length <= 3) {
+            jumboClass = ` msg-jumbo-${emojiImgs.length}`;
+        }
+
+        return `<div class="msg-text-content${jumboClass}">${emojiFormatted}</div>`;
+    }
+
+    function applyWhatsAppEmojis(container) {
+        if (!container) return;
+        if (!window.twemoji) return;
+
+        // Process .msg-text-content
+        const textElements = container.querySelectorAll ? container.querySelectorAll('.msg-text-content') : [];
+        textElements.forEach(el => {
+            if (!el.querySelector('.wa-emoji')) {
+                const raw = el.innerHTML;
+                el.innerHTML = parseWhatsAppEmoji(raw);
+            }
+            detectAndApplyJumbo(el);
+        });
+
+        // Process reaction buttons & badges
+        const reactBtns = container.querySelectorAll ? container.querySelectorAll('.msg-react-emoji-btn, .msg-mobile-react-btn, .msg-reaction-badge span:first-child, .msg-empty-starter-chip, .call-quick-emoji-btn, .emoji-chip') : [];
+        reactBtns.forEach(btn => {
+            if (!btn.querySelector('.wa-emoji')) {
+                const text = btn.innerText || btn.textContent;
+                if (text) {
+                    btn.innerHTML = parseWhatsAppEmoji(text);
+                }
+            }
+        });
+
+        // Process quote snippets
+        const quotes = container.querySelectorAll ? container.querySelectorAll('.msg-quote-snippet, .msg-quote-media-indicator') : [];
+        quotes.forEach(q => {
+            if (!q.querySelector('.wa-emoji')) {
+                q.innerHTML = parseWhatsAppEmoji(q.innerHTML);
+            }
+        });
+    }
+
+    function extractCleanText(element) {
+        if (!element) return '';
+        const clone = element.cloneNode(true);
+        const emojiImgs = clone.querySelectorAll('.wa-emoji, img.emoji');
+        emojiImgs.forEach(img => {
+            const alt = img.getAttribute('alt') || '';
+            img.replaceWith(document.createTextNode(alt));
+        });
+        return clone.innerText.trim();
+    }
+
     function renderReactionsHtml(reactions, currentU) {
         if (!reactions || !Array.isArray(reactions) || reactions.length === 0) return '';
         const grouped = {};
@@ -173,9 +352,10 @@
         const badges = Object.keys(grouped).map(emoji => {
             const users = grouped[emoji];
             const isMine = users.includes(currentU);
+            const emojiHtml = parseWhatsAppEmoji(escapeHtml(emoji));
             return `
                 <button type="button" class="msg-reaction-badge ${isMine ? 'is-user-reacted' : ''}" data-emoji="${escapeHtml(emoji)}" title="${escapeHtml(users.join(', '))}">
-                    <span>${escapeHtml(emoji)}</span>
+                    <span>${emojiHtml}</span>
                     <span>${users.length}</span>
                 </button>
             `;
@@ -196,17 +376,17 @@
             snippet = '<span class="msg-quote-deleted">⚠️ Original message was deleted</span>';
         } else {
             if (replyTo.text) {
-                snippet = `<span class="msg-quote-text">${escapeHtml(replyTo.text)}</span>`;
+                snippet = `<span class="msg-quote-text">${parseWhatsAppEmoji(escapeHtml(replyTo.text))}</span>`;
             }
             if (replyTo.videoTitle || replyTo.videoId) {
                 const vTitle = replyTo.videoTitle || 'Shared Video';
                 const thumbUrl = replyTo.videoThumbnail ? `/thumbnails/${encodeURIComponent(replyTo.videoThumbnail)}` : '';
-                snippet = `<span class="msg-quote-media-indicator">🎬 ${escapeHtml(vTitle)}</span>` + (snippet ? ` — ${snippet}` : '');
+                snippet = `<span class="msg-quote-media-indicator">${parseWhatsAppEmoji('🎬')} ${escapeHtml(vTitle)}</span>` + (snippet ? ` — ${snippet}` : '');
                 if (thumbUrl) {
                     thumbHtml = `<img src="${thumbUrl}" class="msg-quote-thumb" alt="" />`;
                 }
             } else if (replyTo.voiceUrl) {
-                snippet = `<span class="msg-quote-media-indicator">🎙️ Voice Note</span>` + (snippet ? ` — ${snippet}` : '');
+                snippet = `<span class="msg-quote-media-indicator">${parseWhatsAppEmoji('🎙️')} Voice Note</span>` + (snippet ? ` — ${snippet}` : '');
             }
         }
 
@@ -422,7 +602,7 @@
             if (isCallEvent) {
                 contentHtml += renderCallEventHtml(msg.text, isOut, timeStr);
             } else {
-                contentHtml += `<div class="msg-text-content">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
+                contentHtml += formatMessageTextHtml(msg.text);
             }
         }
 
@@ -434,10 +614,10 @@
             <div class="msg-row ${rowClass}" data-msg-id="${msg.id}" ${isCallEvent ? 'data-is-call="true"' : ''}>
                 <div class="msg-action-toolbar">
                     <div class="msg-quick-react-pill">
-                        <button type="button" class="msg-react-emoji-btn" data-emoji="❤️">❤️</button>
-                        <button type="button" class="msg-react-emoji-btn" data-emoji="🔥">🔥</button>
-                        <button type="button" class="msg-react-emoji-btn" data-emoji="😂">😂</button>
-                        <button type="button" class="msg-react-emoji-btn" data-emoji="🍿">🍿</button>
+                        <button type="button" class="msg-react-emoji-btn" data-emoji="❤️">${toAppleEmojiImg('❤️')}</button>
+                        <button type="button" class="msg-react-emoji-btn" data-emoji="🔥">${toAppleEmojiImg('🔥')}</button>
+                        <button type="button" class="msg-react-emoji-btn" data-emoji="😂">${toAppleEmojiImg('😂')}</button>
+                        <button type="button" class="msg-react-emoji-btn" data-emoji="🍿">${toAppleEmojiImg('🍿')}</button>
                     </div>
                     ${!isCallEvent ? `
                     <button type="button" class="msg-action-btn btn-reply" title="Reply to Message" data-reply-id="${msg.id}">
@@ -927,7 +1107,7 @@
                     id,
                     sender: isOut ? currentUser : partnerUser,
                     recipient: isOut ? partnerUser : currentUser,
-                    text: textEl ? textEl.innerText : null,
+                    text: textEl ? extractCleanText(textEl) : null,
                     video,
                     videoId: video ? video.id : null,
                     voiceUrl: voicePlayer ? voicePlayer.getAttribute('data-audio-src') : null,
@@ -937,6 +1117,9 @@
                 });
             }
         });
+
+        // Upgrade SSR messages and reactions to WhatsApp emojis
+        applyWhatsAppEmojis(container);
 
         // Set up infinite scroll for loaded containers
         getActiveContainers().forEach(setupInfiniteScroll);
@@ -950,8 +1133,13 @@
         if (!container || container.dataset.scrollBound === 'true') return;
         container.dataset.scrollBound = 'true';
 
+        let scrollThrottle = false;
         container.addEventListener('scroll', () => {
-            if (container.scrollTop < 100 && !State.isLoadingOlder && State.hasMoreOlder) {
+            if (scrollThrottle) return;
+            scrollThrottle = true;
+            setTimeout(() => { scrollThrottle = false; }, 60);
+
+            if (container.scrollTop < 120 && !State.isLoadingOlder && State.hasMoreOlder) {
                 loadOlderMessages(container);
             }
         }, { passive: true });
@@ -1058,9 +1246,15 @@
             container.appendChild(fragment);
         }
 
-        // Strictly preserve scroll position
+        // Strictly preserve scroll position across layout recalculations
         const newScrollHeight = container.scrollHeight;
-        container.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+        const delta = newScrollHeight - prevScrollHeight;
+        container.scrollTop = prevScrollTop + delta;
+        requestAnimationFrame(() => {
+            if (Math.abs(container.scrollTop - (prevScrollTop + delta)) > 2) {
+                container.scrollTop = prevScrollTop + (container.scrollHeight - prevScrollHeight);
+            }
+        });
     }
 
     // ------------------------------------------------------------
@@ -1670,6 +1864,7 @@
 
         const replyToId = State.replyToMessage ? State.replyToMessage.id : null;
         cancelReply();
+        closeWhatsAppEmojiPicker();
 
         const sendBtns = document.querySelectorAll('.msg-send-btn');
         sendBtns.forEach(btn => { btn.style.opacity = '0.6'; btn.disabled = true; });
@@ -2045,7 +2240,8 @@
             const row = copyBtn.closest('.msg-row');
             const textEl = row ? row.querySelector('.msg-text-content') : null;
             if (textEl) {
-                navigator.clipboard.writeText(textEl.innerText.trim()).then(() => {
+                const cleanText = extractCleanText(textEl);
+                navigator.clipboard.writeText(cleanText).then(() => {
                     const originalHtml = copyBtn.innerHTML;
                     copyBtn.innerHTML = `✓`;
                     copyBtn.style.color = '#34d399';
@@ -2149,6 +2345,136 @@
     });
 
     // ------------------------------------------------------------
+    //  14.5. WHATSAPP EMOJI PICKER CONTROLLER
+    // ------------------------------------------------------------
+    let activeEmojiPicker = null;
+    let activeEmojiTargetTextarea = null;
+
+    function createWhatsAppEmojiPicker() {
+        const picker = document.createElement('div');
+        picker.className = 'wa-emoji-picker';
+        picker.id = 'waEmojiPicker';
+        picker.innerHTML = `
+            <div class="wa-picker-header">
+                <div class="wa-picker-tabs">
+                    <button type="button" class="wa-tab-btn active" data-cat="smileys" title="Smileys & Emotion">
+                        <span>${toAppleEmojiImg('😀')}</span>
+                    </button>
+                    <button type="button" class="wa-tab-btn" data-cat="love" title="Love & Gestures">
+                        <span>${toAppleEmojiImg('❤️')}</span>
+                    </button>
+                    <button type="button" class="wa-tab-btn" data-cat="fun" title="Cinema & Media">
+                        <span>${toAppleEmojiImg('🍿')}</span>
+                    </button>
+                    <button type="button" class="wa-tab-btn" data-cat="party" title="Party & Objects">
+                        <span>${toAppleEmojiImg('🔥')}</span>
+                    </button>
+                </div>
+            </div>
+            <div class="wa-picker-body">
+                <div class="wa-picker-grid" id="waPickerGrid"></div>
+            </div>
+        `;
+
+        // Render category tab switching
+        const tabBtns = picker.querySelectorAll('.wa-tab-btn');
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                tabBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const cat = btn.getAttribute('data-cat');
+                renderPickerCategory(picker, cat);
+            });
+        });
+
+        // Delegate emoji click
+        picker.addEventListener('click', (e) => {
+            const emojiBtn = e.target.closest('.wa-picker-item');
+            if (emojiBtn && activeEmojiTargetTextarea) {
+                e.stopPropagation();
+                const emoji = emojiBtn.getAttribute('data-emoji');
+                insertEmojiAtCursor(activeEmojiTargetTextarea, emoji);
+            }
+        });
+
+        // Render initial smileys category
+        renderPickerCategory(picker, 'smileys');
+
+        return picker;
+    }
+
+    function renderPickerCategory(pickerEl, categoryKey) {
+        const grid = pickerEl.querySelector('#waPickerGrid');
+        if (!grid) return;
+        const catData = WA_EMOJI_CATEGORIES[categoryKey] || WA_EMOJI_CATEGORIES.smileys;
+        const itemsHtml = catData.emojis.map(em => {
+            const appleImg = toAppleEmojiImg(em);
+            return `<button type="button" class="wa-picker-item" data-emoji="${escapeHtml(em)}" title="${escapeHtml(em)}">${appleImg}</button>`;
+        }).join('');
+        grid.innerHTML = itemsHtml;
+    }
+
+    function insertEmojiAtCursor(textarea, emoji) {
+        if (!textarea) return;
+        const start = textarea.selectionStart ?? textarea.value.length;
+        const end = textarea.selectionEnd ?? textarea.value.length;
+        const val = textarea.value;
+        textarea.value = val.substring(0, start) + emoji + val.substring(end);
+        const newPos = start + emoji.length;
+        textarea.focus();
+        textarea.setSelectionRange(newPos, newPos);
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function toggleWhatsAppEmojiPicker(formOrWrap, textarea) {
+        if (!activeEmojiPicker) {
+            activeEmojiPicker = createWhatsAppEmojiPicker();
+        }
+
+        if (activeEmojiPicker.parentElement === formOrWrap && activeEmojiPicker.classList.contains('is-open')) {
+            closeWhatsAppEmojiPicker();
+            return;
+        }
+
+        activeEmojiTargetTextarea = textarea;
+        formOrWrap.appendChild(activeEmojiPicker);
+        // Force reflow for smooth animation
+        void activeEmojiPicker.offsetWidth;
+        activeEmojiPicker.classList.add('is-open');
+    }
+
+    function closeWhatsAppEmojiPicker() {
+        if (activeEmojiPicker && activeEmojiPicker.classList.contains('is-open')) {
+            activeEmojiPicker.classList.remove('is-open');
+            setTimeout(() => {
+                if (activeEmojiPicker && !activeEmojiPicker.classList.contains('is-open')) {
+                    if (activeEmojiPicker.parentElement) {
+                        activeEmojiPicker.parentElement.removeChild(activeEmojiPicker);
+                    }
+                }
+            }, 200);
+        }
+    }
+
+    // Close picker on outside click or Escape
+    document.addEventListener('click', (e) => {
+        if (activeEmojiPicker && activeEmojiPicker.classList.contains('is-open')) {
+            if (!e.target.closest('.wa-emoji-picker') && !e.target.closest('.msg-emoji-toggle-btn')) {
+                closeWhatsAppEmojiPicker();
+            }
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && activeEmojiPicker && activeEmojiPicker.classList.contains('is-open')) {
+            closeWhatsAppEmojiPicker();
+        }
+    });
+
+    // ------------------------------------------------------------
     //  15. COMPOSER SETUP (Idempotent per DOM element)
     // ------------------------------------------------------------
     function setupComposer(formOrWrap) {
@@ -2159,6 +2485,7 @@
         const textarea = formOrWrap.querySelector('.msg-textarea');
         const sendBtn = formOrWrap.querySelector('.msg-send-btn');
         const recordBtn = formOrWrap.querySelector('.msg-mic-btn');
+        const emojiToggleBtn = formOrWrap.querySelector('.msg-emoji-toggle-btn');
         const emojiBtns = formOrWrap.querySelectorAll('.msg-quick-emoji-btn');
         const attachBtn = formOrWrap.querySelector('.msg-attach-btn');
         const attachModal = formOrWrap.querySelector('.msg-attach-video-modal');
@@ -2175,6 +2502,14 @@
 
         // Initialize button visibility
         updateComposerControls();
+
+        // WhatsApp Emoji Picker Toggle
+        if (emojiToggleBtn && textarea) {
+            emojiToggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleWhatsAppEmojiPicker(formOrWrap, textarea);
+            });
+        }
 
         if (textarea) {
             textarea.addEventListener('input', () => {
@@ -2383,8 +2718,9 @@
     // Initialize Composers
     document.querySelectorAll('.msg-composer-wrap').forEach(setupComposer);
 
-    // Ingest SSR messages
+    // Ingest SSR messages & upgrade all emojis
     ingestSSRMessages();
+    applyWhatsAppEmojis(document.body);
 
     // Initial Auto-scroll
     getActiveContainers().forEach(c => scrollToBottom(c));
