@@ -2,6 +2,7 @@ const { S3Client, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/c
 const { Upload } = require('@aws-sdk/lib-storage');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { Transform } = require('stream');
 
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
@@ -9,6 +10,7 @@ const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || '';
 const R2_BUCKET = process.env.R2_BUCKET || 'videohost';
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || '';
+const CF_WORKER_URL = process.env.CF_WORKER_URL || '';
 
 let r2Enabled = false;
 let s3Client = null;
@@ -340,6 +342,28 @@ function getActiveUploadsList() {
     return list;
 }
 
+function generateWorkerSignature(key, expiry) {
+    const secret = process.env.SESSION_SECRET || 'videohost-secret';
+    return crypto
+        .createHmac('sha256', secret)
+        .update(`${key}:${expiry}`)
+        .digest('hex');
+}
+
+function getWorkerUploadUrl(filename, expiresInSeconds = 3600) {
+    if (!CF_WORKER_URL || !filename) return null;
+    const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
+    const sig = generateWorkerSignature(filename, exp);
+    return `${CF_WORKER_URL.replace(/\/$/, '')}/upload/${encodeURIComponent(filename)}?sig=${sig}&exp=${exp}`;
+}
+
+function getWorkerInventoryUrl(expiresInSeconds = 600) {
+    if (!CF_WORKER_URL) return null;
+    const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
+    const sig = generateWorkerSignature('inventory', exp);
+    return `${CF_WORKER_URL.replace(/\/$/, '')}/api/r2-inventory?sig=${sig}&exp=${exp}`;
+}
+
 module.exports = {
     isR2Enabled,
     getPublicUrl,
@@ -349,5 +373,8 @@ module.exports = {
     getUploadProgress,
     registerProgressListener,
     getActiveUploadsList,
-    backfillMissingR2Uploads
+    backfillMissingR2Uploads,
+    generateWorkerSignature,
+    getWorkerUploadUrl,
+    getWorkerInventoryUrl
 };

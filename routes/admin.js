@@ -479,6 +479,41 @@ router.post('/admin/r2/sync-video/:id', isMuaj, (req, res) => {
     });
 });
 
+// GET /admin/r2/edge-status — Edge Worker Connectivity & Remote Audit
+router.get('/admin/r2/edge-status', isMuaj, async (req, res) => {
+    const invUrl = r2.getWorkerInventoryUrl(300);
+    if (!invUrl) {
+        return res.json({
+            workerConfigured: false,
+            message: 'CF_WORKER_URL is not configured in .env'
+        });
+    }
+
+    try {
+        const response = await fetch(invUrl, { signal: AbortSignal.timeout(4000) });
+        if (!response.ok) {
+            return res.json({
+                workerConfigured: true,
+                online: false,
+                status: response.status,
+                error: `Worker returned HTTP ${response.status}`
+            });
+        }
+        const data = await response.json();
+        return res.json({
+            workerConfigured: true,
+            online: true,
+            edgeInventory: data
+        });
+    } catch (err) {
+        return res.json({
+            workerConfigured: true,
+            online: false,
+            error: err.message
+        });
+    }
+});
+
 router.post('/admin/cleanup', isMuaj, async (req, res) => {
     const stats = await collectAdminStats(req.sessionID);
     const targets = [...stats.orphanVideos, ...stats.orphanThumbnails];

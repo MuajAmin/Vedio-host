@@ -46,6 +46,26 @@ export default {
       return addCorsHeaders(response, request);
     }
 
+    // ─── Direct-to-R2 Upload: PUT /upload/:videoKey?sig=...&exp=... ────
+    const uploadMatch = url.pathname.match(/^\/upload\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i);
+    if (uploadMatch && request.method === 'PUT') {
+      const response = await handleDirectUpload(request, env, ctx, uploadMatch[1], url);
+      return addCorsHeaders(response, request);
+    }
+
+    // ─── Edge R2 Inventory & Audit: GET /api/r2-inventory?sig=...&exp=... ─
+    if (url.pathname === '/api/r2-inventory' && request.method === 'GET') {
+      const response = await handleR2Inventory(request, env, ctx, url);
+      return addCorsHeaders(response, request);
+    }
+
+    // ─── Edge Fast Check: GET /api/r2-check/:videoKey?sig=...&exp=... ───
+    const checkMatch = url.pathname.match(/^\/api\/r2-check\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i);
+    if (checkMatch && (request.method === 'GET' || request.method === 'HEAD')) {
+      const response = await handleR2Check(request, env, ctx, checkMatch[1], url);
+      return addCorsHeaders(response, request);
+    }
+
     // ─── All other requests: return 404 (this Worker only serves videos) ─
     return new Response('Not Found', { status: 404 });
   },
@@ -234,21 +254,188 @@ function parseRangeHeader(rangeHeader) {
 }
 
 // =============================================================================
-//  CORS — Required for cross-origin video requests
+//  Direct-to-R2 Upload Handler
 // =============================================================================
 
-/**
- * Since the video player on muaj.bro.bd loads videos from workers.dev,
- * the browser will enforce CORS. We allow the origin domain.
- */
+async function handleDirectUpload(request, env, ctx, videoKey, url) {
+  if (!env.SESSION_SECRET) {
+    return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const isValid = await validateSignedUrl(videoKey, url.searchParams, env.SESSION_SECRET);
+  if (!isValid) {
+    return new Response(JSON.stringify({ error: 'Unauthorized — invalid or expired token' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (!env.R2_BUCKET) {
+    return new Response(JSON.stringify({ error: 'R2 not configured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const contentType = request.headers.get('Content-Type') || getVideoMimeType(videoKey);
+
+  try {
+    const object = await env.R2_BUCKET.put(videoKey, request.body, {
+      httpMetadata: {
+        contentType,
+        cacheControl: 'public, max-age=2592000, immutable',
+      },
+      customMetadata: {
+        uploadedAt: new Date().toISOString(),
+      },
+    });
+
+    return new Response(JSON.stringify({
+      success: true,
+      key: object.key,
+      size: object.size,
+      etag: object.httpEtag,
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message || 'Upload failed' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+// =============================================================================
+//  Edge R2 Inventory & Audit Handler
+// =============================================================================
+
+async function handleR2Inventory(request, env, ctx, url) {
+  if (!env.SESSION_SECRET) {
+    return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const isValid = await validateSignedUrl('inventory', url.searchParams, env.SESSION_SECRET);
+  if (!isValid) {
+    return new Response(JSON.stringify({ error: 'Unauthorized token' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (!env.R2_BUCKET) {
+    return new Response(JSON.stringify({ error: 'R2 not configured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const listed = await env.R2_BUCKET.list({ limit: 1000 });
+    let totalBytes = 0;
+    const files = listed.objects.map((obj) => {
+      totalBytes += obj.size;
+      return {
+        key: obj.key,
+        size: obj.size,
+        uploaded: obj.uploaded,
+        etag: obj.httpEtag,
+      };
+    });
+
+    return new Response(JSON.stringify({
+      success: true,
+      totalCount: files.length,
+      totalBytes,
+      truncated: listed.truncated,
+      files,
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+      },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message || 'Inventory failed' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+// =============================================================================
+//  Edge Fast Check Handler
+// =============================================================================
+
+async function handleR2Check(request, env, ctx, videoKey, url) {
+  if (!env.SESSION_SECRET) {
+    return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const isValid = await validateSignedUrl(videoKey, url.searchParams, env.SESSION_SECRET);
+  if (!isValid) {
+    return new Response(JSON.stringify({ error: 'Unauthorized token' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (!env.R2_BUCKET) {
+    return new Response(JSON.stringify({ error: 'R2 not configured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const head = await env.R2_BUCKET.head(videoKey);
+    if (!head) {
+      return new Response(JSON.stringify({ exists: false, key: videoKey }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return new Response(JSON.stringify({
+      exists: true,
+      key: head.key,
+      size: head.size,
+      uploaded: head.uploaded,
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+// =============================================================================
+//  CORS — Required for cross-origin video and direct uploads
+// =============================================================================
+
 function handleCors(request) {
   const origin = request.headers.get('Origin') || '*';
   return new Response(null, {
     status: 204,
     headers: {
       'Access-Control-Allow-Origin': origin,
-      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-      'Access-Control-Allow-Headers': 'Range, If-None-Match',
+      'Access-Control-Allow-Methods': 'GET, HEAD, PUT, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Range, If-None-Match, X-Requested-With',
       'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges, ETag',
       'Access-Control-Max-Age': '86400',
     },
