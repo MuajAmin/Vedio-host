@@ -3975,11 +3975,69 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="r2-prog-bottom">
                         <span class="r2-prog-bytes" id="r2Bytes_${videoId}">0 MB</span>
-                        <span class="r2-prog-speed" id="r2Speed_${videoId}">-- MB/s</span>
+                        <span class="r2-prog-speed" id="r2Speed_${videoId}">Connecting...</span>
                         <span class="r2-prog-eta" id="r2Eta_${videoId}"></span>
                     </div>
                 </div>
             `;
+
+            function updateUI(data) {
+                if (!data) return;
+                const pct = Math.min(100, Math.max(0, data.percent || 0));
+                const bar = document.getElementById('r2Bar_' + videoId);
+                const pctEl = document.getElementById('r2Pct_' + videoId);
+                const bytesEl = document.getElementById('r2Bytes_' + videoId);
+                const speedEl = document.getElementById('r2Speed_' + videoId);
+                const etaEl = document.getElementById('r2Eta_' + videoId);
+
+                if (bar) bar.style.width = pct + '%';
+                if (pctEl) pctEl.textContent = pct + '%';
+                if (bytesEl) {
+                    if (data.loaded && data.total) {
+                        bytesEl.textContent = (data.loaded / 1024 / 1024).toFixed(1) + ' / ' + (data.total / 1024 / 1024).toFixed(1) + ' MB';
+                    } else if (totalSize) {
+                        bytesEl.textContent = ((pct / 100) * (totalSize / 1024 / 1024)).toFixed(1) + ' / ' + (totalSize / 1024 / 1024).toFixed(1) + ' MB';
+                    }
+                }
+                if (speedEl && data.speed) speedEl.textContent = data.speed;
+                if (etaEl && data.eta) etaEl.textContent = data.eta;
+
+                if (data.status === 'done' || pct >= 100) {
+                    if (r2EventSources[videoId]) {
+                        try { r2EventSources[videoId].close(); } catch(e){}
+                        delete r2EventSources[videoId];
+                    }
+                    if (actionCell) {
+                        actionCell.innerHTML = `
+                            <div class="r2-synced-pill glow-emerald">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                                <span>Synced on Cloudflare Edge CDN</span>
+                            </div>
+                        `;
+                    }
+                    if (pillCell) {
+                        pillCell.className = 'r2-mini-chip chip-r2';
+                        pillCell.innerHTML = '⚡ Cloudflare R2';
+                    }
+                    if (rowEl) {
+                        rowEl.classList.remove('is-pending');
+                        rowEl.classList.add('is-synced');
+                    }
+                    refreshR2DashboardStats();
+                } else if (data.status === 'error') {
+                    if (r2EventSources[videoId]) {
+                        try { r2EventSources[videoId].close(); } catch(e){}
+                        delete r2EventSources[videoId];
+                    }
+                    if (actionCell) {
+                        actionCell.innerHTML = `
+                            <button type="button" class="btn-android-sync-r2" onclick="syncSingleVideo('${videoId}', '${filename}', ${totalSize}, this)">
+                                ⚠️ Retry Sync
+                            </button>
+                        `;
+                    }
+                }
+            }
 
             const es = new EventSource('/api/r2-progress/' + encodeURIComponent(filename));
             r2EventSources[videoId] = es;
@@ -3987,57 +4045,20 @@ document.addEventListener('DOMContentLoaded', () => {
             es.onmessage = function(e) {
                 try {
                     const data = JSON.parse(e.data);
-                    const pct = Math.min(100, Math.max(0, data.percent || 0));
-                    const bar = document.getElementById('r2Bar_' + videoId);
-                    const pctEl = document.getElementById('r2Pct_' + videoId);
-                    const bytesEl = document.getElementById('r2Bytes_' + videoId);
-                    const speedEl = document.getElementById('r2Speed_' + videoId);
-                    const etaEl = document.getElementById('r2Eta_' + videoId);
-
-                    if (bar) bar.style.width = pct + '%';
-                    if (pctEl) pctEl.textContent = pct + '%';
-                    if (bytesEl && data.loaded && data.total) {
-                        bytesEl.textContent = (data.loaded / 1024 / 1024).toFixed(1) + ' / ' + (data.total / 1024 / 1024).toFixed(1) + ' MB';
-                    }
-                    if (speedEl) speedEl.textContent = data.speed || '';
-                    if (etaEl) etaEl.textContent = data.eta || '';
-
-                    if (data.status === 'done' || pct >= 100) {
-                        es.close();
-                        delete r2EventSources[videoId];
-                        if (actionCell) {
-                            actionCell.innerHTML = `
-                                <div class="r2-synced-pill glow-emerald">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
-                                    <span>Synced on Cloudflare Edge CDN</span>
-                                </div>
-                            `;
-                        }
-                        if (pillCell) {
-                            pillCell.className = 'r2-mini-chip chip-r2';
-                            pillCell.innerHTML = '⚡ Cloudflare R2';
-                        }
-                        if (rowEl) {
-                            rowEl.classList.remove('is-pending');
-                            rowEl.classList.add('is-synced');
-                        }
-                        refreshR2DashboardStats();
-                    } else if (data.status === 'error') {
-                        es.close();
-                        delete r2EventSources[videoId];
-                        if (actionCell) {
-                            actionCell.innerHTML = `
-                                <button type="button" class="btn-android-sync-r2" onclick="syncSingleVideo('${videoId}', '${filename}', ${totalSize}, this)">
-                                    ⚠️ Retry Sync
-                                </button>
-                            `;
-                        }
-                    }
+                    updateUI(data);
                 } catch(err){}
             };
 
             es.onerror = function() {
-                // Keep UI clean, periodic polling will catch completion
+                fetch('/admin/r2/live-status')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data && Array.isArray(data.activeUploads)) {
+                            const u = data.activeUploads.find(x => x.filename === filename);
+                            if (u) updateUI(u);
+                        }
+                    })
+                    .catch(() => {});
             };
         }
 

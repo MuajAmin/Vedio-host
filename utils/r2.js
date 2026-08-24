@@ -2,6 +2,7 @@ const { S3Client, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/c
 const { Upload } = require('@aws-sdk/lib-storage');
 const fs = require('fs');
 const path = require('path');
+const { Transform } = require('stream');
 
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
@@ -165,35 +166,23 @@ async function uploadToR2(filePath, filename) {
 
     notify();
 
-    const parallelUpload = new Upload({
-        client: s3Client,
-        params: {
-            Bucket: R2_BUCKET,
-            Key: filename,
-            Body: fs.createReadStream(filePath),
-            ContentType: contentType,
-            CacheControl: 'public, max-age=2592000, immutable', // 30 days — videos are UUID-named & never change
-        },
-        partSize: 10 * 1024 * 1024, // 10MB chunks
-        queueSize: 4, // 4 concurrent chunks (~40MB in-flight, optimal balance)
-        leavePartsOnError: false,
-    });
+    let bytesStreamed = 0;
+    let lastNotifyTime = uploadStart;
+    let lastBytesStreamed = 0;
 
-    let lastLoaded = 0;
-    let lastTime = uploadStart;
-
-    parallelUpload.on('httpUploadProgress', (progress) => {
-        if (progress.loaded) {
+    const progressStream = new Transform({
+        transform(chunk, encoding, callback) {
+            bytesStreamed += chunk.length;
             const now = Date.now();
-            progressEntry.loaded = Math.min(stat.size, progress.loaded);
+            progressEntry.loaded = Math.min(stat.size, bytesStreamed);
             progressEntry.total = stat.size;
             progressEntry.percent = Math.min(99, Math.round((progressEntry.loaded / progressEntry.total) * 100));
 
-            // Calculate moving speed every 400ms
-            const timeDiff = (now - lastTime) / 1000;
-            if (timeDiff >= 0.4) {
-                const bytesDiff = progressEntry.loaded - lastLoaded;
-                const bps = Math.max(0, bytesDiff / timeDiff);
+            // Throttle SSE updates to every 200ms for continuous smooth progress bar animation
+            if (now - lastNotifyTime >= 200) {
+                const timeDiff = (now - lastNotifyTime) / 1000;
+                const bytesDiff = progressEntry.loaded - lastBytesStreamed;
+                const bps = timeDiff > 0 ? Math.max(0, bytesDiff / timeDiff) : 0;
                 if (bps >= 1024 * 1024) {
                     progressEntry.speed = (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
                 } else if (bps >= 1024) {
@@ -205,12 +194,29 @@ async function uploadToR2(filePath, filename) {
                     if (etaSec < 60) progressEntry.eta = `~${etaSec}s left`;
                     else progressEntry.eta = `~${Math.floor(etaSec / 60)}m ${etaSec % 60}s left`;
                 }
-                lastLoaded = progressEntry.loaded;
-                lastTime = now;
+                lastNotifyTime = now;
+                lastBytesStreamed = progressEntry.loaded;
+                notify();
             }
-
-            notify();
+            callback(null, chunk);
         }
+    });
+
+    const fileStream = fs.createReadStream(filePath);
+    const uploadBody = fileStream.pipe(progressStream);
+
+    const parallelUpload = new Upload({
+        client: s3Client,
+        params: {
+            Bucket: R2_BUCKET,
+            Key: filename,
+            Body: uploadBody,
+            ContentType: contentType,
+            CacheControl: 'public, max-age=2592000, immutable', // 30 days — videos are UUID-named & never change
+        },
+        partSize: 10 * 1024 * 1024, // 10MB chunks
+        queueSize: 4, // 4 concurrent chunks (~40MB in-flight, optimal balance)
+        leavePartsOnError: false,
     });
 
     try {
