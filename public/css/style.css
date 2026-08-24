@@ -7819,7 +7819,7 @@ kbd {
     border-radius: 16px;
     background: transparent;
     border: 1px solid transparent;
-    transition: all 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .bottom-nav-icon-wrap svg {
@@ -7827,7 +7827,7 @@ kbd {
     z-index: 1;
     width: 22px;
     height: 22px;
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Active tab liquid spotlight */
@@ -7836,6 +7836,18 @@ kbd {
     border-color: var(--nav-active-pill-border);
     box-shadow: var(--nav-active-pill-glow), inset 0 1px 0 rgba(255, 255, 255, 0.12);
     transform: translateY(-2px);
+    animation: activePillPop 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes activePillPop {
+    0% {
+        transform: translateY(0) scale(0.92);
+        opacity: 0.8;
+    }
+    100% {
+        transform: translateY(-2px) scale(1);
+        opacity: 1;
+    }
 }
 
 /* Subtle micro-dot indicator under active items */
@@ -7848,7 +7860,7 @@ kbd {
     border-radius: 50%;
     background: var(--nav-item-active);
     box-shadow: 0 0 8px var(--nav-item-active);
-    animation: activePipAppear 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    animation: activePipAppear 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes activePipAppear {
@@ -7860,8 +7872,8 @@ kbd {
 .nav-icon-outline,
 .nav-icon-filled {
     position: absolute;
-    transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-                transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: opacity 0.22s ease,
+                transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .nav-icon-outline {
@@ -7871,17 +7883,17 @@ kbd {
 
 .nav-icon-filled {
     opacity: 0;
-    transform: scale(0.72);
+    transform: scale(0.75);
 }
 
 .bottom-nav-item.active .nav-icon-outline {
     opacity: 0;
-    transform: scale(0.72);
+    transform: scale(0.75);
 }
 
 .bottom-nav-item.active .nav-icon-filled {
     opacity: 1;
-    transform: scale(1.08);
+    transform: scale(1.04);
     filter: var(--nav-icon-glow);
 }
 
