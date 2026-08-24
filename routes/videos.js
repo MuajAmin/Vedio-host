@@ -359,7 +359,7 @@ router.get('/api/r2-progress/:filename', isAuthenticated, (req, res) => {
 });
 
 // GET /watch/:id — Video player page
-router.get('/watch/:id', isAuthenticated, (req, res) => {
+router.get('/watch/:id', isAuthenticated, async (req, res) => {
     const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(req.params.id);
 
     if (!video) {
@@ -367,6 +367,15 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
             user: req.session.user,
             message: 'Video not found.'
         });
+    }
+
+    let isOnR2 = false;
+    if (r2.isR2Enabled() && video.filename) {
+        try {
+            isOnR2 = await r2.existsOnR2(video.filename);
+        } catch {
+            isOnR2 = false;
+        }
     }
 
     const comments = db.prepare(
@@ -404,6 +413,7 @@ router.get('/watch/:id', isAuthenticated, (req, res) => {
     res.render('watch', {
         user: req.session.user,
         video,
+        isOnR2,
         comments,
         progress,
         suggestedVideos,

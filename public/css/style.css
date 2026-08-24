@@ -13310,4 +13310,29 @@ h3,
     100% { transform: scale(1); opacity: 1; }
 }
 
+/* Watch Page Video CDN & VPS Storage Badges */
+.uploader-cdn-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+    font-size: 0.76rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    letter-spacing: 0.02em;
+}
+
+.uploader-cdn-tag.tag-r2-cdn {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+}
+
+.uploader-cdn-tag.tag-vps-server {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.14);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
 

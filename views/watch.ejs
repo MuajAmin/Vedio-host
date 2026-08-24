@@ -11,6 +11,7 @@ const uploaderName = uploader === 'hajera' ? 'Hajera' : (uploader === 'muaj' ? '
 const uploaderIsAdmin = uploader === 'muaj';
 const uploaderRole = uploaderIsAdmin ? 'Admin' : 'Viewer';
 const avatars = (typeof userAvatars !== 'undefined' && userAvatars) ? userAvatars : ((typeof locals !== 'undefined' && locals.userAvatars) ? locals.userAvatars : {});
+const isVideoOnR2 = (typeof isOnR2 !== 'undefined') ? !!isOnR2 : false;
 
 function renderAvatar(uname, extraCls = '') {
     const avatar = avatars[uname];
@@ -569,10 +570,22 @@ const commentsHtml = comments.length === 0
                                     <span class="uploader-date-tag">${h(formatDate(video.uploaded_at, false))}</span>
                                     ${video.size ? `<span class="meta-dot">•</span><span class="uploader-size-tag">${h((video.size / (1024 * 1024)).toFixed(1))} MB</span>` : ''}
                                     <span class="meta-dot">•</span>
-                                    <span class="uploader-cdn-tag" style="display:inline-flex;align-items:center;gap:4px;color:#38bdf8;font-weight:600;font-size:0.78rem;" title="Streamed via Cloudflare R2 Global Edge CDN">
-                                        <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="m13 2-2 7h5l-7 13 2-8H6l7-12Z"/></svg>
-                                        <span>Cloudflare CDN</span>
-                                    </span>
+                                    ${isVideoOnR2 ? `
+                                        <span class="uploader-cdn-tag tag-r2-cdn" id="watchStorageBadge" title="Streamed via Cloudflare R2 Global Edge CDN (Zero VPS Bandwidth)">
+                                            <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="m13 2-2 7h5l-7 13 2-8H6l7-12Z"/></svg>
+                                            <span>Cloudflare CDN</span>
+                                        </span>
+                                    ` : `
+                                        <span class="uploader-cdn-tag tag-vps-server" id="watchStorageBadge" title="Streamed directly from VPS Storage (Fallback)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                                                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                                                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                                                <line x1="6" y1="6" x2="6.01" y2="6"/>
+                                                <line x1="6" y1="18" x2="6.01" y2="18"/>
+                                            </svg>
+                                            <span>VPS Server</span>
+                                        </span>
+                                    `}
                                 </div>
                             </div>
                         </div>
