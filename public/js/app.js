@@ -4143,8 +4143,144 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 })
-                .catch(() => {});
-        }
+        // --- 1-Click Cloudflare Edge Cache Purge ---
+        window.purgeEdgeCache = async function(btn) {
+            if (!confirm('Cloudflare Global Edge Cache সম্পূর্ণ Purge (ক্লিয়ার) করতে চাও?')) return;
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span>🧹 Purging Edge Cache...</span>';
+            }
+            try {
+                const res = await fetch('/admin/cf/purge-cache', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('✅ ' + (data.message || 'Cloudflare edge cache purged successfully!'));
+                } else {
+                    alert('⚠️ ' + (data.error || 'Failed to purge edge cache.'));
+                }
+            } catch (err) {
+                alert('Network error while purging edge cache: ' + err.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }
+        };
+
+        // --- Live R2 Bucket Inventory & Orphan Scanner ---
+        window.scanR2Bucket = async function(btn) {
+            const resultsBox = document.getElementById('r2ScanResultsBox');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span>🔍 Scanning R2 Bucket...</span>';
+            }
+            if (resultsBox) {
+                resultsBox.style.display = 'block';
+                resultsBox.innerHTML = '<div style="display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:13px;"><span class="spinner-inline"></span> Cloudflare R2 বাকেটের সমস্ত ফাইল স্ক্যান হচ্ছে...</div>';
+            }
+
+            try {
+                const res = await fetch('/admin/r2/scan-bucket', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    if (resultsBox) resultsBox.innerHTML = `<div style="color:#ef4444; font-size:13px;">❌ স্ক্যান ব্যর্থ: ${data.error || 'Unknown error'}</div>`;
+                    return;
+                }
+
+                let html = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                        <div>
+                            <strong style="color:var(--text-primary); font-size:14px;">Cloudflare R2 Bucket Live Inventory</strong>
+                            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                                মোট অবজেক্ট: <strong>${data.totalObjects}</strong> • মোট সাইজ: <strong>${data.totalBytesFormatted}</strong> • স্ক্যান সোর্স: <code>${data.source}</code>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('r2ScanResultsBox').style.display='none'" style="font-size:11px; padding:3px 8px;">✕ বন্ধ</button>
+                    </div>
+                `;
+
+                if (data.orphanCount > 0) {
+                    const orphanKeysJson = JSON.stringify(data.orphans.map(o => o.key)).replace(/"/g, '&quot;');
+                    html += `
+                        <div style="background:rgba(239, 68, 68, 0.08); border:1px solid rgba(239, 68, 68, 0.25); border-radius:8px; padding:12px; margin-top:8px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <span style="color:#ef4444; font-weight:600; font-size:13px;">⚠️ ${data.orphanCount}টি Orphan ফাইল পাওয়া গেছে (ডাটাবেজে নেই কিন্তু R2-তে জমে আছে)</span>
+                                <button type="button" class="btn btn-danger btn-sm" onclick="cleanR2Orphans(this, ${orphanKeysJson})" style="font-size:11px; padding:4px 10px;">
+                                    🗑️ সমস্ত Orphan (${data.orphanCount}) ডিলিট করো
+                                </button>
+                            </div>
+                            <div style="max-height:160px; overflow-y:auto; font-size:12px;">
+                                ${data.orphans.map(o => `
+                                    <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:var(--text-secondary);">
+                                        <code style="color:var(--text-primary);">${o.key}</code>
+                                        <span>${o.sizeFormatted}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div style="background:rgba(34, 197, 94, 0.08); border:1px solid rgba(34, 197, 94, 0.25); border-radius:8px; padding:10px 14px; margin-top:8px; color:#22c55e; font-size:13px; font-weight:600;">
+                            ✓ ০টি Orphan ফাইল • R2 বাকেট ডাটাবেজের সাথে ১০০% সিঙ্ক ও সম্পূর্ণ ক্লিন!
+                        </div>
+                    `;
+                }
+
+                if (resultsBox) resultsBox.innerHTML = html;
+            } catch (err) {
+                if (resultsBox) resultsBox.innerHTML = `<div style="color:#ef4444; font-size:13px;">❌ নেটওয়ার্ক এরর: ${err.message}</div>`;
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }
+        };
+
+        // --- Batch Delete Orphan Files from R2 ---
+        window.cleanR2Orphans = async function(btn, keys) {
+            if (!Array.isArray(keys) || keys.length === 0) return;
+            if (!confirm(`R2 থেকে ${keys.length}টি orphan ফাইল স্থায়ীভাবে ডিলিট করতে চাও?`)) return;
+
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span>🗑️ Deleting...</span>';
+            }
+
+            try {
+                const res = await fetch('/admin/r2/clean-orphans', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({ keys })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ ${data.deletedCount}টি orphan ফাইল R2 বাকেট থেকে সফলভাবে মুছে ফেলা হয়েছে!`);
+                    const scanBtn = document.getElementById('btnR2ScanBucket');
+                    if (scanBtn) scanR2Bucket(scanBtn);
+                } else {
+                    alert('⚠️ ডিলিট ব্যর্থ: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('নেটওয়ার্ক এরর: ' + err.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }
+        };
 
         // Live monitor active uploads on admin page every 4s
         if (document.getElementById('r2StorageHub')) {

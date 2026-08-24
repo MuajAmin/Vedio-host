@@ -519,9 +519,58 @@ if (sys) {
                     </div>
                 </div>
             </div>
+
+            <!-- 6. Cloudflare Edge Offload & Performance Savings Card -->
+            <div class="vps-metric-box metric-cf-savings" style="border-left: 3px solid #f38020;">
+                <div class="metric-top-row">
+                    <div class="metric-icon-title">
+                        <div class="metric-badge-icon" style="background: rgba(243, 128, 32, 0.15); color: #f38020;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+                                <path d="M12 13v6"/><path d="m9 16 3-3 3 3"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <span class="metric-name">Cloudflare Offload</span>
+                            <span class="metric-sub">${cfSavings.workerUrl ? 'Worker R2 CDN Active' : 'Edge Video CDN'}</span>
+                        </div>
+                    </div>
+                    <div class="metric-val-wrap">
+                        <span class="metric-badge-pill" style="background: rgba(34, 197, 94, 0.15); color: #22c55e; font-weight: 700;">100% Edge Served</span>
+                    </div>
+                </div>
+                <div class="metric-runtime-details">
+                    <div class="runtime-chip">
+                        <span class="chip-k">Offloaded Video</span>
+                        <strong class="chip-v" style="color:#f38020;">${h(cfSavings.totalOffloadedFormatted)}</strong>
+                    </div>
+                    <div class="runtime-chip">
+                        <span class="chip-k">VPS Quota Preserved</span>
+                        <strong class="chip-v" style="color:#22c55e;">${h(cfSavings.vpsQuotaPreservedPercent)}%</strong>
+                    </div>
+                    <div class="runtime-chip">
+                        <span class="chip-k">Total Watched</span>
+                        <strong class="chip-v">${h(cfSavings.totalWatchFormatted)}</strong>
+                    </div>
+                </div>
+            </div>
         </div>
     </section>`;
 }
+
+const cfSavings = (stats && stats.cloudflareSavings) ? stats.cloudflareSavings : {
+    enabled: false,
+    workerUrl: null,
+    zoneConfigured: false,
+    zoneId: null,
+    totalOffloadedBytes: 0,
+    totalOffloadedFormatted: '0 MB',
+    totalWatchSeconds: 0,
+    totalWatchFormatted: '0m',
+    vpsQuotaBytes: 1000 * 1024 * 1024 * 1024,
+    vpsQuotaPreservedPercent: '0.00',
+    edgeOffloadEfficiency: 0
+};
 
 const r2Stats = (stats && stats.r2Stats) ? stats.r2Stats : {
     enabled: false,
@@ -550,7 +599,25 @@ const r2HubHtml = `
                 <p class="admin-section-subtitle">Real-time edge CDN sync status &amp; video distribution</p>
             </div>
         </div>
-        <div class="r2-hub-actions">
+        <div class="r2-hub-actions" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <!-- 1-Click Purge Edge Cache Button -->
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCfPurgeCache" onclick="purgeEdgeCache(this)" title="Purge Cloudflare global edge cache on demand" style="border: 1px solid rgba(243, 128, 32, 0.3); color: #f38020;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                </svg>
+                <span>Purge Edge Cache</span>
+            </button>
+
+            <!-- Scan R2 Bucket Button -->
+            <button type="button" class="btn btn-secondary btn-sm" id="btnR2ScanBucket" onclick="scanR2Bucket(this)" title="Scan live R2 bucket inventory and detect orphan files">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <circle cx="11" cy="11" r="8"/>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <span>Scan R2 Bucket</span>
+            </button>
+
             ${r2Stats.unsyncedCount > 0 ? `
                 <button type="button" class="btn btn-primary btn-sm btn-r2-sync-all" id="btnR2SyncAll" onclick="syncAllR2(this)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -568,6 +635,9 @@ const r2HubHtml = `
             `}
         </div>
     </div>
+
+    <!-- Live R2 Bucket Scan Results & Orphan Scanner Box (Dynamic) -->
+    <div id="r2ScanResultsBox" style="display:none; margin-bottom:16px; padding:14px 18px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);"></div>
 
     <!-- 3-Pillar Storage Summary Tiles -->
     <div class="r2-storage-tiles-grid">

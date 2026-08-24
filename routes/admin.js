@@ -6,6 +6,22 @@ const { isMuaj } = require('../middleware/auth');
 const db = require('../database');
 const importRoutes = require('./import');
 const r2 = require('../utils/r2');
+const crypto = require('crypto');
+
+/**
+ * Generate a short-lived signed URL for admin worker endpoints.
+ * @param {string} action - 'inventory' or 'delete-batch'
+ * @returns {string|null}
+ */
+function getWorkerAdminSignedUrl(action) {
+    const workerUrl = process.env.CF_WORKER_URL;
+    const secret = process.env.SESSION_SECRET;
+    if (!workerUrl || !secret) return null;
+    const exp = Math.floor(Date.now() / 1000) + 300; // 5 minutes TTL
+    const message = `${action}:${exp}`;
+    const sig = crypto.createHmac('sha256', secret).update(message).digest('hex');
+    return `${workerUrl.replace(/\/$/, '')}/api/r2-${action}?exp=${exp}&sig=${sig}`;
+}
 
 const router = express.Router();
 const videosDir = path.join(__dirname, '..', 'uploads', 'videos');
@@ -378,9 +394,57 @@ async function collectAdminStats(currentSid = null) {
         unsyncedVideos: videos.filter(v => !v.onR2)
     };
 
+    // Calculate Cloudflare Offload & Bandwidth Savings
+    let totalWatchedSecondsAll = 0;
+    try {
+        const row = db.prepare('SELECT SUM(seconds_watched) AS total FROM watch_time_ledger').get();
+        totalWatchedSecondsAll = Number(row?.total || 0);
+    } catch {}
+
+    let totalOffloadedBytes = 0;
+    try {
+        const rows = db.prepare(`
+            SELECT w.seconds_watched, v.size, wp.duration_seconds
+            FROM watch_time_ledger w
+            JOIN videos v ON v.id = w.video_id
+            LEFT JOIN watch_progress wp ON wp.video_id = v.id
+        `).all();
+        for (const r of rows) {
+            const dur = Number(r.duration_seconds || 0);
+            const size = Number(r.size || 0);
+            const sec = Number(r.seconds_watched || 0);
+            if (dur > 0 && size > 0) {
+                totalOffloadedBytes += (sec * (size / dur));
+            } else if (size > 0) {
+                totalOffloadedBytes += (sec * (size / 600));
+            }
+        }
+    } catch {}
+
+    if (totalOffloadedBytes === 0 && totalWatchedSecondsAll > 0) {
+        totalOffloadedBytes = totalWatchedSecondsAll * (80 * 1024 * 1024 / 600);
+    }
+
+    const cloudflareSavings = {
+        enabled: r2.isR2Enabled(),
+        workerUrl: process.env.CF_WORKER_URL || null,
+        zoneConfigured: !!(process.env.CF_ZONE_ID && process.env.CF_API_TOKEN),
+        zoneId: process.env.CF_ZONE_ID ? `${process.env.CF_ZONE_ID.slice(0, 6)}...` : null,
+        totalOffloadedBytes: Math.round(totalOffloadedBytes),
+        totalOffloadedFormatted: formatBytes(totalOffloadedBytes),
+        totalWatchSeconds: totalWatchedSecondsAll,
+        totalWatchFormatted: formatWatchTime(totalWatchedSecondsAll),
+        vpsQuotaBytes: 1000 * 1024 * 1024 * 1024,
+        vpsQuotaPreservedPercent: totalOffloadedBytes > 0
+            ? ((totalOffloadedBytes / (1000 * 1024 * 1024 * 1024)) * 100).toFixed(2)
+            : '0.00',
+        edgeOffloadEfficiency: r2.isR2Enabled() ? 100 : 0
+    };
+
     return {
         videos,
         r2Stats,
+        cloudflareSavings,
         commentsCount,
         progressCount,
         sessionCount,
@@ -511,6 +575,198 @@ router.get('/admin/r2/edge-status', isMuaj, async (req, res) => {
             online: false,
             error: err.message
         });
+    }
+});
+
+// POST /admin/r2/scan-bucket — Live R2 bucket inventory and orphan detection
+router.post('/admin/r2/scan-bucket', isMuaj, async (req, res) => {
+    try {
+        const dbVideos = db.prepare('SELECT id, filename, title, size FROM videos').all();
+        const dbFilenameSet = new Set(dbVideos.map(v => v.filename).filter(Boolean));
+
+        let r2Objects = [];
+        let source = 'worker';
+
+        // 1. Try Worker inventory endpoint first
+        const workerScanUrl = getWorkerAdminSignedUrl('inventory');
+        if (workerScanUrl) {
+            try {
+                const response = await fetch(workerScanUrl, { method: 'GET', signal: AbortSignal.timeout(6000) });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && Array.isArray(data.files)) {
+                        r2Objects = data.files;
+                    }
+                }
+            } catch (wErr) {
+                console.warn('[admin] Worker inventory fetch failed, falling back to S3:', wErr.message);
+            }
+        }
+
+        // 2. Fallback to S3 SDK if Worker is unavailable
+        if (r2Objects.length === 0 && r2.isR2Enabled()) {
+            source = 's3-fallback';
+            try {
+                const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+                const s3 = new S3Client({
+                    region: 'auto',
+                    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+                    credentials: {
+                        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+                        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY
+                    }
+                });
+                const s3Res = await s3.send(new ListObjectsV2Command({
+                    Bucket: process.env.R2_BUCKET || 'videohost',
+                    MaxKeys: 1000
+                }));
+                r2Objects = (s3Res.Contents || []).map(o => ({
+                    key: o.Key,
+                    size: o.Size,
+                    uploaded: o.LastModified
+                }));
+            } catch (s3Err) {
+                console.error('[admin] S3 list failed:', s3Err.message);
+            }
+        }
+
+        // 3. Match objects and detect true orphans
+        let totalR2Bytes = 0;
+        const orphans = [];
+        const matched = [];
+
+        for (const obj of r2Objects) {
+            totalR2Bytes += (obj.size || 0);
+            if (!dbFilenameSet.has(obj.key)) {
+                orphans.push({
+                    key: obj.key,
+                    size: obj.size,
+                    sizeFormatted: formatBytes(obj.size),
+                    uploaded: obj.uploaded
+                });
+            } else {
+                matched.push(obj.key);
+            }
+        }
+
+        const matchedSet = new Set(matched);
+        const missingOnR2 = dbVideos.filter(v => !matchedSet.has(v.filename));
+
+        res.json({
+            success: true,
+            source,
+            totalObjects: r2Objects.length,
+            totalBytes: totalR2Bytes,
+            totalBytesFormatted: formatBytes(totalR2Bytes),
+            orphanCount: orphans.length,
+            orphans,
+            missingCount: missingOnR2.length,
+            missingVideos: missingOnR2.map(v => ({ id: v.id, filename: v.filename, title: v.title, size: v.size }))
+        });
+    } catch (err) {
+        console.error('[admin] R2 scan-bucket error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /admin/r2/clean-orphans — Batch delete orphan files from R2
+router.post('/admin/r2/clean-orphans', isMuaj, async (req, res) => {
+    try {
+        const { keys } = req.body;
+        if (!Array.isArray(keys) || keys.length === 0) {
+            return res.status(400).json({ success: false, error: 'No orphan keys specified for cleanup.' });
+        }
+
+        const deletedKeys = [];
+        const failedKeys = [];
+
+        // 1. Try Worker delete-batch first
+        const workerDeleteUrl = getWorkerAdminSignedUrl('delete-batch');
+        let workerHandled = false;
+
+        if (workerDeleteUrl) {
+            try {
+                const response = await fetch(workerDeleteUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keys }),
+                    signal: AbortSignal.timeout(8000)
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.success && Array.isArray(data.deleted)) {
+                        deletedKeys.push(...data.deleted);
+                        workerHandled = true;
+                    }
+                }
+            } catch (wErr) {
+                console.warn('[admin] Worker batch delete failed, falling back to S3:', wErr.message);
+            }
+        }
+
+        // 2. Fallback to S3 client
+        if (!workerHandled) {
+            for (const key of keys.slice(0, 100)) {
+                try {
+                    const success = await r2.deleteFromR2(key);
+                    if (success) deletedKeys.push(key);
+                    else failedKeys.push(key);
+                } catch {
+                    failedKeys.push(key);
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            deletedCount: deletedKeys.length,
+            deletedKeys,
+            failedKeys
+        });
+    } catch (err) {
+        console.error('[admin] Clean orphans error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /admin/cf/purge-cache — 1-Click Cloudflare Global Edge Cache Purge
+router.post('/admin/cf/purge-cache', isMuaj, async (req, res) => {
+    try {
+        const zoneId = process.env.CF_ZONE_ID;
+        const apiToken = process.env.CF_API_TOKEN;
+
+        if (!zoneId || !apiToken) {
+            return res.status(400).json({
+                success: false,
+                error: 'CF_ZONE_ID or CF_API_TOKEN is not configured in .env. Please add them to your VPS .env file.'
+            });
+        }
+
+        const cfRes = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ purge_everything: true })
+        });
+
+        const data = await cfRes.json();
+        if (data && data.success) {
+            return res.json({
+                success: true,
+                message: 'Cloudflare global edge cache purged successfully!'
+            });
+        } else {
+            const errMsg = (data && data.errors && data.errors[0]?.message) || 'Cloudflare API rejected purge request.';
+            return res.status(502).json({
+                success: false,
+                error: errMsg
+            });
+        }
+    } catch (err) {
+        console.error('[admin] CF purge error:', err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

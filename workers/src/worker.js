@@ -66,6 +66,12 @@ export default {
       return addCorsHeaders(response, request);
     }
 
+    // ─── Edge R2 Delete Batch: POST /api/r2-delete-batch?sig=...&exp=... ─
+    if (url.pathname === '/api/r2-delete-batch' && request.method === 'POST') {
+      const response = await handleR2DeleteBatch(request, env, ctx, url);
+      return addCorsHeaders(response, request);
+    }
+
     // ─── All other requests: return 404 (this Worker only serves videos) ─
     return new Response('Not Found', { status: 404 });
   },
@@ -418,6 +424,68 @@ async function handleR2Check(request, env, ctx, videoKey, url) {
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+// =============================================================================
+//  Edge R2 Delete Batch Handler (Orphan Cleanup)
+// =============================================================================
+
+async function handleR2DeleteBatch(request, env, ctx, url) {
+  if (!env.SESSION_SECRET) {
+    return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const isValid = await validateSignedUrl('delete-batch', url.searchParams, env.SESSION_SECRET);
+  if (!isValid) {
+    return new Response(JSON.stringify({ error: 'Unauthorized token' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (!env.R2_BUCKET) {
+    return new Response(JSON.stringify({ error: 'R2 not configured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const body = await request.json();
+    const keys = body && Array.isArray(body.keys) ? body.keys : [];
+
+    if (keys.length === 0) {
+      return new Response(JSON.stringify({ error: 'No keys provided' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const deleted = [];
+    for (const key of keys.slice(0, 100)) {
+      if (typeof key === 'string' && key.trim()) {
+        await env.R2_BUCKET.delete(key.trim());
+        deleted.push(key.trim());
+      }
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      deletedCount: deleted.length,
+      deleted,
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message || 'Delete failed' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
