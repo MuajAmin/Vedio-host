@@ -1012,6 +1012,24 @@ body:has(.msg-fullpage-container) .msg-drawer-widget {
     border-bottom-left-radius: 4px;
 }
 
+/* WhatsApp Floating Emojis: Remove outer bubble background & border when message is only emojis */
+.msg-bubble:has(> .msg-text-content.msg-jumbo-1:only-child),
+.msg-bubble:has(> .msg-text-content.msg-jumbo-2:only-child),
+.msg-bubble:has(> .msg-text-content.msg-jumbo-3:only-child),
+.msg-bubble.is-emoji-only-bubble {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 1px 2px !important;
+}
+
+.msg-row-outgoing .msg-bubble.is-emoji-only-bubble,
+.msg-row-incoming .msg-bubble.is-emoji-only-bubble {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
 /* WhatsApp / Apple Color Emoji Rendering */
 .wa-emoji,
 img.emoji {
@@ -1025,6 +1043,9 @@ img.emoji {
     user-select: none;
     -webkit-user-drag: none;
     image-rendering: -webkit-optimize-contrast;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 .msg-text-content {

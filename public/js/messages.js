@@ -267,14 +267,14 @@
                 } else if (node.tagName === 'BR') {
                     // allow line breaks
                 } else {
-                    hasOtherContent = true;
-                    break;
-                }
-            }
-        }
-
+        const bubble = msgTextEl.closest('.msg-bubble');
         if (!hasOtherContent && emojiCount >= 1 && emojiCount <= 3) {
             msgTextEl.classList.add(`msg-jumbo-${emojiCount}`);
+            if (bubble && !bubble.querySelector('.msg-video-card, .msg-voice-player, .msg-quote-card, .msg-call-event-card')) {
+                bubble.classList.add('is-emoji-only-bubble');
+            }
+        } else {
+            if (bubble) bubble.classList.remove('is-emoji-only-bubble');
         }
     }
 
@@ -632,7 +632,7 @@
                     </button>` : ''}
                 </div>
                 <div class="msg-bubble-wrap">
-                    <div class="msg-bubble">
+                    <div class="msg-bubble ${!msg.video && !msg.voiceUrl && !msg.replyTo && contentHtml.includes('msg-jumbo-') ? 'is-emoji-only-bubble' : ''}">
                         ${renderReplyQuoteHtml(msg.replyTo, currentUser)}
                         ${contentHtml}
                     </div>
