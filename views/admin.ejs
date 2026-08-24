@@ -523,6 +523,161 @@ if (sys) {
     </section>`;
 }
 
+const r2Stats = (stats && stats.r2Stats) ? stats.r2Stats : {
+    enabled: false,
+    totalVideos: videoList.length,
+    r2Count: 0,
+    r2TotalBytes: 0,
+    r2Percent: 0,
+    vpsCount: videoList.length,
+    vpsTotalBytes: stats.videoBytes || 0,
+    unsyncedCount: 0,
+    unsyncedVideos: []
+};
+
+const r2HubHtml = `
+<section class="admin-section-card r2-storage-hub-section" id="r2StorageHub">
+    <div class="admin-section-header">
+        <div class="admin-header-title-group">
+            <div class="admin-section-icon icon-cyan">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+                    <path d="M12 13v6"/><path d="m9 16 3-3 3 3"/>
+                </svg>
+            </div>
+            <div>
+                <h2 class="admin-section-title">Cloudflare R2 &amp; VPS Storage Tracker</h2>
+                <p class="admin-section-subtitle">Real-time edge CDN sync status &amp; video distribution</p>
+            </div>
+        </div>
+        <div class="r2-hub-actions">
+            ${r2Stats.unsyncedCount > 0 ? `
+                <button type="button" class="btn btn-primary btn-sm btn-r2-sync-all" id="btnR2SyncAll" onclick="syncAllR2(this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <span>Sync All (${h(r2Stats.unsyncedCount)}) to R2</span>
+                </button>
+            ` : `
+                <span class="r2-all-synced-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span>100% Synced to Edge CDN</span>
+                </span>
+            `}
+        </div>
+    </div>
+
+    <!-- 3-Pillar Storage Summary Tiles -->
+    <div class="r2-storage-tiles-grid">
+        <!-- 1. Cloudflare R2 Edge CDN -->
+        <div class="r2-tile tile-r2-cdn">
+            <div class="r2-tile-header">
+                <span class="r2-tile-badge badge-cdn">Cloudflare R2 CDN</span>
+                <span class="r2-tile-pct">${h(r2Stats.r2Percent)}% Synced</span>
+            </div>
+            <div class="r2-tile-main">
+                <strong class="r2-tile-count" id="r2VideoCountText">${h(r2Stats.r2Count)} / ${h(r2Stats.totalVideos)}</strong>
+                <span class="r2-tile-sub">Videos in Cloudflare R2</span>
+            </div>
+            <div class="progress-bar">
+                <div class="r2-progress-fill" style="width: ${h(r2Stats.r2Percent)}%;"></div>
+            </div>
+            <div class="r2-tile-footer">
+                <span>CDN Size: <strong>${h(formatBytes(r2Stats.r2TotalBytes))}</strong></span>
+                <span>Bandwidth: <strong style="color:#22c55e;">Zero VPS Cost</strong></span>
+            </div>
+        </div>
+
+        <!-- 2. VPS Local Storage -->
+        <div class="r2-tile tile-vps-disk">
+            <div class="r2-tile-header">
+                <span class="r2-tile-badge badge-vps">VPS Local Disk</span>
+                <span class="r2-tile-pct">100% on Disk</span>
+            </div>
+            <div class="r2-tile-main">
+                <strong class="r2-tile-count">${h(r2Stats.vpsCount)} / ${h(r2Stats.totalVideos)}</strong>
+                <span class="r2-tile-sub">Videos on VPS Storage</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 100%;"></div>
+            </div>
+            <div class="r2-tile-footer">
+                <span>Disk Size: <strong>${h(formatBytes(r2Stats.vpsTotalBytes))}</strong></span>
+                <span>Role: <strong>Master Copy &amp; Backup</strong></span>
+            </div>
+        </div>
+
+        <!-- 3. Sync Status & Health -->
+        <div class="r2-tile tile-sync-health">
+            <div class="r2-tile-header">
+                <span class="r2-tile-badge ${r2Stats.unsyncedCount === 0 ? 'badge-ok' : 'badge-warn'}">
+                    ${r2Stats.unsyncedCount === 0 ? '✓ Fully Synced' : '⚠️ Sync Pending'}
+                </span>
+            </div>
+            <div class="r2-tile-main">
+                <strong class="r2-tile-count ${r2Stats.unsyncedCount > 0 ? 'color-warn' : 'color-ok'}">${h(r2Stats.unsyncedCount)}</strong>
+                <span class="r2-tile-sub">Videos Missing from R2</span>
+            </div>
+            <div class="r2-tile-desc">
+                ${r2Stats.unsyncedCount === 0
+                    ? 'All videos are served via Cloudflare edge CDN with zero VPS bandwidth.'
+                    : `${h(r2Stats.unsyncedCount)} video(s) are streaming directly from VPS disk. Click Sync to transfer to R2.`}
+            </div>
+        </div>
+    </div>
+
+    <!-- Video-by-Video Distribution Table -->
+    <div class="r2-table-container">
+        <table class="r2-table">
+            <thead>
+                <tr>
+                    <th>Video Title</th>
+                    <th>Size</th>
+                    <th>VPS Disk</th>
+                    <th>Cloudflare R2 CDN</th>
+                    <th style="text-align:right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${videoList.map(v => {
+                    const isOnR2 = !!v.onR2;
+                    const isOnDisk = v.onDisk !== false;
+                    return `
+                        <tr class="r2-row ${isOnR2 ? 'is-synced' : 'is-pending'}">
+                            <td class="r2-title-cell">
+                                <a href="/watch/${encodeURIComponent(v.id)}" class="r2-title-link" target="_blank">${h(v.title || v.original_name || 'Untitled')}</a>
+                            </td>
+                            <td class="r2-size-cell">${h(formatBytes(v.size || 0))}</td>
+                            <td>
+                                <span class="r2-status-pill ${isOnDisk ? 'pill-disk' : 'pill-missing'}">
+                                    ${isOnDisk ? '✓ On Disk' : '✗ Missing'}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="r2-status-pill ${isOnR2 ? 'pill-r2' : 'pill-vps-only'}">
+                                    ${isOnR2 ? '⚡ Cloudflare R2' : '⚠️ VPS Only'}
+                                </span>
+                            </td>
+                            <td style="text-align:right;">
+                                ${isOnR2 ? `
+                                    <span class="r2-synced-label">✓ Synced</span>
+                                ` : `
+                                    <button type="button" class="btn btn-sm btn-r2-sync-single" onclick="syncSingleVideo('${encodeURIComponent(v.id)}', this)">
+                                        ⚡ Sync to R2
+                                    </button>
+                                `}
+                            </td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    </div>
+</section>
+`;
+
 const hajeraCardsHtml = hajeraActivityList.length === 0
     ? `<div class="hajera-empty-card" id="hajeraEmptyState">
         <div class="hajera-empty-icon-wrap">
@@ -838,6 +993,7 @@ const videoRows = recentVideos.length === 0
         ${cleanupHtml}
         ${accessMsgHtml}
         ${vpsMonitorHtml}
+        ${r2HubHtml}
 
         <!-- 6-Tile Android Stat Grid -->
         <section class="admin-stat-tiles-grid">
@@ -1412,5 +1568,64 @@ const videoRows = recentVideos.length === 0
         </form>
     </nav>
 </div>
+
+<script>
+async function syncAllR2(btn) {
+    if (!confirm('Start background sync for all unsynced videos to Cloudflare R2?')) return;
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span>⚡ Syncing in Background...</span>';
+    try {
+        const res = await fetch('/admin/r2/sync-all', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('Cloudflare R2 sync started! All missing videos will be uploaded in background.');
+            setTimeout(() => window.location.reload(), 2000);
+        } else {
+            alert('Sync failed: ' + (data.error || 'Unknown error'));
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    } catch (e) {
+        alert('Network error while starting R2 sync.');
+        btn.disabled = false;
+        btn.innerHTML = origText;
+    }
+}
+
+async function syncSingleVideo(videoId, btn) {
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span>Uploading...</span>';
+    try {
+        const res = await fetch('/admin/r2/sync-video/' + encodeURIComponent(videoId), {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        });
+        const data = await res.json();
+        if (data.success) {
+            btn.parentElement.innerHTML = '<span class="r2-synced-label">✓ Synced</span>';
+            alert(data.message || 'Video successfully synced to Cloudflare R2!');
+        } else {
+            alert('Sync failed: ' + (data.error || 'Unknown error'));
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    } catch (e) {
+        alert('Network error while syncing video.');
+        btn.disabled = false;
+        btn.innerHTML = origText;
+    }
+}
+</script>
 ` }) %>
 

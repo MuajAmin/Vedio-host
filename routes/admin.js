@@ -5,6 +5,7 @@ const os = require('os');
 const { isMuaj } = require('../middleware/auth');
 const db = require('../database');
 const importRoutes = require('./import');
+const r2 = require('../utils/r2');
 
 const router = express.Router();
 const videosDir = path.join(__dirname, '..', 'uploads', 'videos');
@@ -347,8 +348,39 @@ async function collectAdminStats(currentSid = null) {
         activityTimeline
     };
 
+    // Calculate Cloudflare R2 vs VPS Storage breakdown
+    let r2VideoCount = 0;
+    let r2TotalBytes = 0;
+    const vpsDiskFileSet = new Set(videoFiles.map(f => f.name));
+
+    for (const v of videos) {
+        v.onDisk = vpsDiskFileSet.has(v.filename);
+        try {
+            v.onR2 = await r2.existsOnR2(v.filename);
+        } catch {
+            v.onR2 = false;
+        }
+        if (v.onR2) {
+            r2VideoCount++;
+            r2TotalBytes += (v.size || 0);
+        }
+    }
+
+    const r2Stats = {
+        enabled: r2.isR2Enabled(),
+        totalVideos: videos.length,
+        r2Count: r2VideoCount,
+        r2TotalBytes,
+        r2Percent: videos.length > 0 ? Math.round((r2VideoCount / videos.length) * 100) : 0,
+        vpsCount: videoFiles.length,
+        vpsTotalBytes: sumBytes(videoFiles),
+        unsyncedCount: Math.max(0, videos.length - r2VideoCount),
+        unsyncedVideos: videos.filter(v => !v.onR2)
+    };
+
     return {
         videos,
+        r2Stats,
         commentsCount,
         progressCount,
         sessionCount,
@@ -382,6 +414,38 @@ router.get('/admin', isMuaj, async (req, res) => {
         cleanupResult: null,
         accessMessage: null
     });
+});
+
+// POST /admin/r2/sync-all — Background sync all unsynced videos to Cloudflare R2
+router.post('/admin/r2/sync-all', isMuaj, (req, res) => {
+    if (!r2.isR2Enabled()) {
+        return res.status(400).json({ success: false, error: 'Cloudflare R2 credentials not configured.' });
+    }
+    r2.backfillMissingR2Uploads().catch(err => {
+        console.error('[admin] R2 sync-all error:', err.message);
+    });
+    res.json({ success: true, message: 'Cloudflare R2 sync started in background!' });
+});
+
+// POST /admin/r2/sync-video/:id — Sync specific video to Cloudflare R2
+router.post('/admin/r2/sync-video/:id', isMuaj, async (req, res) => {
+    if (!r2.isR2Enabled()) {
+        return res.status(400).json({ success: false, error: 'Cloudflare R2 credentials not configured.' });
+    }
+    const video = db.prepare('SELECT id, filename, title FROM videos WHERE id = ?').get(req.params.id);
+    if (!video) {
+        return res.status(404).json({ success: false, error: 'Video not found in database.' });
+    }
+    const filePath = path.join(videosDir, video.filename);
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ success: false, error: 'Video file missing from VPS disk.' });
+    }
+    try {
+        await r2.uploadToR2(filePath, video.filename);
+        res.json({ success: true, message: `Synced "${video.title}" to Cloudflare R2!` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: `Sync failed: ${err.message}` });
+    }
 });
 
 router.post('/admin/cleanup', isMuaj, async (req, res) => {
