@@ -62,6 +62,62 @@ function getMimeType(filename) {
     return mimeMap[ext] || 'video/mp4';
 }
 
+// In-memory active uploads progress tracker (filename -> { loaded, total, percent, speed, eta, status, error, listeners: Set })
+const activeUploads = new Map();
+
+/**
+ * Get current upload progress for a file.
+ * @param {string} filename
+ * @returns {object|null}
+ */
+function getUploadProgress(filename) {
+    if (!filename) return null;
+    const entry = activeUploads.get(filename);
+    if (!entry) return null;
+    return {
+        filename: entry.filename,
+        loaded: entry.loaded,
+        total: entry.total,
+        percent: entry.percent,
+        speed: entry.speed,
+        eta: entry.eta,
+        status: entry.status,
+        error: entry.error
+    };
+}
+
+/**
+ * Register a real-time progress listener for an ongoing R2 upload.
+ * @param {string} filename
+ * @param {function} callback
+ * @returns {function} unregister function
+ */
+function registerProgressListener(filename, callback) {
+    let entry = activeUploads.get(filename);
+    if (!entry) {
+        entry = {
+            filename,
+            loaded: 0,
+            total: 0,
+            percent: 0,
+            speed: '',
+            eta: '',
+            status: 'queued',
+            error: null,
+            listeners: new Set(),
+            startedAt: Date.now(),
+            lastUpdate: Date.now()
+        };
+        activeUploads.set(filename, entry);
+    }
+    entry.listeners.add(callback);
+    return () => {
+        if (entry.listeners) {
+            entry.listeners.delete(callback);
+        }
+    };
+}
+
 /**
  * Upload a video file to R2.
  * Streams the file to avoid loading it entirely into memory (safe for 1GB VPS).
@@ -78,6 +134,37 @@ async function uploadToR2(filePath, filename) {
     const uploadStart = Date.now();
     console.log(`[R2] ⬆ Upload start: ${filename} (${sizeMB} MB)`);
 
+    let progressEntry = activeUploads.get(filename);
+    if (!progressEntry) {
+        progressEntry = {
+            filename,
+            loaded: 0,
+            total: stat.size,
+            percent: 0,
+            speed: '',
+            eta: '',
+            status: 'uploading',
+            error: null,
+            listeners: new Set(),
+            startedAt: uploadStart,
+            lastUpdate: uploadStart
+        };
+        activeUploads.set(filename, progressEntry);
+    } else {
+        progressEntry.total = stat.size;
+        progressEntry.status = 'uploading';
+        progressEntry.startedAt = uploadStart;
+    }
+
+    const notify = () => {
+        if (!progressEntry || !progressEntry.listeners) return;
+        for (const cb of progressEntry.listeners) {
+            try { cb(progressEntry); } catch {}
+        }
+    };
+
+    notify();
+
     const parallelUpload = new Upload({
         client: s3Client,
         params: {
@@ -92,10 +179,60 @@ async function uploadToR2(filePath, filename) {
         leavePartsOnError: false,
     });
 
-    await parallelUpload.done();
-    const elapsed = ((Date.now() - uploadStart) / 1000).toFixed(1);
-    console.log(`[R2] ✓ Upload done: ${filename} (${sizeMB} MB) in ${elapsed}s`);
-    return true;
+    let lastLoaded = 0;
+    let lastTime = uploadStart;
+
+    parallelUpload.on('httpUploadProgress', (progress) => {
+        if (progress.loaded) {
+            const now = Date.now();
+            progressEntry.loaded = Math.min(stat.size, progress.loaded);
+            progressEntry.total = stat.size;
+            progressEntry.percent = Math.min(99, Math.round((progressEntry.loaded / progressEntry.total) * 100));
+
+            // Calculate moving speed every 400ms
+            const timeDiff = (now - lastTime) / 1000;
+            if (timeDiff >= 0.4) {
+                const bytesDiff = progressEntry.loaded - lastLoaded;
+                const bps = Math.max(0, bytesDiff / timeDiff);
+                if (bps >= 1024 * 1024) {
+                    progressEntry.speed = (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
+                } else if (bps >= 1024) {
+                    progressEntry.speed = (bps / 1024).toFixed(0) + ' KB/s';
+                }
+                const remainingBytes = progressEntry.total - progressEntry.loaded;
+                if (bps > 0 && remainingBytes > 0) {
+                    const etaSec = Math.ceil(remainingBytes / bps);
+                    if (etaSec < 60) progressEntry.eta = `~${etaSec}s left`;
+                    else progressEntry.eta = `~${Math.floor(etaSec / 60)}m ${etaSec % 60}s left`;
+                }
+                lastLoaded = progressEntry.loaded;
+                lastTime = now;
+            }
+
+            notify();
+        }
+    });
+
+    try {
+        await parallelUpload.done();
+        const elapsed = ((Date.now() - uploadStart) / 1000).toFixed(1);
+        console.log(`[R2] ✓ Upload done: ${filename} (${sizeMB} MB) in ${elapsed}s`);
+        progressEntry.percent = 100;
+        progressEntry.loaded = stat.size;
+        progressEntry.status = 'done';
+        progressEntry.speed = '';
+        progressEntry.eta = '';
+        notify();
+        // Remove active tracker after 5 minutes to avoid memory leak
+        setTimeout(() => activeUploads.delete(filename), 5 * 60 * 1000).unref();
+        return true;
+    } catch (err) {
+        progressEntry.status = 'error';
+        progressEntry.error = err.message || 'R2 upload failed';
+        notify();
+        setTimeout(() => activeUploads.delete(filename), 5 * 60 * 1000).unref();
+        throw err;
+    }
 }
 
 /**
@@ -142,5 +279,7 @@ module.exports = {
     getPublicUrl,
     uploadToR2,
     deleteFromR2,
-    existsOnR2
+    existsOnR2,
+    getUploadProgress,
+    registerProgressListener
 };

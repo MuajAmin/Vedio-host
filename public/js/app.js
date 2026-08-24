@@ -422,20 +422,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ---- Upload Progress (XHR) ----
+    // ---- Enhanced Multi-Stage Upload Progress (Device -> VPS -> Cloudflare R2) ----
     const uploadForm = document.getElementById('uploadForm');
     const uploadProgress = document.getElementById('uploadProgress');
     const progressFill = document.getElementById('progressFill');
     const progressText = document.getElementById('progressText');
     const uploadBtn = document.getElementById('uploadBtn');
 
+    // Stage 1 & Stage 2 UI Elements
+    const stageDeviceToVps = document.getElementById('stageDeviceToVps');
+    const stageVpsToR2 = document.getElementById('stageVpsToR2');
+    const stage1Badge = document.getElementById('stage1Badge');
+    const stage2Badge = document.getElementById('stage2Badge');
+    const r2ProgressFill = document.getElementById('r2ProgressFill');
+    const r2ProgressText = document.getElementById('r2ProgressText');
+    const r2StatsRow = document.getElementById('r2StatsRow');
+    const r2UploadedSize = document.getElementById('r2UploadedSize');
+    const r2Speed = document.getElementById('r2Speed');
+    const r2Eta = document.getElementById('r2Eta');
+    const uploadCompleteActions = document.getElementById('uploadCompleteActions');
+    const btnWatchNow = document.getElementById('btnWatchNow');
+
     if (uploadForm && fileInput) {
         let activeXhr = null;
+        let activeR2Sse = null;
 
         uploadForm.addEventListener('submit', (e) => {
             if (!fileInput.files || fileInput.files.length === 0) return;
 
             e.preventDefault();
+
+            if (activeR2Sse) {
+                try { activeR2Sse.close(); } catch {}
+                activeR2Sse = null;
+            }
 
             const formData = new FormData(uploadForm);
             const xhr = new XMLHttpRequest();
@@ -467,16 +487,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 return (newest.bytes - oldest.bytes) / timeDiff;
             }
 
-            // 5 minute timeout — prevents infinite hang on dead connections
-            xhr.timeout = 5 * 60 * 1000;
+            // 15 minute timeout for large files
+            xhr.timeout = 15 * 60 * 1000;
 
-            // Show progress
-            if (uploadProgress) uploadProgress.style.display = 'block';
+            // Reset & Show multi-stage progress
+            if (uploadProgress) uploadProgress.style.display = 'flex';
+            if (stageDeviceToVps) stageDeviceToVps.className = 'upload-stage-item active';
+            if (stageVpsToR2) stageVpsToR2.className = 'upload-stage-item';
+            if (stage1Badge) {
+                stage1Badge.className = 'upload-stage-badge badge-running';
+                stage1Badge.textContent = 'Uploading';
+            }
+            if (stage2Badge) {
+                stage2Badge.className = 'upload-stage-badge badge-pending';
+                stage2Badge.textContent = 'Waiting';
+            }
+            if (progressFill) progressFill.style.width = '0%';
+            if (r2ProgressFill) r2ProgressFill.style.width = '0%';
+            if (r2StatsRow) r2StatsRow.style.display = 'none';
+            if (uploadCompleteActions) uploadCompleteActions.style.display = 'none';
+
             if (uploadBtn) {
                 uploadBtn.disabled = true;
-                uploadBtn.innerHTML = '<span>Uploading...</span>';
+                uploadBtn.innerHTML = '<span>Uploading to Server...</span>';
             }
 
+            // Stage 1 Progress: Device -> VPS
             xhr.upload.addEventListener('progress', (e) => {
                 if (e.lengthComputable) {
                     const percent = Math.round((e.loaded / e.total) * 100);
@@ -518,25 +554,132 @@ document.addEventListener('DOMContentLoaded', () => {
 
             xhr.addEventListener('load', () => {
                 activeXhr = null;
-                // Server sends 302 redirect on success, XHR auto-follows it → 200
-                // Also accept direct 200 responses
+
                 if (xhr.status >= 200 && xhr.status < 400) {
+                    // Mark Stage 1 as completed
                     if (progressFill) progressFill.style.width = '100%';
-                    if (progressText) progressText.textContent = 'Upload complete! Redirecting...';
-                    setTimeout(() => {
-                        window.location.href = '/dashboard';
-                    }, 500);
+                    if (progressText) progressText.textContent = 'Uploaded to Server ✓';
+                    if (stageDeviceToVps) stageDeviceToVps.className = 'upload-stage-item completed';
+                    if (stage1Badge) {
+                        stage1Badge.className = 'upload-stage-badge badge-done';
+                        stage1Badge.textContent = '✓ Done';
+                    }
+
+                    let respData = null;
+                    try {
+                        respData = JSON.parse(xhr.responseText);
+                    } catch (parseErr) {}
+
+                    // Stage 2: Track Server -> Cloudflare R2 live sync
+                    if (respData && respData.r2Enabled && respData.filename) {
+                        if (stageVpsToR2) stageVpsToR2.className = 'upload-stage-item active';
+                        if (stage2Badge) {
+                            stage2Badge.className = 'upload-stage-badge badge-running';
+                            stage2Badge.textContent = 'Syncing';
+                        }
+                        if (r2ProgressText) r2ProgressText.textContent = 'Starting Cloudflare R2 sync...';
+                        if (r2StatsRow) r2StatsRow.style.display = 'flex';
+                        if (uploadBtn) uploadBtn.innerHTML = '<span>Syncing to Cloudflare R2...</span>';
+
+                        const sseUrl = '/api/r2-progress/' + encodeURIComponent(respData.filename);
+                        const sse = new EventSource(sseUrl);
+                        activeR2Sse = sse;
+
+                        sse.onmessage = (event) => {
+                            try {
+                                const p = JSON.parse(event.data);
+                                const r2Percent = p.percent || 0;
+
+                                if (r2ProgressFill) r2ProgressFill.style.width = r2Percent + '%';
+
+                                if (p.loaded && p.total && r2UploadedSize) {
+                                    const upMB = (p.loaded / (1024 * 1024)).toFixed(1);
+                                    const totMB = (p.total / (1024 * 1024)).toFixed(1);
+                                    r2UploadedSize.textContent = `${upMB} / ${totMB} MB`;
+                                }
+
+                                if (r2Speed) r2Speed.textContent = p.speed ? ` • ${p.speed}` : '';
+                                if (r2Eta) r2Eta.textContent = p.eta ? ` • ${p.eta}` : '';
+
+                                if (r2ProgressText) {
+                                    r2ProgressText.textContent = p.status === 'done'
+                                        ? 'Synced to Cloudflare R2 Edge ✓'
+                                        : `Syncing to Cloudflare R2... ${r2Percent}%`;
+                                }
+
+                                if (p.status === 'done' || r2Percent >= 100) {
+                                    sse.close();
+                                    activeR2Sse = null;
+                                    if (stageVpsToR2) stageVpsToR2.className = 'upload-stage-item completed';
+                                    if (stage2Badge) {
+                                        stage2Badge.className = 'upload-stage-badge badge-done';
+                                        stage2Badge.textContent = '✓ Synced';
+                                    }
+                                    if (uploadCompleteActions) {
+                                        uploadCompleteActions.style.display = 'flex';
+                                        if (btnWatchNow && respData.id) {
+                                            btnWatchNow.href = '/watch/' + encodeURIComponent(respData.id);
+                                        }
+                                    }
+                                    if (uploadBtn) {
+                                        uploadBtn.disabled = false;
+                                        uploadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg><span>✓ Complete</span>';
+                                    }
+
+                                    // Graceful auto redirect after 3 seconds
+                                    setTimeout(() => {
+                                        if (window.location.pathname === '/upload') {
+                                            window.location.href = '/dashboard';
+                                        }
+                                    }, 3000);
+                                } else if (p.status === 'error') {
+                                    sse.close();
+                                    activeR2Sse = null;
+                                    if (stage2Badge) {
+                                        stage2Badge.className = 'upload-stage-badge badge-error';
+                                        stage2Badge.textContent = 'Fallback';
+                                    }
+                                    if (r2ProgressText) r2ProgressText.textContent = 'R2 sync failed (Saved on server storage)';
+                                    setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
+                                }
+                            } catch (e) {}
+                        };
+
+                        sse.onerror = () => {
+                            // If SSE disconnects or times out, fallback to dashboard
+                            setTimeout(() => {
+                                if (window.location.pathname === '/upload') {
+                                    window.location.href = '/dashboard';
+                                }
+                            }, 4000);
+                        };
+                    } else {
+                        // R2 not configured — complete immediately
+                        if (uploadBtn) uploadBtn.innerHTML = '<span>Upload Complete! Redirecting...</span>';
+                        setTimeout(() => {
+                            window.location.href = '/dashboard';
+                        }, 600);
+                    }
                 } else {
                     let errMsg = 'Upload failed.';
                     try {
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = xhr.responseText;
-                        const alertSpan = tempDiv.querySelector('.alert-error span');
-                        if (alertSpan && alertSpan.textContent) {
-                            errMsg = alertSpan.textContent;
-                        }
-                    } catch (parseErr) {}
+                        const json = JSON.parse(xhr.responseText);
+                        if (json && json.error) errMsg = json.error;
+                    } catch {
+                        try {
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = xhr.responseText;
+                            const alertSpan = tempDiv.querySelector('.alert-error span');
+                            if (alertSpan && alertSpan.textContent) {
+                                errMsg = alertSpan.textContent;
+                            }
+                        } catch {}
+                    }
                     if (progressText) progressText.textContent = errMsg;
+                    if (stage1Badge) {
+                        stage1Badge.className = 'upload-stage-badge badge-error';
+                        stage1Badge.textContent = 'Error';
+                    }
                     if (uploadBtn) {
                         uploadBtn.disabled = false;
                         uploadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Try again</span>';
@@ -547,6 +690,10 @@ document.addEventListener('DOMContentLoaded', () => {
             xhr.addEventListener('error', () => {
                 activeXhr = null;
                 if (progressText) progressText.textContent = 'Upload failed. Network error — check your connection.';
+                if (stage1Badge) {
+                    stage1Badge.className = 'upload-stage-badge badge-error';
+                    stage1Badge.textContent = 'Error';
+                }
                 if (uploadBtn) {
                     uploadBtn.disabled = false;
                     uploadBtn.innerHTML = '<span>Try again</span>';
@@ -573,6 +720,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             xhr.open('POST', '/upload');
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
             xhr.send(formData);
         });
     }

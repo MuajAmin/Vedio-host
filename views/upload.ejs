@@ -170,12 +170,67 @@ const errorHtml = error
                         </div>
                     </div>
 
-                    <!-- Upload Progress -->
-                    <div class="upload-progress" id="uploadProgress" style="display:none">
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="progressFill"></div>
+                    <!-- Enhanced Multi-Stage Upload Progress (Device -> VPS -> Cloudflare R2) -->
+                    <div class="upload-progress-card" id="uploadProgress" style="display:none">
+                        <!-- Stage 1: Device -> VPS -->
+                        <div class="upload-stage-item active" id="stageDeviceToVps">
+                            <div class="upload-stage-header">
+                                <div class="upload-stage-icon" id="stage1Icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                </div>
+                                <div class="upload-stage-info">
+                                    <div class="upload-stage-title-row">
+                                        <span class="upload-stage-name">Step 1: Device ➔ Server (VPS)</span>
+                                        <span class="upload-stage-badge badge-running" id="stage1Badge">Uploading</span>
+                                    </div>
+                                    <p class="upload-stage-desc" id="progressText">Uploading to server... 0%</p>
+                                </div>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill"></div>
+                            </div>
                         </div>
-                        <p class="progress-text" id="progressText">Uploading... 0%</p>
+
+                        <!-- Stage 2: VPS -> Cloudflare R2 CDN -->
+                        <div class="upload-stage-item" id="stageVpsToR2">
+                            <div class="upload-stage-header">
+                                <div class="upload-stage-icon" id="stage2Icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><path d="M12 13v6"/><path d="m9 16 3-3 3 3"/></svg>
+                                </div>
+                                <div class="upload-stage-info">
+                                    <div class="upload-stage-title-row">
+                                        <span class="upload-stage-name">Step 2: Server ➔ Cloudflare R2 CDN</span>
+                                        <span class="upload-stage-badge badge-pending" id="stage2Badge">Waiting</span>
+                                    </div>
+                                    <p class="upload-stage-desc" id="r2ProgressText">Waiting for server upload...</p>
+                                </div>
+                            </div>
+                            <div class="progress-bar r2-progress-bar">
+                                <div class="progress-fill r2-progress-fill" id="r2ProgressFill" style="width: 0%;"></div>
+                            </div>
+                            <div class="r2-stats-row" id="r2StatsRow" style="display:none">
+                                <span id="r2UploadedSize">0 MB / 0 MB</span>
+                                <span id="r2Speed"></span>
+                                <span id="r2Eta"></span>
+                            </div>
+                        </div>
+
+                        <!-- Completion Card -->
+                        <div class="upload-complete-actions" id="uploadCompleteActions" style="display:none">
+                            <div class="complete-banner">
+                                <span class="complete-check">✅</span>
+                                <span class="complete-title">Video uploaded & synced to Cloudflare R2!</span>
+                            </div>
+                            <div class="complete-btns">
+                                <a href="#" class="btn btn-primary btn-sm" id="btnWatchNow">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><polygon points="6,3 20,12 6,21"/></svg>
+                                    <span>Watch Video</span>
+                                </a>
+                                <a href="/dashboard" class="btn btn-ghost btn-sm">
+                                    <span>Go to Library</span>
+                                </a>
+                            </div>
+                        </div>
                     </div>
 
                     <button type="submit" class="btn btn-primary btn-upload-submit" id="uploadBtn">

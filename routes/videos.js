@@ -180,11 +180,16 @@ router.get('/upload', isAuthenticated, (req, res) => {
 // POST /upload — Handle video upload (any authenticated user)
 router.post('/upload', isAuthenticated, (req, res) => {
     upload.single('video')(req, res, async (err) => {
-        const isXHR = req.xhr || (req.headers['x-requested-with'] || '').toLowerCase() === 'xmlhttprequest';
+        const isXHR = req.xhr || 
+            (req.headers['x-requested-with'] || '').toLowerCase() === 'xmlhttprequest' ||
+            (req.headers.accept && req.headers.accept.includes('application/json'));
 
         const fail = (status, error) => {
             if (req.file) {
                 fs.promises.unlink(path.join(uploadsDir, req.file.filename)).catch(() => {});
+            }
+            if (isXHR) {
+                return res.status(status).json({ success: false, error });
             }
             return res.status(status).render('upload', { user: req.session.user, error });
         };
@@ -208,6 +213,9 @@ router.post('/upload', isAuthenticated, (req, res) => {
         if (!csrfOk) {
             if (req.file) {
                 fs.promises.unlink(path.join(uploadsDir, req.file.filename)).catch(() => {});
+            }
+            if (isXHR) {
+                return res.status(403).json({ success: false, error: 'Invalid CSRF token.' });
             }
             return;
         }
@@ -242,7 +250,7 @@ router.post('/upload', isAuthenticated, (req, res) => {
             return fail(500, 'Could not save video metadata.');
         }
 
-        // Upload to R2 CDN in background (non-blocking — user sees dashboard immediately)
+        // Upload to R2 CDN in background (non-blocking — user sees dashboard immediately or monitors progress)
         if (r2.isR2Enabled()) {
             const videoPath = path.join(uploadsDir, req.file.filename);
             console.log(`[upload] R2 background upload starting: ${req.file.filename}`);
@@ -250,8 +258,104 @@ router.post('/upload', isAuthenticated, (req, res) => {
                 .catch(err => console.error(`[upload] R2 upload failed for ${req.file.filename}:`, err.message));
         }
 
+        if (isXHR) {
+            return res.json({
+                success: true,
+                id,
+                filename: req.file.filename,
+                title: title || req.file.originalname,
+                size: req.file.size,
+                r2Enabled: r2.isR2Enabled()
+            });
+        }
+
         res.redirect('/dashboard');
     });
+});
+
+// GET /api/r2-progress/:filename — Real-time Server to Cloudflare R2 upload progress (SSE)
+router.get('/api/r2-progress/:filename', isAuthenticated, (req, res) => {
+    const filename = path.basename(req.params.filename || '');
+
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
+    });
+
+    const send = (data) => {
+        try {
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+            if (typeof res.flush === 'function') res.flush();
+        } catch {}
+    };
+
+    const current = r2.getUploadProgress(filename);
+    if (!current) {
+        r2.existsOnR2(filename).then((exists) => {
+            if (exists) {
+                send({ filename, percent: 100, loaded: 0, total: 0, speed: '', eta: '', status: 'done' });
+                res.end();
+            } else {
+                send({ filename, percent: 0, loaded: 0, total: 0, speed: '', eta: '', status: 'starting' });
+            }
+        }).catch(() => {
+            send({ filename, percent: 0, loaded: 0, total: 0, speed: '', eta: '', status: 'starting' });
+        });
+    } else {
+        send({
+            filename: current.filename,
+            percent: current.percent,
+            loaded: current.loaded,
+            total: current.total,
+            speed: current.speed,
+            eta: current.eta,
+            status: current.status,
+            error: current.error
+        });
+        if (current.status === 'done' || current.status === 'error') {
+            return res.end();
+        }
+    }
+
+    const unregister = r2.registerProgressListener(filename, (entry) => {
+        send({
+            filename: entry.filename,
+            percent: entry.percent,
+            loaded: entry.loaded,
+            total: entry.total,
+            speed: entry.speed,
+            eta: entry.eta,
+            status: entry.status,
+            error: entry.error
+        });
+
+        if (entry.status === 'done' || entry.status === 'error') {
+            setTimeout(() => {
+                try { res.end(); } catch {}
+            }, 800);
+        }
+    });
+
+    const keepalive = setInterval(() => {
+        try {
+            res.write(': keepalive\n\n');
+            if (typeof res.flush === 'function') res.flush();
+        } catch {
+            clearInterval(keepalive);
+        }
+    }, 15000);
+    keepalive.unref();
+
+    const cleanup = () => {
+        clearInterval(keepalive);
+        unregister();
+    };
+
+    req.on('close', cleanup);
+    res.on('finish', cleanup);
+    res.on('error', cleanup);
 });
 
 // GET /watch/:id — Video player page

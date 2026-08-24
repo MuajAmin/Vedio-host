@@ -57,6 +57,7 @@ app.use(compression({
     filter: (req, res) => {
         // SSE progress events are tiny streaming writes; gzip can buffer them until the job ends.
         if (req.path.startsWith('/import-progress/')) return false;
+        if (req.path.startsWith('/api/r2-progress/')) return false;
         // Watch Together SSE stream — don't buffer
         if (req.path.startsWith('/watch-together/stream/')) return false;
         // Direct Messages SSE stream — don't buffer

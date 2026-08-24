@@ -2617,9 +2617,134 @@ input, textarea, select {
     left: 130%;
 }
 
-/* Progress Bar */
+/* Progress Bar & Multi-Stage Upload Card */
 .upload-progress {
     padding: 8px 0 4px;
+}
+
+.upload-progress-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    margin: 8px 0 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    animation: fadeIn 0.3s ease;
+}
+
+.upload-stage-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.upload-stage-item.active {
+    border-color: rgba(212, 175, 55, 0.35);
+    background: rgba(212, 175, 55, 0.04);
+    box-shadow: 0 0 16px rgba(212, 175, 55, 0.08);
+}
+
+.upload-stage-item.completed {
+    border-color: rgba(34, 197, 94, 0.3);
+    background: rgba(34, 197, 94, 0.03);
+}
+
+.upload-stage-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.upload-stage-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+.upload-stage-item.active .upload-stage-icon {
+    background: rgba(212, 175, 55, 0.15);
+    color: var(--accent-gold-bright);
+    animation: pulse 2s infinite;
+}
+
+.upload-stage-item.completed .upload-stage-icon {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.upload-stage-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.upload-stage-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.upload-stage-name {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.2px;
+}
+
+.upload-stage-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: var(--font-display);
+}
+
+.badge-running {
+    background: rgba(212, 175, 55, 0.2);
+    color: var(--accent-gold-bright);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.badge-pending {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-muted);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.badge-done {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.badge-error {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.upload-stage-desc {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin: 2px 0 0;
+    font-variant-numeric: tabular-nums;
 }
 
 .progress-bar {
@@ -2638,6 +2763,61 @@ input, textarea, select {
     animation: shimmer 2s linear infinite;
     border-radius: 999px;
     transition: width 0.3s ease;
+}
+
+.r2-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #2563eb, #38bdf8, #818cf8);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+.r2-stats-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+}
+
+.upload-complete-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+    background: rgba(34, 197, 94, 0.06);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    border-radius: var(--radius-md);
+    text-align: center;
+    animation: fadeIn 0.4s ease;
+}
+
+.complete-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.complete-check {
+    font-size: 1.1rem;
+}
+
+.complete-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #22c55e;
+}
+
+.complete-btns {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
 }
 
 @keyframes shimmer {
