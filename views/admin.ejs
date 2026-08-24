@@ -637,17 +637,20 @@ const r2HubHtml = `
                     <th>Size</th>
                     <th>VPS Disk</th>
                     <th>Cloudflare R2 CDN</th>
-                    <th style="text-align:right;">Action</th>
+                    <th style="text-align:right;">Sync Action</th>
                 </tr>
             </thead>
             <tbody>
                 ${videoList.map(v => {
                     const isOnR2 = !!v.onR2;
                     const isOnDisk = v.onDisk !== false;
+                    const safeId = encodeURIComponent(v.id);
+                    const safeFn = h(v.filename || '');
+                    const safeSize = Number(v.size || 0);
                     return `
-                        <tr class="r2-row ${isOnR2 ? 'is-synced' : 'is-pending'}">
+                        <tr class="r2-row ${isOnR2 ? 'is-synced' : 'is-pending'}" id="r2Row_${safeId}" data-video-id="${safeId}" data-filename="${safeFn}" data-size="${safeSize}">
                             <td class="r2-title-cell">
-                                <a href="/watch/${encodeURIComponent(v.id)}" class="r2-title-link" target="_blank">${h(v.title || v.original_name || 'Untitled')}</a>
+                                <a href="/watch/${safeId}" class="r2-title-link" target="_blank">${h(v.title || v.original_name || 'Untitled')}</a>
                             </td>
                             <td class="r2-size-cell">${h(formatBytes(v.size || 0))}</td>
                             <td>
@@ -655,16 +658,19 @@ const r2HubHtml = `
                                     ${isOnDisk ? '✓ On Disk' : '✗ Missing'}
                                 </span>
                             </td>
-                            <td>
+                            <td id="r2Pill_${safeId}">
                                 <span class="r2-status-pill ${isOnR2 ? 'pill-r2' : 'pill-vps-only'}">
                                     ${isOnR2 ? '⚡ Cloudflare R2' : '⚠️ VPS Only'}
                                 </span>
                             </td>
-                            <td style="text-align:right;">
+                            <td id="r2Action_${safeId}" style="text-align:right;">
                                 ${isOnR2 ? `
-                                    <span class="r2-synced-label">✓ Synced</span>
+                                    <span class="r2-synced-label glow-emerald">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                                        <span>Synced</span>
+                                    </span>
                                 ` : `
-                                    <button type="button" class="btn btn-sm btn-r2-sync-single" onclick="syncSingleVideo('${encodeURIComponent(v.id)}', this)">
+                                    <button type="button" class="btn btn-sm btn-r2-sync-single" onclick="syncSingleVideo('${safeId}', '${safeFn}', ${safeSize}, this)">
                                         ⚡ Sync to R2
                                     </button>
                                 `}
@@ -1568,64 +1574,5 @@ const videoRows = recentVideos.length === 0
         </form>
     </nav>
 </div>
-
-<script>
-async function syncAllR2(btn) {
-    if (!confirm('Start background sync for all unsynced videos to Cloudflare R2?')) return;
-    const origText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span>⚡ Syncing in Background...</span>';
-    try {
-        const res = await fetch('/admin/r2/sync-all', {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            }
-        });
-        const data = await res.json();
-        if (data.success) {
-            alert('Cloudflare R2 sync started! All missing videos will be uploaded in background.');
-            setTimeout(() => window.location.reload(), 2000);
-        } else {
-            alert('Sync failed: ' + (data.error || 'Unknown error'));
-            btn.disabled = false;
-            btn.innerHTML = origText;
-        }
-    } catch (e) {
-        alert('Network error while starting R2 sync.');
-        btn.disabled = false;
-        btn.innerHTML = origText;
-    }
-}
-
-async function syncSingleVideo(videoId, btn) {
-    const origText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span>Uploading...</span>';
-    try {
-        const res = await fetch('/admin/r2/sync-video/' + encodeURIComponent(videoId), {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            }
-        });
-        const data = await res.json();
-        if (data.success) {
-            btn.parentElement.innerHTML = '<span class="r2-synced-label">✓ Synced</span>';
-            alert(data.message || 'Video successfully synced to Cloudflare R2!');
-        } else {
-            alert('Sync failed: ' + (data.error || 'Unknown error'));
-            btn.disabled = false;
-            btn.innerHTML = origText;
-        }
-    } catch (e) {
-        alert('Network error while syncing video.');
-        btn.disabled = false;
-        btn.innerHTML = origText;
-    }
-}
-</script>
 ` }) %>
 

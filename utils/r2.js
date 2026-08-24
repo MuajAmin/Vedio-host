@@ -311,6 +311,23 @@ async function backfillMissingR2Uploads() {
     }
 }
 
+function getActiveUploadsList() {
+    const list = [];
+    for (const [filename, entry] of activeUploads.entries()) {
+        list.push({
+            filename: entry.filename,
+            percent: entry.percent || 0,
+            loaded: entry.loaded || 0,
+            total: entry.total || 0,
+            speed: entry.speed || '',
+            eta: entry.eta || '',
+            status: entry.status || 'idle',
+            error: entry.error || null
+        });
+    }
+    return list;
+}
+
 module.exports = {
     isR2Enabled,
     getPublicUrl,
@@ -319,5 +336,6 @@ module.exports = {
     existsOnR2,
     getUploadProgress,
     registerProgressListener,
+    getActiveUploadsList,
     backfillMissingR2Uploads
 };

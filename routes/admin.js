@@ -416,6 +416,29 @@ router.get('/admin', isMuaj, async (req, res) => {
     });
 });
 
+// GET /admin/r2/live-status — Real-time R2 stats and active uploads for admin dashboard
+router.get('/admin/r2/live-status', isMuaj, async (req, res) => {
+    try {
+        const stats = await collectAdminStats(req.sessionID);
+        const activeUploads = typeof r2.getActiveUploadsList === 'function' ? r2.getActiveUploadsList() : [];
+        res.json({
+            success: true,
+            r2Stats: stats.r2Stats,
+            activeUploads,
+            videos: stats.videos.map(v => ({
+                id: v.id,
+                filename: v.filename,
+                title: v.title,
+                size: v.size,
+                onDisk: v.onDisk,
+                onR2: v.onR2
+            }))
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // POST /admin/r2/sync-all — Background sync all unsynced videos to Cloudflare R2
 router.post('/admin/r2/sync-all', isMuaj, (req, res) => {
     if (!r2.isR2Enabled()) {
@@ -427,12 +450,12 @@ router.post('/admin/r2/sync-all', isMuaj, (req, res) => {
     res.json({ success: true, message: 'Cloudflare R2 sync started in background!' });
 });
 
-// POST /admin/r2/sync-video/:id — Sync specific video to Cloudflare R2
-router.post('/admin/r2/sync-video/:id', isMuaj, async (req, res) => {
+// POST /admin/r2/sync-video/:id — Start background sync of specific video to Cloudflare R2
+router.post('/admin/r2/sync-video/:id', isMuaj, (req, res) => {
     if (!r2.isR2Enabled()) {
         return res.status(400).json({ success: false, error: 'Cloudflare R2 credentials not configured.' });
     }
-    const video = db.prepare('SELECT id, filename, title FROM videos WHERE id = ?').get(req.params.id);
+    const video = db.prepare('SELECT id, filename, title, size FROM videos WHERE id = ?').get(req.params.id);
     if (!video) {
         return res.status(404).json({ success: false, error: 'Video not found in database.' });
     }
@@ -440,12 +463,20 @@ router.post('/admin/r2/sync-video/:id', isMuaj, async (req, res) => {
     if (!fs.existsSync(filePath)) {
         return res.status(404).json({ success: false, error: 'Video file missing from VPS disk.' });
     }
-    try {
-        await r2.uploadToR2(filePath, video.filename);
-        res.json({ success: true, message: `Synced "${video.title}" to Cloudflare R2!` });
-    } catch (err) {
-        res.status(500).json({ success: false, error: `Sync failed: ${err.message}` });
-    }
+
+    // Launch upload asynchronously in background
+    r2.uploadToR2(filePath, video.filename).catch(err => {
+        console.error('[admin] Single video R2 upload error:', video.filename, err.message);
+    });
+
+    res.json({
+        success: true,
+        filename: video.filename,
+        videoId: video.id,
+        title: video.title,
+        size: video.size,
+        message: `Sync started for "${video.title}"`
+    });
 });
 
 router.post('/admin/cleanup', isMuaj, async (req, res) => {

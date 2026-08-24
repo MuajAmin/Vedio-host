@@ -3947,6 +3947,195 @@ document.addEventListener('DOMContentLoaded', () => {
             if (vpsPollingInterval) clearInterval(vpsPollingInterval);
             vpsPollingInterval = setInterval(pollVpsMetrics, 10000);
         }
+
+        // ============================================================
+        // Cloudflare R2 & VPS Storage Tracker Live Sync Engine
+        // ============================================================
+        const r2EventSources = {};
+
+        function attachR2ProgressListener(videoId, filename, totalSize) {
+            if (r2EventSources[videoId]) {
+                try { r2EventSources[videoId].close(); } catch(e){}
+            }
+
+            const actionCell = document.getElementById('r2Action_' + videoId);
+            const pillCell = document.getElementById('r2Pill_' + videoId);
+            const rowEl = document.getElementById('r2Row_' + videoId);
+
+            if (!actionCell) return;
+
+            actionCell.innerHTML = `
+                <div class="r2-live-sync-box" id="r2SyncBox_${videoId}">
+                    <div class="r2-live-sync-header">
+                        <span class="r2-live-sync-badge"><span class="r2-pulse-dot"></span> Uploading</span>
+                        <span class="r2-live-sync-pct" id="r2Pct_${videoId}">0%</span>
+                    </div>
+                    <div class="r2-live-progress-track">
+                        <div class="r2-live-progress-fill" id="r2Bar_${videoId}" style="width: 0%;"></div>
+                    </div>
+                    <div class="r2-live-sync-footer">
+                        <span class="r2-live-sync-bytes" id="r2Bytes_${videoId}">0 MB</span>
+                        <span class="r2-live-sync-speed" id="r2Speed_${videoId}">-- MB/s</span>
+                        <span class="r2-live-sync-eta" id="r2Eta_${videoId}"></span>
+                    </div>
+                </div>
+            `;
+
+            const es = new EventSource('/api/r2-progress/' + encodeURIComponent(filename));
+            r2EventSources[videoId] = es;
+
+            es.onmessage = function(e) {
+                try {
+                    const data = JSON.parse(e.data);
+                    const pct = Math.min(100, Math.max(0, data.percent || 0));
+                    const bar = document.getElementById('r2Bar_' + videoId);
+                    const pctEl = document.getElementById('r2Pct_' + videoId);
+                    const bytesEl = document.getElementById('r2Bytes_' + videoId);
+                    const speedEl = document.getElementById('r2Speed_' + videoId);
+                    const etaEl = document.getElementById('r2Eta_' + videoId);
+
+                    if (bar) bar.style.width = pct + '%';
+                    if (pctEl) pctEl.textContent = pct + '%';
+                    if (bytesEl && data.loaded && data.total) {
+                        bytesEl.textContent = (data.loaded / 1024 / 1024).toFixed(1) + ' / ' + (data.total / 1024 / 1024).toFixed(1) + ' MB';
+                    }
+                    if (speedEl) speedEl.textContent = data.speed || '';
+                    if (etaEl) etaEl.textContent = data.eta || '';
+
+                    if (data.status === 'done' || pct >= 100) {
+                        es.close();
+                        delete r2EventSources[videoId];
+                        if (actionCell) {
+                            actionCell.innerHTML = `<span class="r2-synced-label glow-emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg> Synced</span>`;
+                        }
+                        if (pillCell) {
+                            pillCell.innerHTML = `<span class="r2-status-pill pill-r2">⚡ Cloudflare R2</span>`;
+                        }
+                        if (rowEl) {
+                            rowEl.classList.remove('is-pending');
+                            rowEl.classList.add('is-synced');
+                        }
+                        refreshR2DashboardStats();
+                    } else if (data.status === 'error') {
+                        es.close();
+                        delete r2EventSources[videoId];
+                        if (actionCell) {
+                            actionCell.innerHTML = `<button type="button" class="btn btn-sm btn-r2-sync-single" onclick="syncSingleVideo('${videoId}', '${filename}', ${totalSize}, this)">⚠️ Retry Sync</button>`;
+                        }
+                    }
+                } catch(err){}
+            };
+
+            es.onerror = function() {
+                // Keep UI clean, periodic polling will catch completion
+            };
+        }
+
+        window.syncSingleVideo = async function(videoId, filename, totalSize, btn) {
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch('/admin/r2/sync-video/' + encodeURIComponent(videoId), {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    attachR2ProgressListener(videoId, filename, totalSize);
+                } else {
+                    alert('Sync failed: ' + (data.error || 'Unknown error'));
+                    if (btn) btn.disabled = false;
+                }
+            } catch (e) {
+                alert('Network error while starting sync.');
+                if (btn) btn.disabled = false;
+            }
+        };
+
+        window.syncAllR2 = async function(btn) {
+            if (!confirm('Start background sync for all unsynced videos to Cloudflare R2?')) return;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span>⚡ Syncing in Background...</span>';
+            }
+            try {
+                const res = await fetch('/admin/r2/sync-all', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    const pendingRows = document.querySelectorAll('.r2-row.is-pending');
+                    pendingRows.forEach(row => {
+                        const vid = row.getAttribute('data-video-id');
+                        const fn = row.getAttribute('data-filename');
+                        const sz = Number(row.getAttribute('data-size') || 0);
+                        if (vid && fn) {
+                            attachR2ProgressListener(vid, fn, sz);
+                        }
+                    });
+                } else {
+                    alert('Sync failed: ' + (data.error || 'Unknown error'));
+                    if (btn) btn.disabled = false;
+                }
+            } catch (e) {
+                alert('Network error while starting R2 sync.');
+                if (btn) btn.disabled = false;
+            }
+        };
+
+        function refreshR2DashboardStats() {
+            fetch('/admin/r2/live-status')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data || !data.r2Stats) return;
+                    const s = data.r2Stats;
+                    const r2Text = document.getElementById('r2VideoCountText');
+                    if (r2Text) r2Text.textContent = `${s.r2Count} / ${s.totalVideos}`;
+
+                    const r2Pcts = document.querySelectorAll('.r2-tile-pct');
+                    if (r2Pcts[0]) r2Pcts[0].textContent = `${s.r2Percent}% Synced`;
+
+                    const r2Bar = document.querySelector('.r2-progress-fill');
+                    if (r2Bar) r2Bar.style.width = `${s.r2Percent}%`;
+
+                    const warnCount = document.querySelector('.r2-tile-count.color-warn, .r2-tile-count.color-ok');
+                    if (warnCount) {
+                        warnCount.textContent = s.unsyncedCount;
+                        if (s.unsyncedCount === 0) {
+                            warnCount.className = 'r2-tile-count color-ok';
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+
+        // Live monitor active uploads on admin page every 4s
+        if (document.getElementById('r2StorageHub')) {
+            setInterval(() => {
+                if (window.location.pathname !== '/admin') return;
+                fetch('/admin/r2/live-status')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (!data || !Array.isArray(data.activeUploads)) return;
+                        data.activeUploads.forEach(u => {
+                            const row = document.querySelector(`[data-filename="${u.filename}"]`);
+                            if (row) {
+                                const vid = row.getAttribute('data-video-id');
+                                if (vid && !r2EventSources[vid] && u.status === 'uploading') {
+                                    attachR2ProgressListener(vid, u.filename, u.total);
+                                }
+                            }
+                        });
+                    })
+                    .catch(() => {});
+            }, 4000);
+        }
     } // End admin block
     } // End initPageModules
 
