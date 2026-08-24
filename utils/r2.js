@@ -366,10 +366,6 @@ function uploadToR2(filePath, filename) {
     return uploadPromise;
 }
 
-    inFlightUploads.set(filename, uploadPromise);
-    return uploadPromise;
-}
-
 /**
  * Delete a video file from R2.
  * Aborts any in-flight upload controller immediately to prevent zombie orphan objects.
@@ -386,10 +382,12 @@ async function deleteFromR2(filename) {
     if (activeController) {
         console.log(`[R2] 🛑 Aborting in-flight upload for deleted file: ${filename}`);
         activeController.aborted = true;
-        try {
-            activeController.upload.abort();
-        } catch (abortErr) {
-            console.warn(`[R2] Error aborting upload:`, abortErr.message);
+        if (activeController.upload && typeof activeController.upload.abort === 'function') {
+            try {
+                activeController.upload.abort();
+            } catch (abortErr) {
+                console.warn(`[R2] Error aborting upload:`, abortErr.message);
+            }
         }
         activeUploadControllers.delete(filename);
         inFlightUploads.delete(filename);
