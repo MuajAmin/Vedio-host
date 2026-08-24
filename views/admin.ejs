@@ -628,58 +628,55 @@ const r2HubHtml = `
         </div>
     </div>
 
-    <!-- Video-by-Video Distribution Table -->
-    <div class="r2-table-container">
-        <table class="r2-table">
-            <thead>
-                <tr>
-                    <th>Video Title</th>
-                    <th>Size</th>
-                    <th>VPS Disk</th>
-                    <th>Cloudflare R2 CDN</th>
-                    <th style="text-align:right;">Sync Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${videoList.map(v => {
-                    const isOnR2 = !!v.onR2;
-                    const isOnDisk = v.onDisk !== false;
-                    const safeId = encodeURIComponent(v.id);
-                    const safeFn = h(v.filename || '');
-                    const safeSize = Number(v.size || 0);
-                    return `
-                        <tr class="r2-row ${isOnR2 ? 'is-synced' : 'is-pending'}" id="r2Row_${safeId}" data-video-id="${safeId}" data-filename="${safeFn}" data-size="${safeSize}">
-                            <td class="r2-title-cell">
-                                <a href="/watch/${safeId}" class="r2-title-link" target="_blank">${h(v.title || v.original_name || 'Untitled')}</a>
-                            </td>
-                            <td class="r2-size-cell">${h(formatBytes(v.size || 0))}</td>
-                            <td>
-                                <span class="r2-status-pill ${isOnDisk ? 'pill-disk' : 'pill-missing'}">
-                                    ${isOnDisk ? '✓ On Disk' : '✗ Missing'}
-                                </span>
-                            </td>
-                            <td id="r2Pill_${safeId}">
-                                <span class="r2-status-pill ${isOnR2 ? 'pill-r2' : 'pill-vps-only'}">
+    <!-- Video-by-Video Android Native Card List -->
+    <div class="r2-android-card-list">
+        ${videoList.map(v => {
+            const isOnR2 = !!v.onR2;
+            const isOnDisk = v.onDisk !== false;
+            const safeId = encodeURIComponent(v.id);
+            const safeFn = h(v.filename || '');
+            const safeSize = Number(v.size || 0);
+            const thumbImg = v.thumbnail
+                ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="r2-card-thumb-img" loading="lazy" />`
+                : '<div class="r2-card-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><polygon points="6,4 20,12 6,20"/></svg></div>';
+            return `
+                <div class="r2-android-video-card ${isOnR2 ? 'is-synced' : 'is-pending'}" id="r2Row_${safeId}" data-video-id="${safeId}" data-filename="${safeFn}" data-size="${safeSize}">
+                    <div class="r2-card-main-row">
+                        <div class="r2-card-thumb-box">
+                            ${thumbImg}
+                            ${v.duration ? `<span class="r2-card-duration">${h(v.duration)}</span>` : ''}
+                        </div>
+                        <div class="r2-card-details">
+                            <a href="/watch/${safeId}" class="r2-card-title-link" target="_blank">${h(v.title || v.original_name || 'Untitled Video')}</a>
+                            <div class="r2-card-chips-row">
+                                <span class="r2-mini-chip chip-size">${formatBytes(safeSize)}</span>
+                                <span class="r2-mini-chip ${isOnDisk ? 'chip-disk' : 'chip-missing'}">${isOnDisk ? '✓ Disk' : '✗ Missing'}</span>
+                                <span class="r2-mini-chip ${isOnR2 ? 'chip-r2' : 'chip-vps-only'}" id="r2Pill_${safeId}">
                                     ${isOnR2 ? '⚡ Cloudflare R2' : '⚠️ VPS Only'}
                                 </span>
-                            </td>
-                            <td id="r2Action_${safeId}" style="text-align:right;">
-                                ${isOnR2 ? `
-                                    <span class="r2-synced-label glow-emerald">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
-                                        <span>Synced</span>
-                                    </span>
-                                ` : `
-                                    <button type="button" class="btn btn-sm btn-r2-sync-single" onclick="syncSingleVideo('${safeId}', '${safeFn}', ${safeSize}, this)">
-                                        ⚡ Sync to R2
-                                    </button>
-                                `}
-                            </td>
-                        </tr>
-                    `;
-                }).join('')}
-            </tbody>
-        </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="r2-card-action-bar" id="r2Action_${safeId}">
+                        ${isOnR2 ? `
+                            <div class="r2-synced-pill glow-emerald">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                                <span>Synced on Cloudflare Edge CDN</span>
+                            </div>
+                        ` : `
+                            <button type="button" class="btn-android-sync-r2" onclick="syncSingleVideo('${safeId}', '${safeFn}', ${safeSize}, this)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                <span>⚡ Sync to Cloudflare R2</span>
+                            </button>
+                        `}
+                    </div>
+                </div>
+            `;
+        }).join('')}
     </div>
 </section>
 `;

@@ -289,6 +289,10 @@ app.use((req, res, next) => {
     if (req.path.startsWith('/api/settings') && (req.method === 'POST' || req.method === 'GET')) {
         return next();
     }
+    // Admin Cloudflare R2 Sync API — handled via isMuaj session auth
+    if (req.path.startsWith('/admin/r2/') && req.method === 'POST') {
+        return next();
+    }
     return requireCsrf(req, res, next);
 });
 

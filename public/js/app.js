@@ -3965,18 +3965,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!actionCell) return;
 
             actionCell.innerHTML = `
-                <div class="r2-live-sync-box" id="r2SyncBox_${videoId}">
-                    <div class="r2-live-sync-header">
-                        <span class="r2-live-sync-badge"><span class="r2-pulse-dot"></span> Uploading</span>
-                        <span class="r2-live-sync-pct" id="r2Pct_${videoId}">0%</span>
+                <div class="r2-android-progress-box" id="r2SyncBox_${videoId}">
+                    <div class="r2-prog-top">
+                        <span class="r2-prog-status"><span class="r2-pulse-dot"></span> Uploading to R2...</span>
+                        <span class="r2-prog-pct" id="r2Pct_${videoId}">0%</span>
                     </div>
-                    <div class="r2-live-progress-track">
-                        <div class="r2-live-progress-fill" id="r2Bar_${videoId}" style="width: 0%;"></div>
+                    <div class="r2-prog-track">
+                        <div class="r2-prog-fill" id="r2Bar_${videoId}" style="width: 0%;"></div>
                     </div>
-                    <div class="r2-live-sync-footer">
-                        <span class="r2-live-sync-bytes" id="r2Bytes_${videoId}">0 MB</span>
-                        <span class="r2-live-sync-speed" id="r2Speed_${videoId}">-- MB/s</span>
-                        <span class="r2-live-sync-eta" id="r2Eta_${videoId}"></span>
+                    <div class="r2-prog-bottom">
+                        <span class="r2-prog-bytes" id="r2Bytes_${videoId}">0 MB</span>
+                        <span class="r2-prog-speed" id="r2Speed_${videoId}">-- MB/s</span>
+                        <span class="r2-prog-eta" id="r2Eta_${videoId}"></span>
                     </div>
                 </div>
             `;
@@ -4006,10 +4006,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         es.close();
                         delete r2EventSources[videoId];
                         if (actionCell) {
-                            actionCell.innerHTML = `<span class="r2-synced-label glow-emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg> Synced</span>`;
+                            actionCell.innerHTML = `
+                                <div class="r2-synced-pill glow-emerald">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                                    <span>Synced on Cloudflare Edge CDN</span>
+                                </div>
+                            `;
                         }
                         if (pillCell) {
-                            pillCell.innerHTML = `<span class="r2-status-pill pill-r2">⚡ Cloudflare R2</span>`;
+                            pillCell.className = 'r2-mini-chip chip-r2';
+                            pillCell.innerHTML = '⚡ Cloudflare R2';
                         }
                         if (rowEl) {
                             rowEl.classList.remove('is-pending');
@@ -4020,7 +4026,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         es.close();
                         delete r2EventSources[videoId];
                         if (actionCell) {
-                            actionCell.innerHTML = `<button type="button" class="btn btn-sm btn-r2-sync-single" onclick="syncSingleVideo('${videoId}', '${filename}', ${totalSize}, this)">⚠️ Retry Sync</button>`;
+                            actionCell.innerHTML = `
+                                <button type="button" class="btn-android-sync-r2" onclick="syncSingleVideo('${videoId}', '${filename}', ${totalSize}, this)">
+                                    ⚠️ Retry Sync
+                                </button>
+                            `;
                         }
                     }
                 } catch(err){}

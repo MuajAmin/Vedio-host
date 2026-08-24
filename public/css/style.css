@@ -13037,122 +13037,196 @@ h3,
     line-height: 1.4;
 }
 
-.r2-table-container {
-    padding: 0 20px 20px 20px;
-    overflow-x: auto;
-}
-
-.r2-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem;
-}
-
-.r2-table th {
-    text-align: left;
-    padding: 10px 14px;
-    background: rgba(255, 255, 255, 0.03);
-    color: var(--text-secondary);
-    font-weight: 600;
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.r2-table td {
-    padding: 12px 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-    vertical-align: middle;
-}
-
-.r2-row:hover td {
-    background: rgba(255, 255, 255, 0.02);
-}
-
-.r2-title-link {
-    color: var(--text-primary);
-    font-weight: 600;
-    text-decoration: none;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    max-width: 380px;
-}
-
-.r2-title-link:hover {
-    color: #38bdf8;
-    text-decoration: underline;
-}
-
-.r2-status-pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 0.78rem;
-    font-weight: 600;
-}
-
-.pill-r2 { background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); }
-.pill-vps-only { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
-.pill-disk { background: rgba(34, 197, 94, 0.12); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.2); }
-.pill-missing { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); }
-
-.r2-synced-label {
-    color: #4ade80;
-    font-weight: 600;
-    font-size: 0.8rem;
-}
-
-.btn-r2-sync-single {
-    background: rgba(56, 189, 248, 0.15);
-    color: #38bdf8;
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-r2-sync-single:hover {
-    background: #0284c7;
-    color: #fff;
-}
-
-/* Live R2 Sync Progress Box inside Table */
-.r2-live-sync-box {
+/* ==========================================================================
+   Android Native Mobile-First Cloudflare R2 Storage Tracker
+   ========================================================================== */
+.r2-android-card-list {
     display: flex;
     flex-direction: column;
+    gap: 12px;
+    padding: 0 16px 16px 16px;
+}
+
+.r2-android-video-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.r2-android-video-card.is-synced {
+    border-color: rgba(56, 189, 248, 0.25);
+    background: linear-gradient(180deg, rgba(56, 189, 248, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+}
+
+.r2-android-video-card.is-pending {
+    border-color: rgba(245, 158, 11, 0.25);
+    background: linear-gradient(180deg, rgba(245, 158, 11, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+}
+
+.r2-card-main-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.r2-card-thumb-box {
+    position: relative;
+    width: 96px;
+    height: 60px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.5);
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.r2-card-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.r2-card-thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.r2-card-duration {
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+.r2-card-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.r2-card-title-link {
+    color: var(--text-primary, #fff);
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-decoration: none;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.r2-card-title-link:hover {
+    color: #38bdf8;
+}
+
+.r2-card-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.r2-mini-chip {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
     gap: 4px;
-    min-width: 180px;
-    max-width: 220px;
-    background: rgba(15, 23, 42, 0.7);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    border-radius: 8px;
-    padding: 6px 10px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.chip-size { background: rgba(255, 255, 255, 0.08); color: var(--text-secondary, #94a3b8); }
+.chip-disk { background: rgba(34, 197, 94, 0.12); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.2); }
+.chip-missing { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); }
+.chip-r2 { background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); }
+.chip-vps-only { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
+
+.r2-card-action-bar {
+    width: 100%;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 8px;
+}
+
+.btn-android-sync-r2 {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    color: #fff;
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 3px 12px rgba(2, 132, 199, 0.3);
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-android-sync-r2:active {
+    transform: scale(0.98);
+}
+
+.r2-synced-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #4ade80;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 4px 8px;
+}
+
+/* In-Card Android Progress Bar */
+.r2-android-progress-box {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 12px;
+    padding: 8px 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     animation: fadeIn 0.3s ease;
 }
 
-.r2-live-sync-header {
+.r2-prog-top {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.75rem;
+    font-size: 0.78rem;
 }
 
-.r2-live-sync-badge {
+.r2-prog-status {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     color: #38bdf8;
     font-weight: 700;
     text-transform: uppercase;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     letter-spacing: 0.04em;
 }
 
@@ -13170,25 +13244,23 @@ h3,
     100% { opacity: 1; transform: scale(1.15); box-shadow: 0 0 12px #38bdf8; }
 }
 
-.r2-live-sync-pct {
+.r2-prog-pct {
     font-weight: 800;
     color: #38bdf8;
-    font-size: 0.82rem;
-    font-variant-numeric: tabular-nums;
+    font-size: 0.85rem;
 }
 
-.r2-live-progress-track {
-    height: 5px;
+.r2-prog-track {
+    height: 6px;
     width: 100%;
     background: rgba(255, 255, 255, 0.08);
-    border-radius: 3px;
+    border-radius: 4px;
     overflow: hidden;
-    position: relative;
 }
 
-.r2-live-progress-fill {
+.r2-prog-fill {
     height: 100%;
-    border-radius: 3px;
+    border-radius: 4px;
     background: linear-gradient(90deg, #0284c7, #38bdf8, #818cf8);
     background-size: 200% 100%;
     animation: shimmerSlide 1.5s linear infinite;
@@ -13200,26 +13272,26 @@ h3,
     100% { background-position: -100% 0; }
 }
 
-.r2-live-sync-footer {
+.r2-prog-bottom {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.7rem;
-    color: var(--text-secondary);
+    font-size: 0.72rem;
+    color: var(--text-secondary, #94a3b8);
 }
 
-.r2-live-sync-bytes {
-    font-weight: 600;
-    color: var(--text-primary);
+.r2-prog-bytes {
+    font-weight: 700;
+    color: var(--text-primary, #fff);
 }
 
-.r2-live-sync-speed {
+.r2-prog-speed {
     color: #38bdf8;
-    font-weight: 600;
+    font-weight: 700;
 }
 
-.r2-live-sync-eta {
-    color: var(--text-muted);
+.r2-prog-eta {
+    color: var(--text-muted, #64748b);
 }
 
 .glow-emerald {

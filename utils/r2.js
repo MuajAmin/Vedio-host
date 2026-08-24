@@ -217,6 +217,7 @@ async function uploadToR2(filePath, filename) {
         await parallelUpload.done();
         const elapsed = ((Date.now() - uploadStart) / 1000).toFixed(1);
         console.log(`[R2] ✓ Upload done: ${filename} (${sizeMB} MB) in ${elapsed}s`);
+        _r2ConfirmedCache.add(filename);
         progressEntry.percent = 100;
         progressEntry.loaded = stat.size;
         progressEntry.status = 'done';
@@ -235,6 +236,8 @@ async function uploadToR2(filePath, filename) {
     }
 }
 
+const _r2ConfirmedCache = new Set();
+
 /**
  * Delete a video file from R2.
  * @param {string} filename - The filename (R2 object key) to delete
@@ -250,6 +253,7 @@ async function deleteFromR2(filename) {
     });
 
     await s3Client.send(command);
+    _r2ConfirmedCache.delete(filename);
     console.log(`[R2] ✓ Delete done: ${filename}`);
     return true;
 }
@@ -261,6 +265,7 @@ async function deleteFromR2(filename) {
  */
 async function existsOnR2(filename) {
     if (!r2Enabled || !filename) return false;
+    if (_r2ConfirmedCache.has(filename)) return true;
 
     try {
         const command = new HeadObjectCommand({
@@ -268,6 +273,7 @@ async function existsOnR2(filename) {
             Key: filename,
         });
         await s3Client.send(command);
+        _r2ConfirmedCache.add(filename);
         return true;
     } catch {
         return false;

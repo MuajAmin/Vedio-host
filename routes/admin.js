@@ -348,12 +348,12 @@ async function collectAdminStats(currentSid = null) {
         activityTimeline
     };
 
-    // Calculate Cloudflare R2 vs VPS Storage breakdown
+    // Calculate Cloudflare R2 vs VPS Storage breakdown (Parallel & Cached)
     let r2VideoCount = 0;
     let r2TotalBytes = 0;
     const vpsDiskFileSet = new Set(videoFiles.map(f => f.name));
 
-    for (const v of videos) {
+    await Promise.all(videos.map(async (v) => {
         v.onDisk = vpsDiskFileSet.has(v.filename);
         try {
             v.onR2 = await r2.existsOnR2(v.filename);
@@ -364,7 +364,7 @@ async function collectAdminStats(currentSid = null) {
             r2VideoCount++;
             r2TotalBytes += (v.size || 0);
         }
-    }
+    }));
 
     const r2Stats = {
         enabled: r2.isR2Enabled(),
