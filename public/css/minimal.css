@@ -328,21 +328,49 @@ html[data-ui-mode="minimal"] .bottom-nav-item:active {
     opacity: 0.85 !important;
 }
 
+html[data-ui-mode="minimal"] .bottom-nav-icon-wrap {
+    width: 48px !important;
+    height: 30px !important;
+    min-width: 48px !important;
+    min-height: 30px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    border-radius: 15px !important;
+    background: transparent !important;
+    border: none !important;
+    transition: background 0.18s ease, transform 0.18s ease !important;
+}
+
+html[data-ui-mode="minimal"] .bottom-nav-icon-wrap svg {
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px !important;
+    min-height: 22px !important;
+    flex-shrink: 0 !important;
+}
+
 html[data-ui-mode="minimal"] .bottom-nav-item.active {
     color: var(--accent-gold) !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item.active .bottom-nav-icon-wrap {
     background: var(--min-accent-muted) !important;
-    border-radius: var(--min-radius-full) !important;
-    padding: 2px 14px !important;
+    border-radius: 15px !important;
+    padding: 0 !important;
+    width: 48px !important;
+    height: 30px !important;
     animation: minActivePillPop 0.22s cubic-bezier(0.2, 0, 0, 1) both !important;
 }
 
 @keyframes minActivePillPop {
     0% {
-        transform: scale(0.92);
-        opacity: 0.75;
+        transform: scale(0.94);
+        opacity: 0.8;
     }
     100% {
         transform: scale(1);
@@ -354,29 +382,38 @@ html[data-ui-mode="minimal"] .bottom-nav-item.active::after {
     display: none !important;
 }
 
+html[data-ui-mode="minimal"] .nav-icon-outline,
+html[data-ui-mode="minimal"] .nav-icon-filled {
+    position: absolute !important;
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px !important;
+    min-height: 22px !important;
+    flex-shrink: 0 !important;
+    transition: opacity 0.18s ease !important;
+}
+
 html[data-ui-mode="minimal"] .bottom-nav-item.active .nav-icon-outline {
     opacity: 0 !important;
-    transform: scale(0.85) !important;
-    transition: opacity 0.18s ease, transform 0.18s ease !important;
+    transform: scale(1) !important;
+    pointer-events: none !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item.active .nav-icon-filled {
     opacity: 1 !important;
     transform: scale(1) !important;
     filter: none !important;
-    transition: opacity 0.18s ease, transform 0.18s ease !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item:not(.active) .nav-icon-outline {
     opacity: 1 !important;
     transform: scale(1) !important;
-    transition: opacity 0.18s ease, transform 0.18s ease !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item:not(.active) .nav-icon-filled {
     opacity: 0 !important;
-    transform: scale(0.85) !important;
-    transition: opacity 0.18s ease, transform 0.18s ease !important;
+    transform: scale(1) !important;
+    pointer-events: none !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item.active .bottom-nav-label {
