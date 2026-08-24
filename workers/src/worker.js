@@ -1,8 +1,12 @@
 // =============================================================================
 //  VideoHost — Cloudflare Edge Worker
 //  Non-destructive middleware: security headers, R2 video proxy, static cache,
-//  edge validation. All routes fall through to origin VPS when not handled.
+//  edge validation, Watch Together Durable Objects.
+//  All routes fall through to origin VPS when not handled.
 // =============================================================================
+
+// Re-export Durable Object class so wrangler can register it
+export { WatchRoom } from './WatchRoom.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -11,9 +15,12 @@ const BYPASS_PATTERNS = [
   /^\/upload$/,                          // POST body up to 550 MB — exceeds 100 MB Worker limit
   /^\/import-progress\//,                // SSE long-lived stream
   /^\/messages\/stream/,                 // SSE long-lived stream
-  /^\/watch-together\/stream\//,         // SSE long-lived stream
   /^\/api\/call\/events/,                // SSE long-lived stream
+  // Note: /watch-together/stream/ removed — Watch Together now uses WebSockets via Durable Objects
 ];
+
+/** Watch Together Durable Object API path pattern: /wt/room/<roomId>/<action> */
+const WT_ROOM_RE = /^\/wt\/room\/([a-f0-9]{12})(?:\/(.+))?$/;
 
 /** File extensions served as static assets with long-lived immutable caching. */
 const STATIC_ASSET_RE = /\.(css|js|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot|json|webmanifest)$/i;
@@ -70,6 +77,12 @@ export default {
     // ─── Phase 2: Static Asset Edge Caching ──────────────────────────
     if (STATIC_ASSET_RE.test(url.pathname) && request.method === 'GET') {
       return handleStaticAsset(request, ctx);
+    }
+
+    // ─── Watch Together: Route to Durable Object ─────────────────────
+    const wtMatch = url.pathname.match(WT_ROOM_RE);
+    if (wtMatch) {
+      return handleWatchTogether(request, env, url, wtMatch[1], wtMatch[2] || 'websocket');
     }
 
     // ─── Phase 1: Pass through to origin with security headers ───────
@@ -338,6 +351,52 @@ function validateRequest(request, url) {
     return new Response('Not Found', { status: 404 });
   }
   return null;
+}
+
+// =============================================================================
+//  Watch Together — Durable Object Router
+// =============================================================================
+
+/**
+ * Routes Watch Together requests to the correct WatchRoom Durable Object.
+ *
+ * URL pattern: /wt/room/<roomId>/<action>
+ *   - /wt/room/<roomId>/websocket  → WebSocket upgrade (GET with Upgrade header)
+ *   - /wt/room/<roomId>/create     → POST create room
+ *   - /wt/room/<roomId>/state      → GET room state
+ *   - /wt/room/<roomId>/leave      → POST leave room
+ *
+ * @param {Request} request
+ * @param {{ WATCH_ROOM: DurableObjectNamespace, WT_SHARED_SECRET: string }} env
+ * @param {URL} url
+ * @param {string} roomId - 12-char hex room ID
+ * @param {string} action - Route action (websocket, create, state, leave)
+ * @returns {Promise<Response>}
+ */
+async function handleWatchTogether(request, env, url, roomId, action) {
+  if (!env.WATCH_ROOM) {
+    return new Response('Durable Objects not configured', { status: 503 });
+  }
+
+  if (!env.WT_SHARED_SECRET) {
+    return new Response('Watch Together secret not configured', { status: 503 });
+  }
+
+  // Derive a deterministic DO ID from the room ID
+  const doId = env.WATCH_ROOM.idFromName(roomId);
+  const stub = env.WATCH_ROOM.get(doId);
+
+  // Forward the request to the Durable Object
+  const doUrl = new URL(request.url);
+  doUrl.pathname = `/${action}`;
+
+  const doRequest = new Request(doUrl.toString(), {
+    method: request.method,
+    headers: request.headers,
+    body: request.body,
+  });
+
+  return stub.fetch(doRequest);
 }
 
 // =============================================================================

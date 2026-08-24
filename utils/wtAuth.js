@@ -19,13 +19,14 @@ function isDurableObjectsEnabled() {
 
 /**
  * Get the Worker base URL for Watch Together API calls.
- * Uses the same domain as the VPS (Worker is deployed on the same route).
+ * Worker is deployed on the same subdomain (muaj.bro.bd) — DO requests
+ * go to /wt/room/* on the same origin, routed by the edge Worker.
  * @returns {string}
  */
 function getWorkerBaseUrl() {
-    return process.env.WT_WORKER_URL || process.env.CF_DOMAIN
-        ? `https://${process.env.CF_DOMAIN}`
-        : 'https://muaj.bro.bd';
+    if (process.env.WT_WORKER_URL) return process.env.WT_WORKER_URL;
+    if (process.env.CF_DOMAIN) return `https://${process.env.CF_DOMAIN}`;
+    return 'https://muaj.bro.bd';
 }
 
 /**

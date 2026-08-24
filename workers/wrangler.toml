@@ -1,6 +1,7 @@
 name = "videohost-edge"
 main = "src/worker.js"
 compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 # ─── Route ───────────────────────────────────────────────────────────
@@ -16,6 +17,9 @@ workers_dev = true
 #   Pattern: muaj.bro.bd/* → Worker: videohost-edge
 
 # ─── Environment Variables ───────────────────────────────────────────
+# Set via `wrangler secret put` or Cloudflare Dashboard:
+#   SESSION_SECRET   — same value as your VPS .env SESSION_SECRET
+#   WT_SHARED_SECRET — shared HMAC key for Watch Together auth tokens
 [vars]
 ORIGIN = "https://muaj.bro.bd"
 
@@ -27,3 +31,16 @@ command = ""
 [[r2_buckets]]
 binding = "R2_BUCKET"
 bucket_name = "videohost"
+
+# ─── Durable Objects — Watch Together Rooms ──────────────────────────
+# Each Watch Together session maps 1:1 to a WatchRoom Durable Object.
+# WebSocket connections, playback sync, and chat all live at the edge.
+[durable_objects]
+bindings = [
+  { name = "WATCH_ROOM", class_name = "WatchRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["WatchRoom"]
+
