@@ -20,7 +20,7 @@ class SQLiteSessionStore extends session.Store {
             touch: db.prepare('UPDATE sessions SET expires_at = ? WHERE sid = ?'),
             destroy: db.prepare('DELETE FROM sessions WHERE sid = ?'),
             prune: db.prepare('DELETE FROM sessions WHERE expires_at <= ?'),
-            pruneUnauthenticated: db.prepare("DELETE FROM sessions WHERE sess NOT LIKE '%\"user\":%' AND expires_at <= ?")
+            pruneUnauthenticated: db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user') IS NULL AND expires_at <= ?")
         };
 
         this.cleanupTimer = setInterval(() => {

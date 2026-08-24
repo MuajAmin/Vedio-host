@@ -140,9 +140,9 @@ function attachLocals(req, res, next) {
     next();
 }
 
-function requireCsrf(req, res, next) {
+function validateCsrf(req) {
     if (SAFE_METHODS.has(req.method)) {
-        return next();
+        return true;
     }
 
     const expected = req.session && req.session.csrfToken;
@@ -150,26 +150,34 @@ function requireCsrf(req, res, next) {
         || (req.query && req.query._csrf)
         || req.get('x-csrf-token');
 
-    if (!expected || !submitted || !timingSafeCompare(submitted, expected)) {
-        const isJsonReq = Boolean(
-            req.xhr ||
-            (req.headers['content-type'] && req.headers['content-type'].includes('application/json')) ||
-            (req.headers['accept'] && req.headers['accept'].includes('application/json'))
-        );
+    if (!expected || !submitted) {
+        return false;
+    }
 
-        if (isJsonReq) {
-            return res.status(403).json({
-                error: 'Invalid security token. Please refresh the page and try again.'
-            });
-        }
+    return timingSafeCompare(submitted, expected);
+}
 
-        return res.status(403).render('forbidden', {
-            user: req.session ? req.session.user : null,
-            message: 'Invalid request token. Please refresh the page and try again.'
+function requireCsrf(req, res, next) {
+    if (validateCsrf(req)) {
+        return next();
+    }
+
+    const isJsonReq = Boolean(
+        req.xhr ||
+        (req.headers['content-type'] && req.headers['content-type'].includes('application/json')) ||
+        (req.headers['accept'] && req.headers['accept'].includes('application/json'))
+    );
+
+    if (isJsonReq) {
+        return res.status(403).json({
+            error: 'Invalid security token. Please refresh the page and try again.'
         });
     }
 
-    return next();
+    return res.status(403).render('forbidden', {
+        user: req.session ? req.session.user : null,
+        message: 'Invalid request token. Please refresh the page and try again.'
+    });
 }
 
 module.exports = {
@@ -181,5 +189,6 @@ module.exports = {
     invalidateSettingsCache,
     renderAvatar,
     requireCsrf,
+    validateCsrf,
     timingSafeCompare
 };

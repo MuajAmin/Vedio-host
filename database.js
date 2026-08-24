@@ -315,7 +315,7 @@ function pruneExpiredSessions() {
     try {
         db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now());
         // Clean unauthenticated / ghost sessions older than 30 minutes
-        db.prepare("DELETE FROM sessions WHERE sess NOT LIKE '%\"user\":%' AND expires_at <= ?").run(Date.now() + 30 * 60 * 1000);
+        db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user') IS NULL AND expires_at <= ?").run(Date.now() + 30 * 60 * 1000);
     } catch (err) {
         console.error('[db] Error pruning expired sessions:', err.message);
     }
@@ -359,8 +359,7 @@ function getAllActiveSessions(currentSid = null) {
 function destroyUserSessions(username) {
     if (!username) return 0;
     try {
-        const pattern = `%"user":"${username}"%`;
-        const result = db.prepare('DELETE FROM sessions WHERE sess LIKE ?').run(pattern);
+        const result = db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user') = ?").run(username);
         const count = result.changes || 0;
 
         // Force user presence to offline
@@ -380,11 +379,10 @@ function destroyOtherUserSessions(username, currentSid) {
     if (!username) return 0;
     try {
         let result;
-        const pattern = `%"user":"${username}"%`;
         if (currentSid) {
-            result = db.prepare('DELETE FROM sessions WHERE sess LIKE ? AND sid != ?').run(pattern, currentSid);
+            result = db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user') = ? AND sid != ?").run(username, currentSid);
         } else {
-            result = db.prepare('DELETE FROM sessions WHERE sess LIKE ?').run(pattern);
+            result = db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user') = ?").run(username);
         }
         const count = result.changes || 0;
 
@@ -447,8 +445,7 @@ function destroyAllSessions(keepCurrentSid = null) {
 function countUserSessions(username) {
     if (!username) return 0;
     try {
-        const pattern = `%"user":"${username}"%`;
-        const row = db.prepare('SELECT COUNT(*) AS count FROM sessions WHERE sess LIKE ? AND expires_at > ?').get(pattern, Date.now());
+        const row = db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE json_extract(sess, '$.user') = ? AND expires_at > ?").get(username, Date.now());
         return row ? row.count : 0;
     } catch {
         return 0;
@@ -1199,18 +1196,26 @@ function getUserSettings(username) {
 function setUserSetting(username, key, value) {
     if (!username || !key) return false;
     try {
-        const validKeys = { ui_mode: true, theme: true };
-        if (!validKeys[key]) return false;
         const now = new Date().toISOString();
-        const existing = db.prepare('SELECT username FROM user_settings WHERE username = ?').get(username);
-        if (existing) {
-            db.prepare(`UPDATE user_settings SET ${key} = ?, updated_at = ? WHERE username = ?`).run(String(value), now, username);
-        } else {
-            const ui_mode = key === 'ui_mode' ? String(value) : 'standard';
-            const theme = key === 'theme' ? String(value) : ((username === 'hajera') ? 'sunset' : 'cinematic');
-            db.prepare('INSERT INTO user_settings (username, ui_mode, theme, updated_at) VALUES (?, ?, ?, ?)').run(username, ui_mode, theme, now);
+        if (key === 'ui_mode') {
+            const cleanVal = String(value);
+            db.prepare(`
+                INSERT INTO user_settings (username, ui_mode, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(username) DO UPDATE SET ui_mode = excluded.ui_mode, updated_at = excluded.updated_at
+            `).run(username, cleanVal, now);
+            return true;
         }
-        return true;
+        if (key === 'theme') {
+            const cleanVal = String(value);
+            db.prepare(`
+                INSERT INTO user_settings (username, theme, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(username) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
+            `).run(username, cleanVal, now);
+            return true;
+        }
+        return false;
     } catch (err) {
         console.error('[db] Error saving user setting:', err.message);
         return false;

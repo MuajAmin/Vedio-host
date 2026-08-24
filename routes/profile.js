@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { isAuthenticated } = require('../middleware/auth');
-const { requireCsrf, invalidateAvatarCache, invalidateSettingsCache } = require('../utils/security');
+const { requireCsrf, validateCsrf, invalidateAvatarCache, invalidateSettingsCache } = require('../utils/security');
 const db = require('../database');
 
 const avatarsDir = path.join(__dirname, '..', 'uploads', 'avatars');
@@ -42,9 +42,7 @@ router.post('/profile/avatar', isAuthenticated, (req, res) => {
             return res.redirect(returnUrl);
         }
 
-        let csrfOk = false;
-        requireCsrf(req, res, () => { csrfOk = true; });
-        if (!csrfOk) {
+        if (!validateCsrf(req)) {
             if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
             return;
         }
@@ -80,9 +78,7 @@ router.post('/profile/avatar', isAuthenticated, (req, res) => {
 
 // POST /profile/avatar/remove - Remove custom photo & revert to default letter avatar
 router.post('/profile/avatar/remove', isAuthenticated, (req, res) => {
-    let csrfOk = false;
-    requireCsrf(req, res, () => { csrfOk = true; });
-    if (!csrfOk) return;
+    if (!validateCsrf(req)) return;
 
     const returnUrl = req.get('Referrer') || '/dashboard';
     const isJson = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));

@@ -6,7 +6,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { spawn } = require('child_process');
 const { isAuthenticated, isMuaj } = require('../middleware/auth');
-const { requireCsrf } = require('../utils/security');
+const { requireCsrf, validateCsrf } = require('../utils/security');
 const db = require('../database');
 const { parseUserAgent, getClientIp } = require('../utils/device');
 const r2 = require('../utils/r2');
@@ -33,8 +33,7 @@ const allowedMimeTypes = new Set([
     'video/x-flv',
     'video/x-ms-wmv',
     'video/x-m4v',
-    'video/webm',
-    'application/octet-stream'
+    'video/webm'
 ]);
 const MAX_TITLE_LENGTH = 180;
 
@@ -205,11 +204,7 @@ router.post('/upload', isAuthenticated, (req, res) => {
             return fail(400, errorMsg);
         }
 
-        let csrfOk = false;
-        requireCsrf(req, res, () => {
-            csrfOk = true;
-        });
-        if (!csrfOk) {
+        if (!validateCsrf(req)) {
             if (req.file) {
                 fs.promises.unlink(path.join(uploadsDir, req.file.filename)).catch(() => {});
             }
@@ -274,9 +269,7 @@ router.post('/upload', isAuthenticated, (req, res) => {
 
 // POST /api/upload/init — Initialize direct-to-R2 upload ticket
 router.post('/api/upload/init', isAuthenticated, (req, res) => {
-    let csrfOk = false;
-    requireCsrf(req, res, () => { csrfOk = true; });
-    if (!csrfOk) {
+    if (!validateCsrf(req)) {
         return res.status(403).json({ success: false, error: 'Invalid CSRF token.' });
     }
 
@@ -332,9 +325,7 @@ router.post('/api/upload/init', isAuthenticated, (req, res) => {
 
 // POST /api/upload/finalize — Finalize direct-to-R2 upload metadata and client-extracted thumbnail
 router.post('/api/upload/finalize', isAuthenticated, async (req, res) => {
-    let csrfOk = false;
-    requireCsrf(req, res, () => { csrfOk = true; });
-    if (!csrfOk) {
+    if (!validateCsrf(req)) {
         return res.status(403).json({ success: false, error: 'Invalid CSRF token.' });
     }
 
@@ -744,7 +735,7 @@ router.post('/api/presence/ping', isAuthenticated, (req, res) => {
 });
 
 // POST /api/presence/leave - Client leaving beacon (pagehide / beforeunload)
-router.post('/api/presence/leave', (req, res) => {
+router.post('/api/presence/leave', isAuthenticated, (req, res) => {
     const user = req.session ? req.session.user : null;
     if (user) {
         const deviceInfo = parseUserAgent(req.headers['user-agent']);
@@ -841,11 +832,7 @@ router.post('/thumbnail/:id', isMuaj, (req, res) => {
             return fail(err.message || 'Thumbnail upload failed.');
         }
 
-        let csrfOk = false;
-        requireCsrf(req, res, () => {
-            csrfOk = true;
-        });
-        if (!csrfOk) {
+        if (!validateCsrf(req)) {
             if (req.file) {
                 fs.promises.unlink(path.join(thumbnailsDir, req.file.filename)).catch(() => {});
             }
@@ -870,11 +857,7 @@ router.post('/thumbnail/:id', isMuaj, (req, res) => {
 
 // POST /thumbnail/:id/regenerate - Rebuild thumbnail from source URL or video file (Admin / Muaj only)
 router.post('/thumbnail/:id/regenerate', isMuaj, async (req, res) => {
-    let csrfOk = false;
-    requireCsrf(req, res, () => {
-        csrfOk = true;
-    });
-    if (!csrfOk) return;
+    if (!validateCsrf(req)) return;
 
     const video = db.prepare('SELECT id, filename, thumbnail, source_url FROM videos WHERE id = ?').get(req.params.id);
     const watchUrl = `/watch/${encodeURIComponent(req.params.id)}`;

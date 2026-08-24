@@ -2,6 +2,38 @@
 // VideoHost — Client-side JavaScript
 // ========================================
 
+// Global CSRF protection: auto-inject x-csrf-token header on all mutating fetch() requests.
+// Token is read from <meta name="csrf-token"> in layout.ejs.
+(function () {
+    const originalFetch = window.fetch;
+    const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+    window.fetch = function (input, init) {
+        init = init || {};
+        const method = (init.method || 'GET').toUpperCase();
+
+        if (!SAFE_METHODS.has(method)) {
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const token = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+            if (token) {
+                // Preserve existing headers (Headers object, plain object, or array)
+                if (init.headers instanceof Headers) {
+                    if (!init.headers.has('x-csrf-token')) {
+                        init.headers.set('x-csrf-token', token);
+                    }
+                } else if (Array.isArray(init.headers)) {
+                    const hasIt = init.headers.some(([k]) => k.toLowerCase() === 'x-csrf-token');
+                    if (!hasIt) init.headers.push(['x-csrf-token', token]);
+                } else {
+                    init.headers = Object.assign({ 'x-csrf-token': token }, init.headers || {});
+                }
+            }
+        }
+
+        return originalFetch.call(this, input, init);
+    };
+})();
 document.addEventListener('DOMContentLoaded', () => {
     const storage = (() => {
         try {

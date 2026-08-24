@@ -8,7 +8,7 @@ const net = require('net');
 const { v4: uuidv4 } = require('uuid');
 const { spawn } = require('child_process');
 const { isAuthenticated } = require('../middleware/auth');
-const { requireCsrf } = require('../utils/security');
+const { requireCsrf, validateCsrf } = require('../utils/security');
 const db = require('../database');
 const r2 = require('../utils/r2');
 
@@ -1053,11 +1053,7 @@ async function cleanupOrphanedImportFiles() {
 // ----------------------------------------------------
 
 router.post('/import-url', isAuthenticated, async (req, res) => {
-    let csrfOk = false;
-    requireCsrf(req, res, () => {
-        csrfOk = true;
-    });
-    if (!csrfOk) return;
+    if (!validateCsrf(req)) return;
 
     if (activeJobs.size >= MAX_QUEUE_SIZE) {
         return res.status(429).json({ error: 'Import queue is full. Please wait for current jobs to finish.' });
@@ -1156,11 +1152,7 @@ router.post('/import-url', isAuthenticated, async (req, res) => {
 });
 
 router.post('/import-formats', isAuthenticated, async (req, res) => {
-    let csrfOk = false;
-    requireCsrf(req, res, () => {
-        csrfOk = true;
-    });
-    if (!csrfOk) return;
+    if (!validateCsrf(req)) return;
 
     const url = String(req.body.url || '').trim();
     if (!url) {
@@ -1200,11 +1192,7 @@ router.get('/import-jobs', isAuthenticated, (req, res) => {
 });
 
 router.post('/import-cancel/:jobId', isAuthenticated, (req, res) => {
-    let csrfOk = false;
-    requireCsrf(req, res, () => {
-        csrfOk = true;
-    });
-    if (!csrfOk) return;
+    if (!validateCsrf(req)) return;
 
     const job = activeJobs.get(req.params.jobId);
     if (!job) {
@@ -1240,11 +1228,7 @@ router.post('/import-cancel/:jobId', isAuthenticated, (req, res) => {
 });
 
 router.post('/import-retry/:jobId', isAuthenticated, async (req, res) => {
-    let csrfOk = false;
-    requireCsrf(req, res, () => {
-        csrfOk = true;
-    });
-    if (!csrfOk) return;
+    if (!validateCsrf(req)) return;
 
     const oldJob = activeJobs.get(req.params.jobId);
     if (!oldJob) {

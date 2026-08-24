@@ -43,8 +43,13 @@ function isMuaj(req, res, next) {
 }
 
 function authenticate(password) {
-    const muajPassword = process.env.MUAJ_PASSWORD || 'muaj123';
-    const hajeraPassword = process.env.HAJERA_PASSWORD || 'hajera123';
+    const muajPassword = process.env.MUAJ_PASSWORD;
+    const hajeraPassword = process.env.HAJERA_PASSWORD;
+
+    if (!muajPassword || !hajeraPassword) {
+        console.error('[auth] MUAJ_PASSWORD and HAJERA_PASSWORD must be set in environment.');
+        return null;
+    }
 
     if (timingSafeCompare(password, muajPassword)) {
         return 'muaj';

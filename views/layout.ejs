@@ -15,12 +15,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <script src="/js/theme-init.js?v=12.7"></script>
-    <script src="/js/twemoji.min.js?v=12.7"></script>
-    <link rel="stylesheet" href="/css/style.css?v=12.7">
-    <link rel="stylesheet" href="/css/messages.css?v=12.7">
-    <link rel="stylesheet" href="/css/calling.css?v=12.7">
-    <link rel="stylesheet" href="/css/minimal.css?v=12.7">
+    <script src="/js/theme-init.js?v=12.8"></script>
+    <script src="/js/twemoji.min.js?v=12.8"></script>
+    <link rel="stylesheet" href="/css/style.css?v=12.8">
+    <link rel="stylesheet" href="/css/messages.css?v=12.8">
+    <link rel="stylesheet" href="/css/calling.css?v=12.8">
+    <link rel="stylesheet" href="/css/minimal.css?v=12.8">
+    <meta name="csrf-token" content="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -673,10 +674,10 @@
             <audio id="remoteAudioTrack" autoplay playsinline style="display:none;"></audio>
             <% } %>
 
-            <script src="/js/app.js?v=12.7"></script>
-            <script defer src="/js/messages.js?v=12.7"></script>
-            <script defer src="/js/watchTogether.js?v=12.7"></script>
-            <script defer src="/js/calling.js?v=12.7"></script>
+            <script src="/js/app.js?v=12.8"></script>
+            <script defer src="/js/messages.js?v=12.8"></script>
+            <script defer src="/js/watchTogether.js?v=12.8"></script>
+            <script defer src="/js/calling.js?v=12.8"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').then(function(reg) {

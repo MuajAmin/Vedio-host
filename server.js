@@ -82,9 +82,9 @@ app.use((req, res, next) => {
     );
     next();
 });
-app.use(express.urlencoded({ extended: false, limit: '32kb' }));
-app.use(express.json({ limit: '64kb' }));
-app.use(express.text({ limit: '64kb', type: 'text/plain' }));
+app.use(express.urlencoded({ extended: false, limit: '64kb' }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.text({ limit: '2mb', type: 'text/plain' }));
 app.use(express.static(path.join(__dirname, 'public'), {
     etag: true,
     immutable: isProduction,
@@ -103,7 +103,11 @@ app.get('/health', (req, res) => {
 // skipping session deserialization, touch, and write-back.
 const cookie = require('cookie');
 const signature = require('cookie-signature');
-const sessionSecret = process.env.SESSION_SECRET || 'dev_only_change_me';
+const sessionSecret = process.env.SESSION_SECRET || (() => {
+    const ephemeral = require('crypto').randomBytes(32).toString('hex');
+    console.warn('[security] SESSION_SECRET not set — using ephemeral random secret (sessions will not persist across restarts)');
+    return ephemeral;
+})();
 const streamSessionStmt = db.prepare('SELECT sess, expires_at FROM sessions WHERE sid = ?');
 
 function fastStreamAuth(req, res, next) {
@@ -151,7 +155,7 @@ app.get('/stream/:videoKey', fastStreamAuth, (req, res, next) => {
 // Session
 app.use(session({
     store: new SQLiteSessionStore(),
-    secret: process.env.SESSION_SECRET || 'dev_only_change_me',
+    secret: sessionSecret,
     name: 'videohost.sid',
     resave: false,
     saveUninitialized: false,
@@ -253,6 +257,7 @@ app.get('/voice/:file', isAuthenticated, (req, res) => {
 });
 
 app.use((req, res, next) => {
+    // File upload routes — CSRF validated inline after multer parses multipart body
     if (req.path === '/upload' && req.method === 'POST') {
         return next();
     }
@@ -268,32 +273,11 @@ app.use((req, res, next) => {
     if (req.path === '/profile/avatar' && req.method === 'POST') {
         return next();
     }
-    // Watch Together chat/sync — CSRF handled via session auth
-    if (req.path.startsWith('/watch-together/') && (req.method === 'POST' || req.method === 'GET')) {
+    // sendBeacon endpoints — navigator.sendBeacon() cannot set custom headers
+    if (req.path === '/api/presence/leave' && req.method === 'POST') {
         return next();
     }
-    // Real-time presence pings & beacons — handled via session auth
-    if (req.path.startsWith('/api/presence/') && (req.method === 'POST' || req.method === 'GET')) {
-        return next();
-    }
-    // Direct Messaging API — handled via session auth
-    if (req.path.startsWith('/api/messages') && (req.method === 'POST' || req.method === 'GET')) {
-        return next();
-    }
-    // WebRTC Calling API — handled via session auth
-    if (req.path.startsWith('/api/call/') && (req.method === 'POST' || req.method === 'GET')) {
-        return next();
-    }
-    // Push Subscription API — handled via session auth
-    if (req.path.startsWith('/api/push/') && (req.method === 'POST' || req.method === 'GET')) {
-        return next();
-    }
-    // User Settings API — handled via session auth
-    if (req.path.startsWith('/api/settings') && (req.method === 'POST' || req.method === 'GET')) {
-        return next();
-    }
-    // Admin Cloudflare R2 Sync API — handled via isMuaj session auth
-    if (req.path.startsWith('/admin/r2/') && req.method === 'POST') {
+    if (req.path === '/api/call/end' && req.method === 'POST') {
         return next();
     }
     return requireCsrf(req, res, next);
