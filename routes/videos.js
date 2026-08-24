@@ -10,6 +10,7 @@ const { requireCsrf } = require('../utils/security');
 const db = require('../database');
 const { parseUserAgent, getClientIp } = require('../utils/device');
 const r2 = require('../utils/r2');
+const crypto = require('crypto');
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads', 'videos');
@@ -880,6 +881,29 @@ function pipeFile(res, filePath, options) {
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+// ─── Worker CDN: Signed URL for cross-origin R2 video proxy ─────────────
+// When CF_WORKER_URL is set, video streams redirect to the Cloudflare Worker
+// instead of the R2 public URL. The Worker validates the signed token and
+// proxies the video from R2 with proper Range/206 support.
+const CF_WORKER_URL = process.env.CF_WORKER_URL; // e.g. https://videohost-edge.muajamin2021.workers.dev
+
+/**
+ * Generates a signed Worker CDN URL for a video file.
+ * Token = HMAC-SHA256(filename + ":" + expiry, SESSION_SECRET)
+ * @param {string} filename - The video filename (R2 object key)
+ * @returns {string|null} Signed Worker URL or null if not configured
+ */
+function getWorkerStreamUrl(filename) {
+    if (!CF_WORKER_URL || !process.env.SESSION_SECRET) return null;
+    const exp = Math.floor(Date.now() / 1000) + 86400; // 24 hours from now
+    const message = `${filename}:${exp}`;
+    const sig = crypto.createHmac('sha256', process.env.SESSION_SECRET)
+        .update(message)
+        .digest('hex');
+    return `${CF_WORKER_URL}/stream/${encodeURIComponent(filename)}?exp=${exp}&sig=${sig}`;
+}
+
+
 async function handleStream(req, res) {
     const videoKey = req.params.videoKey;
 
@@ -895,10 +919,13 @@ async function handleStream(req, res) {
     }
 
     // R2 CDN: Redirect to Cloudflare edge — zero VPS bandwidth usage.
-    // R2 handles Range/206 requests natively, so seeking works out of the box.
+    // Prefers Worker CDN (signed URL) over raw R2 public URL when configured.
+    // R2/Worker handles Range/206 requests natively, so seeking works out of the box.
     // Uses an in-memory Set to track confirmed R2 files (avoids HEAD on every request).
     if (r2.isR2Enabled()) {
-        const cdnUrl = r2.getPublicUrl(filename);
+        // Generate redirect URL: Worker CDN (signed) or R2 public
+        const workerUrl = getWorkerStreamUrl(filename);
+        const cdnUrl = workerUrl || r2.getPublicUrl(filename);
         if (cdnUrl) {
             // Fast path: already confirmed on R2
             if (_r2ConfirmedFiles.has(filename)) {

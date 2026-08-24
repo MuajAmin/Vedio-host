@@ -1,35 +1,10 @@
 // =============================================================================
 //  VideoHost — Cloudflare Edge Worker
-//  Non-destructive middleware: security headers, R2 video proxy, static cache,
-//  edge validation, Watch Together Durable Objects.
-//  All routes fall through to origin VPS when not handled.
+//  R2 Video CDN with Signed URL authentication.
+//  Works without root domain — VPS redirects to workers.dev URL.
 // =============================================================================
 
-// Re-export Durable Object class so wrangler can register it
-export { WatchRoom } from './WatchRoom.js';
-
 // ─── Constants ──────────────────────────────────────────────────────────────
-
-/** Routes that MUST bypass the Worker entirely (SSE streams, large uploads). */
-const BYPASS_PATTERNS = [
-  /^\/upload$/,                          // POST body up to 550 MB — exceeds 100 MB Worker limit
-  /^\/import-progress\//,                // SSE long-lived stream
-  /^\/messages\/stream/,                 // SSE long-lived stream
-  /^\/api\/call\/events/,                // SSE long-lived stream
-  // Note: /watch-together/stream/ removed — Watch Together now uses WebSockets via Durable Objects
-];
-
-/** Watch Together Durable Object API path pattern: /wt/room/<roomId>/<action> */
-const WT_ROOM_RE = /^\/wt\/room\/([a-f0-9]{12})(?:\/(.+))?$/;
-
-/** File extensions served as static assets with long-lived immutable caching. */
-const STATIC_ASSET_RE = /\.(css|js|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot|json|webmanifest)$/i;
-
-/**
- * UUID v4 pattern used in video keys (with optional file extension).
- * Matches: 550e8400-e29b-41d4-a716-446655440000 or 550e8400-e29b-41d4-a716-446655440000.mp4
- */
-const VIDEO_KEY_RE = /^\/stream\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i;
 
 /** MIME type mapping for video file extensions. */
 const VIDEO_MIME_MAP = {
@@ -43,8 +18,8 @@ const VIDEO_MIME_MAP = {
   '.m4v': 'video/mp4',
 };
 
-/** Session validation cache TTL. */
-const SESSION_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+/** Valid video key pattern — UUID with optional extension. */
+const VIDEO_KEY_RE = /^\/stream\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i;
 
 // =============================================================================
 //  Entry Point
@@ -53,121 +28,117 @@ const SESSION_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 export default {
   /**
    * @param {Request} request
-   * @param {{ R2_BUCKET: R2Bucket, ORIGIN: string, SESSION_SECRET: string }} env
+   * @param {{ R2_BUCKET: R2Bucket, SESSION_SECRET: string }} env
    * @param {ExecutionContext} ctx
    */
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // ─── Phase 0: Bypass routes that Workers cannot handle ───────────
-    if (shouldBypass(url, request.method)) {
-      return fetch(request);
+    // ─── CORS preflight for cross-origin video requests ──────────────
+    if (request.method === 'OPTIONS') {
+      return handleCors(request);
     }
 
-    // ─── Phase 5: Edge request validation ────────────────────────────
-    const blocked = validateRequest(request, url);
-    if (blocked) return blocked;
-
-    // ─── Phase 3: R2 Video Streaming Proxy ───────────────────────────
+    // ─── Video Stream: /stream/:videoKey?sig=...&exp=... ─────────────
     const streamMatch = url.pathname.match(VIDEO_KEY_RE);
     if (streamMatch && (request.method === 'GET' || request.method === 'HEAD')) {
-      return handleVideoStream(request, env, ctx, streamMatch[1]);
+      const response = await handleVideoStream(request, env, ctx, streamMatch[1], url);
+      return addCorsHeaders(response, request);
     }
 
-    // ─── Phase 2: Static Asset Edge Caching ──────────────────────────
-    if (STATIC_ASSET_RE.test(url.pathname) && request.method === 'GET') {
-      return handleStaticAsset(request, ctx);
-    }
-
-    // ─── Watch Together: Route to Durable Object ─────────────────────
-    const wtMatch = url.pathname.match(WT_ROOM_RE);
-    if (wtMatch) {
-      return handleWatchTogether(request, env, url, wtMatch[1], wtMatch[2] || 'websocket');
-    }
-
-    // ─── Phase 1: Pass through to origin with security headers ───────
-    const response = await fetch(request);
-    return applySecurityHeaders(response);
+    // ─── All other requests: return 404 (this Worker only serves videos) ─
+    return new Response('Not Found', { status: 404 });
   },
 };
 
 // =============================================================================
-//  Phase 0 — Bypass Logic
+//  Signed URL Authentication
 // =============================================================================
 
-function shouldBypass(url, method) {
-  if (url.pathname === '/upload' && method === 'POST') return true;
-  return BYPASS_PATTERNS.some((re) => re.test(url.pathname));
-}
+/**
+ * Validates a signed URL token.
+ *
+ * The VPS generates: sig = HMAC-SHA256(videoKey + ":" + expiry, SESSION_SECRET)
+ * The Worker validates it using the same SESSION_SECRET.
+ *
+ * @param {string} videoKey - The video filename/UUID from the URL path
+ * @param {URLSearchParams} params - Query parameters (sig, exp)
+ * @param {string} secret - The shared SESSION_SECRET
+ * @returns {Promise<boolean>}
+ */
+async function validateSignedUrl(videoKey, params, secret) {
+  const sig = params.get('sig');
+  const exp = params.get('exp');
 
-// =============================================================================
-//  Phase 1 — Security Headers
-// =============================================================================
+  if (!sig || !exp) return false;
 
-function applySecurityHeaders(response) {
-  if (response.status === 0) return response;
-
-  const headers = new Headers(response.headers);
-  headers.set('X-Content-Type-Options', 'nosniff');
-  headers.set('X-Frame-Options', 'DENY');
-  headers.set('Referrer-Policy', 'same-origin');
-  headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  headers.set('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(), payment=()');
-  headers.delete('X-Powered-By');
-  headers.delete('Server');
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
-
-// =============================================================================
-//  Phase 2 — Static Asset Edge Caching
-// =============================================================================
-
-async function handleStaticAsset(request, ctx) {
-  const cache = caches.default;
-  const cached = await cache.match(request);
-  if (cached) return applySecurityHeaders(cached);
-
-  const originResponse = await fetch(request);
-
-  if (originResponse.ok) {
-    const cacheHeaders = new Headers(originResponse.headers);
-    cacheHeaders.set('Cache-Control', 'public, max-age=604800, immutable');
-
-    const cacheableResponse = new Response(originResponse.body, {
-      status: originResponse.status,
-      statusText: originResponse.statusText,
-      headers: cacheHeaders,
-    });
-
-    ctx.waitUntil(cache.put(request, cacheableResponse.clone()));
-    return applySecurityHeaders(cacheableResponse);
+  // Check expiry
+  const expiryTs = parseInt(exp, 10);
+  if (!Number.isFinite(expiryTs) || Date.now() > expiryTs * 1000) {
+    return false; // Expired
   }
 
-  return applySecurityHeaders(originResponse);
+  // Compute expected HMAC
+  const message = `${videoKey}:${exp}`;
+  const encoder = new TextEncoder();
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+  const expectedSig = arrayBufferToHex(signature);
+
+  // Constant-time comparison
+  return expectedSig === sig;
+}
+
+/**
+ * Converts an ArrayBuffer to a hex string.
+ * @param {ArrayBuffer} buffer
+ * @returns {string}
+ */
+function arrayBufferToHex(buffer) {
+  return [...new Uint8Array(buffer)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 // =============================================================================
-//  Phase 3 — R2 Video Streaming Proxy
+//  R2 Video Streaming
 // =============================================================================
 
-async function handleVideoStream(request, env, ctx, videoKey) {
-  // ─── Authentication ────────────────────────────────────────────────
-  const authResult = await validateStreamAuth(request, env);
-  if (!authResult.valid) {
-    return new Response('Unauthorized', { status: 401, headers: { 'Content-Type': 'text/plain' } });
+/**
+ * Proxies video streams directly from R2 with signed URL auth.
+ *
+ * @param {Request} request
+ * @param {{ R2_BUCKET: R2Bucket, SESSION_SECRET: string }} env
+ * @param {ExecutionContext} ctx
+ * @param {string} videoKey
+ * @param {URL} url
+ * @returns {Promise<Response>}
+ */
+async function handleVideoStream(request, env, ctx, videoKey, url) {
+  // ─── Authentication via Signed URL ─────────────────────────────────
+  if (!env.SESSION_SECRET) {
+    return new Response('Server misconfigured', { status: 500 });
+  }
+
+  const isValid = await validateSignedUrl(videoKey, url.searchParams, env.SESSION_SECRET);
+  if (!isValid) {
+    return new Response('Unauthorized — invalid or expired token', { status: 401 });
   }
 
   // ─── R2 Binding Check ─────────────────────────────────────────────
   if (!env.R2_BUCKET) {
-    return passToOrigin(request);
+    return new Response('R2 not configured', { status: 500 });
   }
 
-  // ─── Resolve R2 Object Key ─────────────────────────────────────────
+  // ─── Resolve R2 Object ─────────────────────────────────────────────
   let object = null;
   let objectKey = videoKey;
   const r2Options = buildR2Options(request);
@@ -184,30 +155,23 @@ async function handleVideoStream(request, env, ctx, videoKey) {
     } catch { /* fall through */ }
   }
 
-  // ─── R2 Miss: Fall through to origin VPS ───────────────────────────
   if (!object) {
-    return passToOrigin(request);
+    return new Response('Video not found on R2', { status: 404 });
   }
 
-  // ─── Build Response ────────────────────────────────────────────────
-  const responseHeaders = new Headers();
+  // ─── Build Response Headers ────────────────────────────────────────
+  const headers = new Headers();
   const contentType = object.httpMetadata?.contentType || getVideoMimeType(objectKey);
-  responseHeaders.set('Content-Type', contentType);
-  responseHeaders.set('Accept-Ranges', 'bytes');
-  responseHeaders.set('Cache-Control', 'private, max-age=86400, no-transform');
-  responseHeaders.set('X-Content-Type-Options', 'nosniff');
-  responseHeaders.set('Connection', 'keep-alive');
+  headers.set('Content-Type', contentType);
+  headers.set('Accept-Ranges', 'bytes');
+  headers.set('Cache-Control', 'private, max-age=86400, no-transform');
+  headers.set('X-Content-Type-Options', 'nosniff');
 
-  if (object.httpEtag) responseHeaders.set('ETag', object.httpEtag);
-  if (object.uploaded) responseHeaders.set('Last-Modified', object.uploaded.toUTCString());
+  if (object.httpEtag) headers.set('ETag', object.httpEtag);
+  if (object.uploaded) headers.set('Last-Modified', object.uploaded.toUTCString());
 
   const basename = objectKey.split('/').pop() || 'video.mp4';
-  responseHeaders.set('Content-Disposition', `inline; filename="${encodeBasename(basename)}"`);
-
-  // Security headers
-  responseHeaders.set('X-Frame-Options', 'DENY');
-  responseHeaders.set('Referrer-Policy', 'same-origin');
-  responseHeaders.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  headers.set('Content-Disposition', `inline; filename="${encodeBasename(basename)}"`);
 
   // ─── Range Response (206 Partial Content) ──────────────────────────
   if (object.range) {
@@ -215,18 +179,22 @@ async function handleVideoStream(request, env, ctx, videoKey) {
     const length = 'length' in object.range ? object.range.length : object.size;
     const end = offset + length - 1;
 
-    responseHeaders.set('Content-Range', `bytes ${offset}-${end}/${object.size}`);
-    responseHeaders.set('Content-Length', length.toString());
+    headers.set('Content-Range', `bytes ${offset}-${end}/${object.size}`);
+    headers.set('Content-Length', length.toString());
 
-    if (request.method === 'HEAD') return new Response(null, { status: 206, headers: responseHeaders });
-    return new Response(object.body, { status: 206, headers: responseHeaders });
+    if (request.method === 'HEAD') return new Response(null, { status: 206, headers });
+    return new Response(object.body, { status: 206, headers });
   }
 
   // ─── Full Response (200 OK) ────────────────────────────────────────
-  responseHeaders.set('Content-Length', object.size.toString());
-  if (request.method === 'HEAD') return new Response(null, { status: 200, headers: responseHeaders });
-  return new Response(object.body, { status: 200, headers: responseHeaders });
+  headers.set('Content-Length', object.size.toString());
+  if (request.method === 'HEAD') return new Response(null, { status: 200, headers });
+  return new Response(object.body, { status: 200, headers });
 }
+
+// =============================================================================
+//  Range Request Parsing
+// =============================================================================
 
 function buildR2Options(request) {
   const options = {};
@@ -245,8 +213,7 @@ function buildR2Options(request) {
 function parseRangeHeader(rangeHeader) {
   const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
   if (!match) return null;
-  const startStr = match[1];
-  const endStr = match[2];
+  const [, startStr, endStr] = match;
 
   if (startStr === '' && endStr !== '') {
     const suffix = parseInt(endStr, 10);
@@ -266,6 +233,44 @@ function parseRangeHeader(rangeHeader) {
   return null;
 }
 
+// =============================================================================
+//  CORS — Required for cross-origin video requests
+// =============================================================================
+
+/**
+ * Since the video player on muaj.bro.bd loads videos from workers.dev,
+ * the browser will enforce CORS. We allow the origin domain.
+ */
+function handleCors(request) {
+  const origin = request.headers.get('Origin') || '*';
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Range, If-None-Match',
+      'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges, ETag',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+}
+
+function addCorsHeaders(response, request) {
+  const origin = request.headers.get('Origin') || '*';
+  const headers = new Headers(response.headers);
+  headers.set('Access-Control-Allow-Origin', origin);
+  headers.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges, ETag');
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+// =============================================================================
+//  Utilities
+// =============================================================================
+
 function getVideoMimeType(filename) {
   const dot = filename.lastIndexOf('.');
   if (dot === -1) return 'video/mp4';
@@ -274,136 +279,4 @@ function getVideoMimeType(filename) {
 
 function encodeBasename(name) {
   return name.replace(/["\\\r\n\x00-\x1F\x7F]/g, '_');
-}
-
-// =============================================================================
-//  Phase 4 — Edge Authentication (Origin Cookie Passthrough)
-// =============================================================================
-
-async function validateStreamAuth(request, env) {
-  const cookieHeader = request.headers.get('Cookie') || '';
-  const sidMatch = cookieHeader.match(/videohost\.sid=([^;]+)/);
-  if (!sidMatch) return { valid: false };
-
-  const sessionCookie = sidMatch[1];
-  const cacheKey = `session-check:${hashCode(sessionCookie)}`;
-
-  // Check CF Cache API
-  const cache = caches.default;
-  const cacheUrl = new URL(`https://session-cache.internal/${cacheKey}`);
-  const cacheRequest = new Request(cacheUrl.toString());
-
-  const cached = await cache.match(cacheRequest);
-  if (cached) return cached.json();
-
-  // Cache miss — validate against origin VPS
-  try {
-    const originUrl = (env.ORIGIN || 'https://muaj.bro.bd').replace(/\/$/, '');
-    const dashCheck = await fetch(`${originUrl}/dashboard`, {
-      method: 'HEAD',
-      headers: {
-        Cookie: `videohost.sid=${sessionCookie}`,
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      redirect: 'manual',
-    });
-
-    const valid = dashCheck.status === 200;
-    const result = { valid };
-
-    const cacheResponse = new Response(JSON.stringify(result), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': `max-age=${SESSION_CACHE_TTL_MS / 1000}`,
-      },
-    });
-    await cache.put(cacheRequest, cacheResponse);
-    return result;
-  } catch {
-    return { valid: false };
-  }
-}
-
-function hashCode(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash).toString(36);
-}
-
-// =============================================================================
-//  Phase 5 — Edge Request Validation
-// =============================================================================
-
-function validateRequest(request, url) {
-  if (url.pathname.includes('..') || url.pathname.includes('%2e%2e') || url.pathname.includes('%2E%2E')) {
-    return new Response('Bad Request', { status: 400 });
-  }
-  if (url.pathname.length > 2048) {
-    return new Response('URI Too Long', { status: 414 });
-  }
-  const ua = request.headers.get('User-Agent') || '';
-  if (!ua && !url.pathname.startsWith('/api/') && !url.pathname.startsWith('/health') && request.method !== 'OPTIONS') {
-    return new Response('Forbidden', { status: 403 });
-  }
-  if (/\.(php|asp|aspx|jsp|cgi|env|git|svn|htaccess|htpasswd|sql|bak|swp)$/i.test(url.pathname)) {
-    return new Response('Not Found', { status: 404 });
-  }
-  return null;
-}
-
-// =============================================================================
-//  Watch Together — Durable Object Router
-// =============================================================================
-
-/**
- * Routes Watch Together requests to the correct WatchRoom Durable Object.
- *
- * URL pattern: /wt/room/<roomId>/<action>
- *   - /wt/room/<roomId>/websocket  → WebSocket upgrade (GET with Upgrade header)
- *   - /wt/room/<roomId>/create     → POST create room
- *   - /wt/room/<roomId>/state      → GET room state
- *   - /wt/room/<roomId>/leave      → POST leave room
- *
- * @param {Request} request
- * @param {{ WATCH_ROOM: DurableObjectNamespace, WT_SHARED_SECRET: string }} env
- * @param {URL} url
- * @param {string} roomId - 12-char hex room ID
- * @param {string} action - Route action (websocket, create, state, leave)
- * @returns {Promise<Response>}
- */
-async function handleWatchTogether(request, env, url, roomId, action) {
-  if (!env.WATCH_ROOM) {
-    return new Response('Durable Objects not configured', { status: 503 });
-  }
-
-  if (!env.WT_SHARED_SECRET) {
-    return new Response('Watch Together secret not configured', { status: 503 });
-  }
-
-  // Derive a deterministic DO ID from the room ID
-  const doId = env.WATCH_ROOM.idFromName(roomId);
-  const stub = env.WATCH_ROOM.get(doId);
-
-  // Forward the request to the Durable Object
-  const doUrl = new URL(request.url);
-  doUrl.pathname = `/${action}`;
-
-  const doRequest = new Request(doUrl.toString(), {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-  });
-
-  return stub.fetch(doRequest);
-}
-
-// =============================================================================
-//  Utility
-// =============================================================================
-
-async function passToOrigin(request) {
-  const response = await fetch(request);
-  return applySecurityHeaders(response);
 }
