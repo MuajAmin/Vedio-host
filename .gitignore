@@ -41,3 +41,7 @@ Thumbs.db
 # Agent Customizations & Local Skills (Contains VPS deploy scripts & keys)
 .agents/
 _agents/
+
+# AI Agent & CLI configs (Contains API keys)
+opencode.json
+opencode.*.json

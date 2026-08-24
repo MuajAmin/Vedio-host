@@ -385,10 +385,7 @@ router.post('/api/upload/finalize', isAuthenticated, async (req, res) => {
         console.log(`[upload/finalize] Video saved directly to R2: id=${id} file=${filename} size=${(size / 1024 / 1024).toFixed(1)}MB by=${uploader}`);
 
         // Mark as confirmed in memory caches so playback stream redirects instantly without HEAD check
-        _r2ConfirmedFiles.add(filename);
-        if (typeof r2.markR2Confirmed === 'function') {
-            r2.markR2Confirmed(filename);
-        }
+        r2.markConfirmedOnR2(filename);
 
         return res.json({
             success: true,

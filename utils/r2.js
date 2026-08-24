@@ -569,6 +569,7 @@ function getWorkerCallSignalingUrl(user, expiresInSeconds = 7200) {
 module.exports = {
     isR2Enabled,
     getPublicUrl,
+    getMimeType,
     uploadToR2,
     deleteFromR2,
     existsOnR2,

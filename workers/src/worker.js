@@ -21,6 +21,103 @@ const VIDEO_MIME_MAP = {
 /** Valid video key pattern — UUID with optional extension. */
 const VIDEO_KEY_RE = /^\/stream\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i;
 
+/** Valid upload key pattern — same as video key. */
+const UPLOAD_KEY_RE = /^\/upload\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i;
+
+/** Valid R2 check key pattern — same as video key. */
+const R2_CHECK_KEY_RE = /^\/api\/r2-check\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i;
+
+/** Allowed CORS origins — restrict to our own domain. */
+const ALLOWED_ORIGINS = new Set([
+  'https://muaj.bro.bd',
+  'https://www.muaj.bro.bd',
+]);
+
+/** WebSocket idle timeout for call signaling (5 minutes). */
+const CALL_WS_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** Max request body size for admin endpoints (100 KB). */
+const MAX_ADMIN_BODY_SIZE = 100 * 1024;
+
+/** Batch delete parallelism limit. */
+const DELETE_BATCH_CONCURRENCY = 10;
+
+// =============================================================================
+//  Simple Router
+// =============================================================================
+
+/**
+ * @typedef {Object} Route
+ * @property {string|string[]} method - HTTP method(s) to match
+ * @property {RegExp|string}   pattern - URL pathname regex or exact string
+ * @property {Function}        handler - async (request, env, ctx, match, url) => Response
+ */
+
+/** @type {Route[]} */
+const routes = [
+  // Video streaming
+  {
+    method: ['GET', 'HEAD'],
+    pattern: VIDEO_KEY_RE,
+    handler: handleVideoStream,
+  },
+  // Direct-to-R2 upload
+  {
+    method: 'PUT',
+    pattern: UPLOAD_KEY_RE,
+    handler: handleDirectUpload,
+  },
+  // Edge R2 inventory & audit
+  {
+    method: 'GET',
+    pattern: '/api/r2-inventory',
+    handler: handleR2Inventory,
+  },
+  // Edge fast check
+  {
+    method: ['GET', 'HEAD'],
+    pattern: R2_CHECK_KEY_RE,
+    handler: handleR2Check,
+  },
+  // Edge R2 delete batch (orphan cleanup)
+  {
+    method: 'POST',
+    pattern: '/api/r2-delete-batch',
+    handler: handleR2DeleteBatch,
+  },
+  // WebRTC call signaling WebSocket
+  {
+    method: null, // any method — WebSocket upgrade
+    pattern: '/call-signaling',
+    handler: handleCallSignalingWebSocket,
+  },
+];
+
+/**
+ * Match a request against the route table.
+ * @param {string} method
+ * @param {string} pathname
+ * @returns {{ route: Route, match: RegExpMatchArray|null }|null}
+ */
+function matchRoute(method, pathname) {
+  for (const route of routes) {
+    // Method check (null = any method)
+    if (route.method !== null) {
+      const methods = Array.isArray(route.method) ? route.method : [route.method];
+      if (!methods.includes(method)) continue;
+    }
+
+    // Pattern check
+    if (typeof route.pattern === 'string') {
+      if (pathname === route.pattern) return { route, match: null };
+    } else {
+      const m = pathname.match(route.pattern);
+      if (m) return { route, match: m };
+    }
+  }
+  return null;
+}
+
 // =============================================================================
 //  Entry Point
 // =============================================================================
@@ -34,60 +131,119 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // ─── CORS preflight for cross-origin video requests ──────────────
+    // ─── CORS preflight ──────────────────────────────────────────────
     if (request.method === 'OPTIONS') {
       return handleCors(request);
     }
 
-    // ─── Video Stream: /stream/:videoKey?sig=...&exp=... ─────────────
-    const streamMatch = url.pathname.match(VIDEO_KEY_RE);
-    if (streamMatch && (request.method === 'GET' || request.method === 'HEAD')) {
-      const response = await handleVideoStream(request, env, ctx, streamMatch[1], url);
-      return addCorsHeaders(response, request);
+    // ─── Route matching ──────────────────────────────────────────────
+    const found = matchRoute(request.method, url.pathname);
+    if (!found) {
+      return new Response('Not Found', { status: 404 });
     }
 
-    // ─── Direct-to-R2 Upload: PUT /upload/:videoKey?sig=...&exp=... ────
-    const uploadMatch = url.pathname.match(/^\/upload\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i);
-    if (uploadMatch && request.method === 'PUT') {
-      const response = await handleDirectUpload(request, env, ctx, uploadMatch[1], url);
-      return addCorsHeaders(response, request);
+    const { route, match } = found;
+
+    // Special case: WebSocket upgrade check
+    if (url.pathname === '/call-signaling' && request.headers.get('Upgrade') !== 'websocket') {
+      return new Response('Expected WebSocket upgrade', { status: 426 });
     }
 
-    // ─── Edge R2 Inventory & Audit: GET /api/r2-inventory?sig=...&exp=... ─
-    if (url.pathname === '/api/r2-inventory' && request.method === 'GET') {
-      const response = await handleR2Inventory(request, env, ctx, url);
-      return addCorsHeaders(response, request);
-    }
-
-    // ─── Edge Fast Check: GET /api/r2-check/:videoKey?sig=...&exp=... ───
-    const checkMatch = url.pathname.match(/^\/api\/r2-check\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i);
-    if (checkMatch && (request.method === 'GET' || request.method === 'HEAD')) {
-      const response = await handleR2Check(request, env, ctx, checkMatch[1], url);
-      return addCorsHeaders(response, request);
-    }
-
-    // ─── Edge R2 Delete Batch: POST /api/r2-delete-batch?sig=...&exp=... ─
-    if (url.pathname === '/api/r2-delete-batch' && request.method === 'POST') {
-      const response = await handleR2DeleteBatch(request, env, ctx, url);
-      return addCorsHeaders(response, request);
-    }
-
-    // ─── Edge WebRTC Call Signaling WebSocket: /call-signaling?user=...&sig=...&exp=... ───
-    if (url.pathname === '/call-signaling') {
-      if (request.headers.get('Upgrade') !== 'websocket') {
-        return new Response('Expected WebSocket upgrade', { status: 426 });
-      }
-      return handleCallSignalingWebSocket(request, env, ctx, url);
-    }
-
-    // ─── All other requests: return 404 (this Worker only serves videos) ─
-    return new Response('Not Found', { status: 404 });
+    // Extract capture group (videoKey) if regex matched
+    const capturedKey = match ? match[1] : null;
+    const response = await route.handler(request, env, ctx, capturedKey, url);
+    return addCorsHeaders(response, request);
   },
 };
 
 // =============================================================================
+//  JSON Response Helpers (DRY)
+// =============================================================================
+
+/**
+ * Return a JSON error response.
+ * @param {string} message
+ * @param {number} status
+ * @returns {Response}
+ */
+function jsonError(message, status) {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/**
+ * Return a JSON success response.
+ * @param {object} data
+ * @param {number} [status=200]
+ * @param {object} [extraHeaders={}]
+ * @returns {Response}
+ */
+function jsonOk(data, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
+  });
+}
+
+// =============================================================================
+//  Common Auth Guard (DRY)
+// =============================================================================
+
+/**
+ * Authenticate a signed admin/API request. Returns null if auth passed,
+ * or a Response to return immediately on failure.
+ *
+ * @param {{ SESSION_SECRET?: string, R2_BUCKET?: R2Bucket }} env
+ * @param {string} signatureKey - The key used in HMAC signature (videoKey, 'inventory', etc.)
+ * @param {URL} url
+ * @param {{ requireR2?: boolean }} [options]
+ * @returns {Promise<Response|null>}
+ */
+async function authenticate(env, signatureKey, url, options = {}) {
+  const { requireR2 = true } = options;
+  if (!env.SESSION_SECRET) {
+    return jsonError('Server misconfigured', 500);
+  }
+  const isValid = await validateSignedUrl(signatureKey, url.searchParams, env.SESSION_SECRET);
+  if (!isValid) {
+    return jsonError('Unauthorized — invalid or expired token', 401);
+  }
+  if (requireR2 && !env.R2_BUCKET) {
+    return jsonError('R2 not configured', 500);
+  }
+  return null; // auth passed
+}
+
+// =============================================================================
 //  Signed URL Authentication
 // =============================================================================
+
+// ─── HMAC CryptoKey Cache ────────────────────────────────────────────────────
+// Workers reuse isolates across requests within the same colo. Caching the key
+// avoids re-importing on every 206 range request during a playback session.
+let _cachedHmacKey = null;
+let _cachedHmacSecret = null;
+
+/**
+ * Get or create a cached HMAC-SHA256 CryptoKey for the given secret.
+ * @param {string} secret
+ * @returns {Promise<CryptoKey>}
+ */
+async function getHmacKey(secret) {
+  if (_cachedHmacKey && _cachedHmacSecret === secret) return _cachedHmacKey;
+  const encoder = new TextEncoder();
+  _cachedHmacKey = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  _cachedHmacSecret = secret;
+  return _cachedHmacKey;
+}
 
 /**
  * Validates a signed URL token.
@@ -112,23 +268,15 @@ async function validateSignedUrl(videoKey, params, secret) {
     return false; // Expired
   }
 
-  // Compute expected HMAC
+  // Compute expected HMAC using cached key
   const message = `${videoKey}:${exp}`;
   const encoder = new TextEncoder();
-
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-
+  const key = await getHmacKey(secret);
   const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
   const expectedSig = arrayBufferToHex(signature);
 
-  // Constant-time comparison
-  return expectedSig === sig;
+  // Constant-time comparison — prevents timing side-channel attacks
+  return timingSafeEqual(expectedSig, sig);
 }
 
 /**
@@ -140,6 +288,21 @@ function arrayBufferToHex(buffer) {
   return [...new Uint8Array(buffer)]
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+/**
+ * Constant-time string comparison to prevent timing side-channel attacks.
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
 }
 
 // =============================================================================
@@ -157,20 +320,8 @@ function arrayBufferToHex(buffer) {
  * @returns {Promise<Response>}
  */
 async function handleVideoStream(request, env, ctx, videoKey, url) {
-  // ─── Authentication via Signed URL ─────────────────────────────────
-  if (!env.SESSION_SECRET) {
-    return new Response('Server misconfigured', { status: 500 });
-  }
-
-  const isValid = await validateSignedUrl(videoKey, url.searchParams, env.SESSION_SECRET);
-  if (!isValid) {
-    return new Response('Unauthorized — invalid or expired token', { status: 401 });
-  }
-
-  // ─── R2 Binding Check ─────────────────────────────────────────────
-  if (!env.R2_BUCKET) {
-    return new Response('R2 not configured', { status: 500 });
-  }
+  const authErr = await authenticate(env, videoKey, url);
+  if (authErr) return authErr;
 
   // ─── Resolve R2 Object ─────────────────────────────────────────────
   let object = null;
@@ -187,6 +338,16 @@ async function handleVideoStream(request, env, ctx, videoKey, url) {
       objectKey = `${videoKey}.mp4`;
       object = await env.R2_BUCKET.get(objectKey, r2Options);
     } catch { /* fall through */ }
+  }
+
+  // ─── 304 Not Modified ──────────────────────────────────────────────
+  // R2 returns null when onlyIf conditional check fails (ETag matches).
+  // Respond with 304 to save bandwidth — browser already has this data.
+  if (!object && r2Options.onlyIf) {
+    return new Response(null, {
+      status: 304,
+      headers: { 'Cache-Control': 'private, max-age=86400, no-transform' },
+    });
   }
 
   if (!object) {
@@ -272,27 +433,8 @@ function parseRangeHeader(rangeHeader) {
 // =============================================================================
 
 async function handleDirectUpload(request, env, ctx, videoKey, url) {
-  if (!env.SESSION_SECRET) {
-    return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  const isValid = await validateSignedUrl(videoKey, url.searchParams, env.SESSION_SECRET);
-  if (!isValid) {
-    return new Response(JSON.stringify({ error: 'Unauthorized — invalid or expired token' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (!env.R2_BUCKET) {
-    return new Response(JSON.stringify({ error: 'R2 not configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const authErr = await authenticate(env, videoKey, url);
+  if (authErr) return authErr;
 
   const contentType = request.headers.get('Content-Type') || getVideoMimeType(videoKey);
 
@@ -307,82 +449,66 @@ async function handleDirectUpload(request, env, ctx, videoKey, url) {
       },
     });
 
-    return new Response(JSON.stringify({
+    return jsonOk({
       success: true,
       key: object.key,
       size: object.size,
       etag: object.httpEtag,
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message || 'Upload failed' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError(err.message || 'Upload failed', 500);
   }
 }
 
 // =============================================================================
-//  Edge R2 Inventory & Audit Handler
+//  Edge R2 Inventory & Audit Handler (with full pagination)
 // =============================================================================
 
-async function handleR2Inventory(request, env, ctx, url) {
-  if (!env.SESSION_SECRET) {
-    return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  const isValid = await validateSignedUrl('inventory', url.searchParams, env.SESSION_SECRET);
-  if (!isValid) {
-    return new Response(JSON.stringify({ error: 'Unauthorized token' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (!env.R2_BUCKET) {
-    return new Response(JSON.stringify({ error: 'R2 not configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+async function handleR2Inventory(request, env, ctx, _capturedKey, url) {
+  const authErr = await authenticate(env, 'inventory', url);
+  if (authErr) return authErr;
 
   try {
-    const listed = await env.R2_BUCKET.list({ limit: 1000 });
-    let totalBytes = 0;
-    const files = listed.objects.map((obj) => {
+    const { files, totalBytes } = await listAllR2Objects(env.R2_BUCKET);
+
+    return jsonOk({
+      success: true,
+      totalCount: files.length,
+      totalBytes,
+      truncated: false,
+      files,
+    }, 200, { 'Cache-Control': 'no-cache' });
+  } catch (err) {
+    return jsonError(err.message || 'Inventory failed', 500);
+  }
+}
+
+/**
+ * List all objects in the R2 bucket with cursor-based pagination.
+ * Handles buckets with >1000 objects (R2 returns max 1000 per call).
+ * @param {R2Bucket} bucket
+ * @returns {Promise<{ files: object[], totalBytes: number }>}
+ */
+async function listAllR2Objects(bucket) {
+  const files = [];
+  let totalBytes = 0;
+  let cursor = undefined;
+
+  do {
+    const listed = await bucket.list({ limit: 1000, cursor });
+    for (const obj of listed.objects) {
       totalBytes += obj.size;
-      return {
+      files.push({
         key: obj.key,
         size: obj.size,
         uploaded: obj.uploaded,
         etag: obj.httpEtag,
-      };
-    });
+      });
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
 
-    return new Response(JSON.stringify({
-      success: true,
-      totalCount: files.length,
-      totalBytes,
-      truncated: listed.truncated,
-      files,
-    }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-      },
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message || 'Inventory failed' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  return { files, totalBytes };
 }
 
 // =============================================================================
@@ -390,51 +516,23 @@ async function handleR2Inventory(request, env, ctx, url) {
 // =============================================================================
 
 async function handleR2Check(request, env, ctx, videoKey, url) {
-  if (!env.SESSION_SECRET) {
-    return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  const isValid = await validateSignedUrl(videoKey, url.searchParams, env.SESSION_SECRET);
-  if (!isValid) {
-    return new Response(JSON.stringify({ error: 'Unauthorized token' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (!env.R2_BUCKET) {
-    return new Response(JSON.stringify({ error: 'R2 not configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const authErr = await authenticate(env, videoKey, url);
+  if (authErr) return authErr;
 
   try {
     const head = await env.R2_BUCKET.head(videoKey);
     if (!head) {
-      return new Response(JSON.stringify({ exists: false, key: videoKey }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return jsonOk({ exists: false, key: videoKey }, 404);
     }
 
-    return new Response(JSON.stringify({
+    return jsonOk({
       exists: true,
       key: head.key,
       size: head.size,
       uploaded: head.uploaded,
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError(err.message, 500);
   }
 }
 
@@ -442,27 +540,14 @@ async function handleR2Check(request, env, ctx, videoKey, url) {
 //  Edge R2 Delete Batch Handler (Orphan Cleanup)
 // =============================================================================
 
-async function handleR2DeleteBatch(request, env, ctx, url) {
-  if (!env.SESSION_SECRET) {
-    return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+async function handleR2DeleteBatch(request, env, ctx, _capturedKey, url) {
+  const authErr = await authenticate(env, 'delete-batch', url);
+  if (authErr) return authErr;
 
-  const isValid = await validateSignedUrl('delete-batch', url.searchParams, env.SESSION_SECRET);
-  if (!isValid) {
-    return new Response(JSON.stringify({ error: 'Unauthorized token' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (!env.R2_BUCKET) {
-    return new Response(JSON.stringify({ error: 'R2 not configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  // Guard against oversized payloads
+  const contentLength = parseInt(request.headers.get('Content-Length') || '0', 10);
+  if (contentLength > MAX_ADMIN_BODY_SIZE) {
+    return jsonError('Request body too large', 413);
   }
 
   try {
@@ -470,42 +555,64 @@ async function handleR2DeleteBatch(request, env, ctx, url) {
     const keys = body && Array.isArray(body.keys) ? body.keys : [];
 
     if (keys.length === 0) {
-      return new Response(JSON.stringify({ error: 'No keys provided' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return jsonError('No keys provided', 400);
     }
 
+    // Parallel deletion with concurrency limit
+    const safeKeys = keys.slice(0, 100);
     const deleted = [];
-    for (const key of keys.slice(0, 100)) {
-      if (typeof key === 'string' && key.trim()) {
-        await env.R2_BUCKET.delete(key.trim());
-        deleted.push(key.trim());
+    const failed = [];
+
+    for (let i = 0; i < safeKeys.length; i += DELETE_BATCH_CONCURRENCY) {
+      const batch = safeKeys.slice(i, i + DELETE_BATCH_CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(async (key) => {
+          const k = typeof key === 'string' ? key.trim() : '';
+          if (!k) return null;
+          await env.R2_BUCKET.delete(k);
+          return k;
+        })
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value) {
+          deleted.push(r.value);
+        } else if (r.status === 'rejected') {
+          failed.push(r.reason?.message || 'Unknown error');
+        }
       }
     }
 
-    return new Response(JSON.stringify({
+    return jsonOk({
       success: true,
       deletedCount: deleted.length,
       deleted,
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      failedCount: failed.length,
+      failed: failed.length > 0 ? failed : undefined,
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message || 'Delete failed' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError(err.message || 'Delete failed', 500);
   }
 }
 
 // =============================================================================
-//  CORS — Required for cross-origin video and direct uploads
+//  CORS — Restricted to allowed origins
 // =============================================================================
 
+/**
+ * Check if an origin is in the whitelist.
+ * @param {string|null} origin
+ * @returns {boolean}
+ */
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  return ALLOWED_ORIGINS.has(origin);
+}
+
 function handleCors(request) {
-  const origin = request.headers.get('Origin') || '*';
+  const origin = request.headers.get('Origin');
+  if (!isAllowedOrigin(origin)) {
+    return new Response(null, { status: 403 });
+  }
   return new Response(null, {
     status: 204,
     headers: {
@@ -519,9 +626,13 @@ function handleCors(request) {
 }
 
 function addCorsHeaders(response, request) {
-  const origin = request.headers.get('Origin') || '*';
+  const origin = request.headers.get('Origin');
+  // Only add CORS headers if origin is allowed (or same-origin requests with no Origin header)
+  const allowedOrigin = isAllowedOrigin(origin) ? origin : null;
+  if (!allowedOrigin) return response;
+
   const headers = new Headers(response.headers);
-  headers.set('Access-Control-Allow-Origin', origin);
+  headers.set('Access-Control-Allow-Origin', allowedOrigin);
   headers.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges, ETag');
   return new Response(response.body, {
     status: response.status,
@@ -541,27 +652,33 @@ function getVideoMimeType(filename) {
 }
 
 function encodeBasename(name) {
-  return name.replace(/["\\\r\n\x00-\x1F\x7F]/g, '_');
+  return name.replace(/["\\\\r\n\x00-\x1F\x7F]/g, '_');
 }
 
 // =============================================================================
 //  Edge WebRTC Call Signaling WebSocket Handler
 // =============================================================================
 
+// NOTE: connectedCallUsers lives in module-level memory and does NOT survive
+// isolate eviction (cold starts, scaling). Cloudflare can evict isolates at any
+// time, silently breaking active WebSocket connections. The client-side call UI
+// must handle reconnection gracefully. For durable WebSocket state, use Durable
+// Objects (which this project already has infrastructure for via Watch Together).
 const connectedCallUsers = new Map(); // username -> Set<WebSocket>
 
-async function handleCallSignalingWebSocket(request, env, ctx, url) {
+async function handleCallSignalingWebSocket(request, env, ctx, _capturedKey, url) {
   const user = url.searchParams.get('user');
   if (!user || (user !== 'muaj' && user !== 'hajera')) {
     return new Response('Invalid user', { status: 400 });
   }
 
-  // Validate signed token
-  if (env.SESSION_SECRET) {
-    const isValid = await validateSignedUrl(`call:${user}`, url.searchParams, env.SESSION_SECRET);
-    if (!isValid) {
-      return new Response('Unauthorized token', { status: 401 });
-    }
+  // Mandatory signed token validation — consistent with all other handlers
+  if (!env.SESSION_SECRET) {
+    return new Response('Server misconfigured', { status: 500 });
+  }
+  const isValid = await validateSignedUrl(`call:${user}`, url.searchParams, env.SESSION_SECRET);
+  if (!isValid) {
+    return new Response('Unauthorized token', { status: 401 });
   }
 
   const pair = new WebSocketPair();
@@ -576,7 +693,17 @@ async function handleCallSignalingWebSocket(request, env, ctx, url) {
 
   const partner = user === 'muaj' ? 'hajera' : 'muaj';
 
+  // ─── Idle timeout — close stale connections after 5 minutes of silence ─
+  let lastActivity = Date.now();
+  const idleTimer = setInterval(() => {
+    if (Date.now() - lastActivity > CALL_WS_IDLE_TIMEOUT_MS) {
+      try { server.close(1000, 'Idle timeout'); } catch {}
+      clearInterval(idleTimer);
+    }
+  }, 30000);
+
   server.addEventListener('message', async (event) => {
+    lastActivity = Date.now();
     try {
       const data = JSON.parse(event.data);
       if (data.type === 'ping') {
@@ -602,6 +729,7 @@ async function handleCallSignalingWebSocket(request, env, ctx, url) {
   });
 
   const cleanup = () => {
+    clearInterval(idleTimer);
     const sockets = connectedCallUsers.get(user);
     if (sockets) {
       sockets.delete(server);
@@ -617,4 +745,3 @@ async function handleCallSignalingWebSocket(request, env, ctx, url) {
     webSocket: client,
   });
 }
-
