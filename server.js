@@ -13,7 +13,7 @@ const app = express();
 app.locals.renderAvatar = renderAvatar;
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
-const useSecureCookies = process.env.COOKIE_SECURE === 'true';
+const useSecureCookies = isProduction || process.env.COOKIE_SECURE === 'true';
 const requiredSecrets = ['SESSION_SECRET', 'MUAJ_PASSWORD', 'HAJERA_PASSWORD'];
 
 if (isProduction) {
@@ -78,7 +78,7 @@ app.use((req, res, next) => {
     }
     res.setHeader(
         'Content-Security-Policy',
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob: https: https://*.r2.dev; img-src 'self' data: https: https://*.r2.dev; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'"
+        "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; media-src 'self' blob: https: https://*.r2.dev; img-src 'self' data: https: https://*.r2.dev; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'"
     );
     next();
 });
@@ -87,8 +87,8 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.text({ limit: '2mb', type: 'text/plain' }));
 app.use(express.static(path.join(__dirname, 'public'), {
     etag: true,
-    immutable: isProduction,
-    maxAge: isProduction ? '7d' : 0
+    immutable: false,
+    maxAge: isProduction ? '1h' : 0
 }));
 // Health check — before session middleware to avoid creating sessions
 app.get('/health', (req, res) => {
@@ -271,13 +271,6 @@ app.use((req, res, next) => {
         return next();
     }
     if (req.path === '/profile/avatar' && req.method === 'POST') {
-        return next();
-    }
-    // sendBeacon endpoints — navigator.sendBeacon() cannot set custom headers
-    if (req.path === '/api/presence/leave' && req.method === 'POST') {
-        return next();
-    }
-    if (req.path === '/api/call/end' && req.method === 'POST') {
         return next();
     }
     return requireCsrf(req, res, next);

@@ -10,6 +10,9 @@
     const currentUser = document.body.getAttribute('data-user') || '';
     if (!currentUser) return; // Not logged in
 
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    const CSRF_TOKEN = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
     const partnerUser = currentUser === 'muaj' ? 'hajera' : 'muaj';
     const partnerName = partnerUser === 'muaj' ? 'Muaj' : 'Hajera';
 
@@ -910,7 +913,7 @@
             fetch('/api/call/end', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ callId: id, durationSeconds: dur, reason })
+                body: JSON.stringify({ callId: id, durationSeconds: dur, reason, _csrf: CSRF_TOKEN })
             }).catch(() => {});
         }
     }
@@ -1084,7 +1087,8 @@
                     body: JSON.stringify({
                         callId: id,
                         durationSeconds: duration,
-                        reason: 'user_ended'
+                        reason: 'user_ended',
+                        _csrf: CSRF_TOKEN
                     })
                 });
             } catch (e) {}
@@ -1622,7 +1626,8 @@
                 const payload = JSON.stringify({
                     callId: CallState.callId,
                     durationSeconds: CallState.durationSeconds,
-                    reason: 'page_unload'
+                    reason: 'page_unload',
+                    _csrf: CSRF_TOKEN
                 });
                 const blob = new Blob([payload], { type: 'application/json' });
                 navigator.sendBeacon('/api/call/end', blob);
@@ -1635,7 +1640,8 @@
                 const payload = JSON.stringify({
                     callId: CallState.callId,
                     durationSeconds: CallState.durationSeconds,
-                    reason: 'page_hide'
+                    reason: 'page_hide',
+                    _csrf: CSRF_TOKEN
                 });
                 const blob = new Blob([payload], { type: 'application/json' });
                 navigator.sendBeacon('/api/call/end', blob);
@@ -1832,7 +1838,8 @@
             const payload = JSON.stringify({
                 callId: CallState.callId,
                 durationSeconds: CallState.durationSeconds,
-                reason: 'page_unload'
+                reason: 'page_unload',
+                _csrf: CSRF_TOKEN
             });
 
             if (navigator.sendBeacon) {

@@ -2808,12 +2808,6 @@
         `;
 
         banner.innerHTML = `
-            <style>
-                @keyframes pushBannerSlideUp {
-                    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
-                    to { opacity: 1; transform: translateX(-50%) translateY(0); }
-                }
-            </style>
             <div style="display:flex; align-items:center; gap:10px;">
                 <div style="width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg, #6366f1, #8b5cf6); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                     <span style="font-size:18px;">🔔</span>

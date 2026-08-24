@@ -346,6 +346,29 @@ router.post('/api/upload/finalize', isAuthenticated, async (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid video filename.' });
     }
 
+    const expectedFilename = `${id}${path.extname(filename).toLowerCase()}`;
+    if (filename !== expectedFilename) {
+        return res.status(400).json({ success: false, error: 'Video filename does not match upload ticket.' });
+    }
+
+    if (!Number.isFinite(size) || size <= 0 || size > maxSize) {
+        return res.status(400).json({ success: false, error: 'Invalid video size.' });
+    }
+
+    const objectMeta = await r2.getObjectMetadata(filename);
+    if (!objectMeta) {
+        return res.status(400).json({ success: false, error: 'Uploaded video was not found on Cloudflare R2.' });
+    }
+
+    if (objectMeta.size !== size) {
+        return res.status(400).json({ success: false, error: 'Uploaded video size does not match finalized metadata.' });
+    }
+
+    const objectContentType = String(objectMeta.contentType || '').toLowerCase();
+    if (objectContentType && !allowedMimeTypes.has(objectContentType) && !objectContentType.startsWith('video/')) {
+        return res.status(400).json({ success: false, error: 'Uploaded object is not a supported video type.' });
+    }
+
     let thumbnail = null;
     if (thumbnailBase64 && typeof thumbnailBase64 === 'string' && thumbnailBase64.startsWith('data:image/')) {
         try {

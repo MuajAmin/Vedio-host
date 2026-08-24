@@ -433,6 +433,27 @@ async function existsOnR2(filename) {
     }
 }
 
+async function getObjectMetadata(filename) {
+    if (!r2Enabled || !s3Client || !filename) return null;
+
+    try {
+        const command = new HeadObjectCommand({
+            Bucket: R2_BUCKET,
+            Key: filename,
+        });
+        const head = await s3Client.send(command);
+        _r2ConfirmedCache.add(filename);
+        return {
+            size: Number(head.ContentLength || 0),
+            contentType: head.ContentType || '',
+            etag: head.ETag || '',
+            lastModified: head.LastModified || null
+        };
+    } catch {
+        return null;
+    }
+}
+
 /**
  * List all objects currently in the R2 bucket with full pagination.
  * @returns {Promise<Array<{ key: string, size: number, uploaded: Date, etag: string }>>}
@@ -537,7 +558,10 @@ function getActiveUploadsList() {
 }
 
 function generateWorkerSignature(key, expiry) {
-    const secret = process.env.SESSION_SECRET || 'videohost-secret';
+    const secret = process.env.SESSION_SECRET;
+    if (!secret) {
+        throw new Error('SESSION_SECRET is required for Worker signed URLs.');
+    }
     return crypto
         .createHmac('sha256', secret)
         .update(`${key}:${expiry}`)
@@ -545,21 +569,21 @@ function generateWorkerSignature(key, expiry) {
 }
 
 function getWorkerUploadUrl(filename, expiresInSeconds = 3600) {
-    if (!CF_WORKER_URL || !filename) return null;
+    if (!CF_WORKER_URL || !filename || !process.env.SESSION_SECRET) return null;
     const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
     const sig = generateWorkerSignature(filename, exp);
     return `${CF_WORKER_URL.replace(/\/$/, '')}/upload/${encodeURIComponent(filename)}?sig=${sig}&exp=${exp}`;
 }
 
 function getWorkerInventoryUrl(expiresInSeconds = 600) {
-    if (!CF_WORKER_URL) return null;
+    if (!CF_WORKER_URL || !process.env.SESSION_SECRET) return null;
     const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
     const sig = generateWorkerSignature('inventory', exp);
     return `${CF_WORKER_URL.replace(/\/$/, '')}/api/r2-inventory?sig=${sig}&exp=${exp}`;
 }
 
 function getWorkerCallSignalingUrl(user, expiresInSeconds = 7200) {
-    if (!CF_WORKER_URL || !user) return null;
+    if (!CF_WORKER_URL || !user || !process.env.SESSION_SECRET) return null;
     const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
     const sig = generateWorkerSignature(`call:${user}`, exp);
     const wsBase = CF_WORKER_URL.replace(/^http/, 'ws').replace(/\/$/, '');
@@ -573,6 +597,7 @@ module.exports = {
     uploadToR2,
     deleteFromR2,
     existsOnR2,
+    getObjectMetadata,
     isConfirmedOnR2,
     markConfirmedOnR2,
     unmarkConfirmedOnR2,

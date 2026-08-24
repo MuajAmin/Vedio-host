@@ -2675,4 +2675,15 @@ body[data-user="muaj"] .msg-quote-card.is-reply-to-partner .msg-quote-author {
     border-left: 3px solid var(--msg-primary);
 }
 
+@keyframes pushBannerSlideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
 
