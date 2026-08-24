@@ -359,6 +359,25 @@ router.post('/delete/:id', isAuthenticated, async (req, res) => {
                 }
             }
 
+            // 1b. Purge Cloudflare edge cache (Worker / CDN cached responses)
+            if (process.env.CF_ZONE_ID && process.env.CF_API_TOKEN) {
+                const cfDomain = process.env.CF_DOMAIN || 'muaj.bro.bd';
+                const purgeUrls = [`https://${cfDomain}/stream/${video.filename}`];
+                if (video.thumbnail) {
+                    purgeUrls.push(`https://${cfDomain}/thumbnails/${video.thumbnail}`);
+                }
+                fetch(`https://api.cloudflare.com/client/v4/zones/${process.env.CF_ZONE_ID}/purge_cache`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${process.env.CF_API_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ files: purgeUrls })
+                })
+                    .then(() => console.log(`[delete] CF cache purge sent for ${video.filename}`))
+                    .catch(err => console.warn(`[delete] CF cache purge failed: ${err.message}`));
+            }
+
             // 2. Delete video file from disk
             const filePath = getSafeVideoPath(video.filename);
             if (filePath && fs.existsSync(filePath)) {

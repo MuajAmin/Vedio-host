@@ -164,6 +164,19 @@ app.use(session({
 }));
 app.use(attachLocals);
 
+// --- Cloudflare CDN: Prevent caching of EJS HTML responses ---
+// All pages are session-dependent — caching would leak user data between users.
+// Static assets already have their own Cache-Control from express.static / Nginx.
+app.use((req, res, next) => {
+    const originalRender = res.render;
+    res.render = function (...args) {
+        res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        return originalRender.apply(this, args);
+    };
+    next();
+});
+
 // --- Diagnostic: Log slow requests (>200ms) ---
 // Helps verify the intermittent loading fix is working.
 // Safe to keep in production — only fires on genuinely slow routes.
