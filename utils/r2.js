@@ -274,6 +274,43 @@ async function existsOnR2(filename) {
     }
 }
 
+/**
+ * Automatically scan database and upload any videos that are missing from Cloudflare R2.
+ * Run in background on server startup or on-demand.
+ */
+async function backfillMissingR2Uploads() {
+    if (!r2Enabled) return;
+    try {
+        const db = require('../database');
+        const videosDir = path.join(__dirname, '..', 'uploads', 'videos');
+        const rows = db.prepare('SELECT id, title, filename FROM videos').all();
+        let synced = 0;
+
+        for (const row of rows) {
+            if (!row.filename) continue;
+            try {
+                const exists = await existsOnR2(row.filename);
+                if (!exists) {
+                    const localPath = path.join(videosDir, row.filename);
+                    if (fs.existsSync(localPath)) {
+                        console.log(`[R2-Sync] 🔄 Backfilling missing video to Cloudflare R2: ${row.filename} (${row.title})`);
+                        await uploadToR2(localPath, row.filename);
+                        synced++;
+                    }
+                }
+            } catch (err) {
+                console.warn(`[R2-Sync] Failed to backfill ${row.filename}:`, err.message);
+            }
+        }
+
+        if (synced > 0) {
+            console.log(`[R2-Sync] ✓ Successfully synced ${synced} missing video(s) to Cloudflare R2.`);
+        }
+    } catch (err) {
+        console.warn('[R2-Sync] Error during background R2 sync:', err.message);
+    }
+}
+
 module.exports = {
     isR2Enabled,
     getPublicUrl,
@@ -281,5 +318,6 @@ module.exports = {
     deleteFromR2,
     existsOnR2,
     getUploadProgress,
-    registerProgressListener
+    registerProgressListener,
+    backfillMissingR2Uploads
 };

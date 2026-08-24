@@ -26,6 +26,7 @@ if (isProduction) {
 
 const { backfillMissingThumbnails } = require('./utils/thumbnail');
 const { backfillFaststart } = require('./utils/faststart');
+const r2 = require('./utils/r2');
 
 // Ensure uploads directories exist
 const uploadsDir = path.join(__dirname, 'uploads', 'videos');
@@ -339,6 +340,10 @@ const server = app.listen(PORT, () => {
     // Optimize existing videos for instant playback (moov atom at file start)
     // Runs after a short delay to avoid competing with thumbnail backfill
     setTimeout(() => backfillFaststart(), 5000);
+    // Automatically sync any videos in database that are missing from Cloudflare R2
+    if (typeof r2.backfillMissingR2Uploads === 'function') {
+        setTimeout(() => r2.backfillMissingR2Uploads(), 8000);
+    }
     // Clean up any orphaned import temp files from past server restarts
     if (typeof importRoutes.cleanupOrphanedImportFiles === 'function') {
         importRoutes.cleanupOrphanedImportFiles();
