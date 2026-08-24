@@ -374,7 +374,7 @@ async function collectAdminStats(currentSid = null) {
     await Promise.all(videos.map(async (v) => {
         v.onDisk = vpsDiskFileSet.has(v.filename);
         try {
-            v.onR2 = await r2.existsOnR2(v.filename);
+            v.onR2 = r2.isConfirmedOnR2(v.filename) || await r2.existsOnR2(v.filename);
         } catch {
             v.onR2 = false;
         }
@@ -609,24 +609,7 @@ router.post('/admin/r2/scan-bucket', isMuaj, async (req, res) => {
         if (r2Objects.length === 0 && r2.isR2Enabled()) {
             source = 's3-fallback';
             try {
-                const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
-                const s3 = new S3Client({
-                    region: 'auto',
-                    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-                    credentials: {
-                        accessKeyId: process.env.R2_ACCESS_KEY_ID,
-                        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY
-                    }
-                });
-                const s3Res = await s3.send(new ListObjectsV2Command({
-                    Bucket: process.env.R2_BUCKET || 'videohost',
-                    MaxKeys: 1000
-                }));
-                r2Objects = (s3Res.Contents || []).map(o => ({
-                    key: o.Key,
-                    size: o.Size,
-                    uploaded: o.LastModified
-                }));
+                r2Objects = await r2.listAllR2Objects();
             } catch (s3Err) {
                 console.error('[admin] S3 list failed:', s3Err.message);
             }

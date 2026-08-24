@@ -72,6 +72,14 @@ export default {
       return addCorsHeaders(response, request);
     }
 
+    // ─── Edge WebRTC Call Signaling WebSocket: /call-signaling?user=...&sig=...&exp=... ───
+    if (url.pathname === '/call-signaling') {
+      if (request.headers.get('Upgrade') !== 'websocket') {
+        return new Response('Expected WebSocket upgrade', { status: 426 });
+      }
+      return handleCallSignalingWebSocket(request, env, ctx, url);
+    }
+
     // ─── All other requests: return 404 (this Worker only serves videos) ─
     return new Response('Not Found', { status: 404 });
   },
@@ -535,3 +543,78 @@ function getVideoMimeType(filename) {
 function encodeBasename(name) {
   return name.replace(/["\\\r\n\x00-\x1F\x7F]/g, '_');
 }
+
+// =============================================================================
+//  Edge WebRTC Call Signaling WebSocket Handler
+// =============================================================================
+
+const connectedCallUsers = new Map(); // username -> Set<WebSocket>
+
+async function handleCallSignalingWebSocket(request, env, ctx, url) {
+  const user = url.searchParams.get('user');
+  if (!user || (user !== 'muaj' && user !== 'hajera')) {
+    return new Response('Invalid user', { status: 400 });
+  }
+
+  // Validate signed token
+  if (env.SESSION_SECRET) {
+    const isValid = await validateSignedUrl(`call:${user}`, url.searchParams, env.SESSION_SECRET);
+    if (!isValid) {
+      return new Response('Unauthorized token', { status: 401 });
+    }
+  }
+
+  const pair = new WebSocketPair();
+  const [client, server] = Object.values(pair);
+
+  server.accept();
+
+  if (!connectedCallUsers.has(user)) {
+    connectedCallUsers.set(user, new Set());
+  }
+  connectedCallUsers.get(user).add(server);
+
+  const partner = user === 'muaj' ? 'hajera' : 'muaj';
+
+  server.addEventListener('message', async (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'ping') {
+        server.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+        return;
+      }
+
+      // Forward signal directly to partner
+      const partnerSockets = connectedCallUsers.get(partner);
+      if (partnerSockets && partnerSockets.size > 0) {
+        const payload = JSON.stringify({ ...data, sender: user, ts: Date.now() });
+        for (const sock of partnerSockets) {
+          try {
+            sock.send(payload);
+          } catch (e) {
+            partnerSockets.delete(sock);
+          }
+        }
+      }
+    } catch (err) {
+      // ignore parsing error
+    }
+  });
+
+  const cleanup = () => {
+    const sockets = connectedCallUsers.get(user);
+    if (sockets) {
+      sockets.delete(server);
+      if (sockets.size === 0) connectedCallUsers.delete(user);
+    }
+  };
+
+  server.addEventListener('close', cleanup);
+  server.addEventListener('error', cleanup);
+
+  return new Response(null, {
+    status: 101,
+    webSocket: client,
+  });
+}
+

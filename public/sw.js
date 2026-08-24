@@ -9,15 +9,15 @@ const CACHE_NAME = 'videohost-v12.3';
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
-    '/css/style.css?v=12.2',
-    '/css/minimal.css?v=12.2',
-    '/css/messages.css?v=12.2',
-    '/css/calling.css?v=12.2',
-    '/js/theme-init.js?v=12.2',
+    '/css/style.css?v=12.3',
+    '/css/minimal.css?v=12.3',
+    '/css/messages.css?v=12.3',
+    '/css/calling.css?v=12.3',
+    '/js/theme-init.js?v=12.3',
     '/js/app.js?v=12.3',
-    '/js/messages.js?v=12.2',
-    '/js/watchTogether.js?v=12.2',
-    '/js/calling.js?v=12.2',
+    '/js/messages.js?v=12.3',
+    '/js/watchTogether.js?v=12.3',
+    '/js/calling.js?v=12.3',
     '/css/icon-192.png',
     '/css/icon-512.png',
     '/manifest.json'

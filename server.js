@@ -256,6 +256,9 @@ app.use((req, res, next) => {
     if (req.path === '/upload' && req.method === 'POST') {
         return next();
     }
+    if (req.path.startsWith('/api/upload/') && req.method === 'POST') {
+        return next();
+    }
     if (req.path === '/import-url' && req.method === 'POST') {
         return next();
     }

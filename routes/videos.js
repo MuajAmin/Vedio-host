@@ -91,9 +91,8 @@ const thumbnailUpload = multer({
 });
 const STREAM_HIGH_WATER_MARK = 256 * 1024;
 
-// In-memory Set tracking filenames confirmed to exist on R2.
-// Prevents a HEAD request on every 206 range request during playback.
-const _r2ConfirmedFiles = new Set();
+// Mutex set to deduplicate concurrent delete requests for the same video
+const activeDeletes = new Set();
 
 // Lightweight LRU cache for video filename lookups.
 // Prevents a DB query on every single 206 range request during playback.
@@ -273,6 +272,137 @@ router.post('/upload', isAuthenticated, (req, res) => {
     });
 });
 
+// POST /api/upload/init — Initialize direct-to-R2 upload ticket
+router.post('/api/upload/init', isAuthenticated, (req, res) => {
+    let csrfOk = false;
+    requireCsrf(req, res, () => { csrfOk = true; });
+    if (!csrfOk) {
+        return res.status(403).json({ success: false, error: 'Invalid CSRF token.' });
+    }
+
+    const rawFilename = String(req.body.filename || req.body.originalName || '').trim();
+    const rawTitle = String(req.body.title || '').trim().slice(0, MAX_TITLE_LENGTH);
+    const fileSize = parseInt(req.body.size, 10) || 0;
+    const ext = path.extname(rawFilename).toLowerCase();
+
+    if (!ext || !allowedExtensions.has(ext)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Only video files are allowed (.mp4, .mkv, .avi, .mov, .webm, .flv, .wmv, .m4v).'
+        });
+    }
+
+    if (fileSize > maxSize) {
+        return res.status(400).json({
+            success: false,
+            error: `File exceeds maximum allowed size of ${process.env.MAX_FILE_SIZE_MB || 500}MB.`
+        });
+    }
+
+    const id = uuidv4();
+    const videoFilename = `${id}${ext}`;
+    const contentType = r2.getMimeType(videoFilename);
+
+    // Direct-to-R2 Worker upload URL
+    const uploadUrl = r2.getWorkerUploadUrl(videoFilename, 3600);
+
+    if (r2.isR2Enabled() && uploadUrl) {
+        return res.json({
+            success: true,
+            directUpload: true,
+            id,
+            filename: videoFilename,
+            originalName: rawFilename || videoFilename,
+            title: rawTitle || rawFilename,
+            uploadUrl,
+            method: 'PUT',
+            headers: {
+                'Content-Type': contentType
+            }
+        });
+    }
+
+    // If R2/Worker direct upload is not available, indicate fallback to standard multipart POST /upload
+    return res.json({
+        success: true,
+        directUpload: false,
+        message: 'Direct R2 upload not configured. Falling back to server upload.'
+    });
+});
+
+// POST /api/upload/finalize — Finalize direct-to-R2 upload metadata and client-extracted thumbnail
+router.post('/api/upload/finalize', isAuthenticated, async (req, res) => {
+    let csrfOk = false;
+    requireCsrf(req, res, () => { csrfOk = true; });
+    if (!csrfOk) {
+        return res.status(403).json({ success: false, error: 'Invalid CSRF token.' });
+    }
+
+    const id = String(req.body.id || '').trim();
+    const filename = String(req.body.filename || '').trim();
+    const originalName = String(req.body.originalName || req.body.title || '').trim().slice(0, 255);
+    const title = String(req.body.title || originalName || 'Untitled Video').trim().slice(0, MAX_TITLE_LENGTH);
+    const size = parseInt(req.body.size, 10) || 0;
+    const duration = req.body.duration ? String(req.body.duration).trim().slice(0, 20) : null;
+    const thumbnailBase64 = req.body.thumbnailBase64 || null;
+    const uploader = req.session.user || 'muaj';
+
+    if (!id || !/^[a-f0-9-]{36}$/i.test(id)) {
+        return res.status(400).json({ success: false, error: 'Invalid video ID.' });
+    }
+
+    if (!filename || !allowedExtensions.has(path.extname(filename).toLowerCase())) {
+        return res.status(400).json({ success: false, error: 'Invalid video filename.' });
+    }
+
+    let thumbnail = null;
+    if (thumbnailBase64 && typeof thumbnailBase64 === 'string' && thumbnailBase64.startsWith('data:image/')) {
+        try {
+            const matches = thumbnailBase64.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+            if (matches) {
+                const imgExt = matches[1].toLowerCase() === 'png' ? '.png' : '.jpg';
+                const base64Data = matches[2];
+                const buffer = Buffer.from(base64Data, 'base64');
+
+                // Limit thumbnail buffer to 2MB to protect disk/RAM
+                if (buffer.length <= 2 * 1024 * 1024) {
+                    const thumbFilename = `${id}${imgExt}`;
+                    const thumbPath = path.join(thumbnailsDir, thumbFilename);
+                    await fs.promises.writeFile(thumbPath, buffer);
+                    thumbnail = thumbFilename;
+                }
+            }
+        } catch (thumbErr) {
+            console.warn('[upload/finalize] Failed to save client thumbnail:', thumbErr.message);
+        }
+    }
+
+    try {
+        db.prepare(
+            'INSERT INTO videos (id, title, filename, original_name, size, thumbnail, duration, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(id, title, filename, originalName, size, thumbnail, duration, uploader);
+
+        console.log(`[upload/finalize] Video saved directly to R2: id=${id} file=${filename} size=${(size / 1024 / 1024).toFixed(1)}MB by=${uploader}`);
+
+        // Mark as confirmed in memory caches so playback stream redirects instantly without HEAD check
+        _r2ConfirmedFiles.add(filename);
+        if (typeof r2.markR2Confirmed === 'function') {
+            r2.markR2Confirmed(filename);
+        }
+
+        return res.json({
+            success: true,
+            id,
+            filename,
+            title,
+            redirectUrl: '/dashboard'
+        });
+    } catch (dbErr) {
+        console.error(`[upload/finalize] DB save failed for ${filename}:`, dbErr.message);
+        return res.status(500).json({ success: false, error: 'Could not save video metadata.' });
+    }
+});
+
 // GET /api/r2-progress/:filename — Real-time Server to Cloudflare R2 upload progress (SSE)
 router.get('/api/r2-progress/:filename', isAuthenticated, (req, res) => {
     const filename = path.basename(req.params.filename || '');
@@ -449,8 +579,24 @@ router.post('/rename/:id', isAuthenticated, (req, res) => {
 
 // POST /delete/:id — Delete video (any authenticated user)
 router.post('/delete/:id', isAuthenticated, async (req, res) => {
+    const videoId = String(req.params.id || '').trim();
+    if (!videoId) {
+        return res.status(400).json({ error: 'Invalid video ID.' });
+    }
+
+    // Deduplicate concurrent deletion requests for the same video ID
+    if (activeDeletes.has(videoId)) {
+        console.log(`[delete] Deduplicated concurrent delete request for video: ${videoId}`);
+        const isAjax = req.xhr || 
+            (req.headers.accept && req.headers.accept.includes('application/json')) ||
+            (req.headers['content-type'] && req.headers['content-type'].includes('application/json'));
+        if (isAjax) return res.json({ success: true, message: 'Video deletion in progress.' });
+        return res.redirect('/dashboard');
+    }
+
+    activeDeletes.add(videoId);
+
     try {
-        const videoId = String(req.params.id || '').trim();
         const video = db.prepare('SELECT * FROM videos WHERE id = ? OR filename = ?').get(videoId, videoId);
 
         if (video) {
@@ -460,16 +606,14 @@ router.post('/delete/:id', isAuthenticated, async (req, res) => {
             invalidateVideoCache(video.id);
             invalidateVideoCache(video.filename);
             // Clear R2 confirmed cache so stale 302 redirects don't hit a deleted object
-            _r2ConfirmedFiles.delete(video.filename);
+            r2.unmarkConfirmedOnR2(video.filename);
 
-            // 1. Delete from R2 CDN first (await — ensures object is removed before DB record vanishes)
+            // 1. Delete from R2 CDN first (also aborts any in-flight upload controller immediately)
             if (r2.isR2Enabled()) {
                 try {
                     await r2.deleteFromR2(video.filename);
                     console.log(`[delete] R2 delete success: ${video.filename}`);
                 } catch (err) {
-                    // Log but continue — R2 DeleteObject on non-existent keys returns success,
-                    // so real failures are transient (network issue). Don't block DB cleanup.
                     console.error(`[delete] R2 delete failed for ${video.filename}:`, err.message);
                 }
             }
@@ -530,6 +674,8 @@ router.post('/delete/:id', isAuthenticated, async (req, res) => {
             return res.status(500).json({ error: 'Could not delete video.' });
         }
         res.redirect('/dashboard');
+    } finally {
+        activeDeletes.delete(videoId);
     }
 });
 
@@ -1041,8 +1187,8 @@ async function handleStream(req, res) {
         const workerUrl = getWorkerStreamUrl(filename);
         const cdnUrl = workerUrl || r2.getPublicUrl(filename);
         if (cdnUrl) {
-            // Fast path: already confirmed on R2
-            if (_r2ConfirmedFiles.has(filename)) {
+            // Fast path: already confirmed on R2 (O(1) lookup, 0 network overhead)
+            if (r2.isConfirmedOnR2(filename)) {
                 res.setHeader('Cache-Control', 'private, no-cache');
                 return res.redirect(302, cdnUrl);
             }
@@ -1050,7 +1196,6 @@ async function handleStream(req, res) {
             try {
                 const exists = await r2.existsOnR2(filename);
                 if (exists) {
-                    _r2ConfirmedFiles.add(filename);
                     res.setHeader('Cache-Control', 'private, no-cache');
                     return res.redirect(302, cdnUrl);
                 }

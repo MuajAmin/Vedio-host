@@ -4,6 +4,7 @@ const { isAuthenticated } = require('../middleware/auth');
 const db = require('../database');
 const { broadcastToUser, broadcastToBoth } = require('../utils/realtime');
 const { invalidateUnreadCache } = require('../utils/security');
+const r2 = require('../utils/r2');
 
 const router = express.Router();
 
@@ -141,6 +142,19 @@ function parseRequestBody(req) {
     }
     return {};
 }
+
+// ------------------------------------------------------------
+//  GET /api/call/edge-token — Edge WebSocket Signaling Bridge
+// ------------------------------------------------------------
+router.get('/api/call/edge-token', isAuthenticated, (req, res) => {
+    const user = req.session.user;
+    const signalingUrl = r2.getWorkerCallSignalingUrl(user, 7200);
+    res.json({
+        enabled: !!signalingUrl,
+        signalingUrl,
+        user
+    });
+});
 
 // ------------------------------------------------------------
 //  POST /api/call/initiate — Start a Call

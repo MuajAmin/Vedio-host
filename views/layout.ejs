@@ -12,11 +12,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
-    <script src="/js/theme-init.js?v=12.2"></script>
-    <link rel="stylesheet" href="/css/style.css?v=12.2">
-    <link rel="stylesheet" href="/css/messages.css?v=12.2">
-    <link rel="stylesheet" href="/css/calling.css?v=12.2">
-    <link rel="stylesheet" href="/css/minimal.css?v=12.2">
+    <script src="/js/theme-init.js?v=12.3"></script>
+    <link rel="stylesheet" href="/css/style.css?v=12.3">
+    <link rel="stylesheet" href="/css/messages.css?v=12.3">
+    <link rel="stylesheet" href="/css/calling.css?v=12.3">
+    <link rel="stylesheet" href="/css/minimal.css?v=12.3">
 </head>
 
 <body data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-page="<%= typeof page !== 'undefined' ? page : (typeof isMessagesPage !== 'undefined' && isMessagesPage ? 'messages' : '') %>">
@@ -479,7 +479,7 @@
                     <div class="active-call-header-info">
                         <div class="active-call-badge-wrap">
                             <span class="active-call-type-tag" id="activeCallTypeTag">Audio Call</span>
-                            <span class="active-call-hd-tag">HD Voice</span>
+                            <span class="active-call-hd-tag" id="activeCallNetworkQualityTag" title="Edge Signaling & HD Media">⚡ Edge HD</span>
                         </div>
                         <div class="active-call-status-pill">
                             <span class="active-call-live-dot" id="activeCallLiveDot"></span>
@@ -662,9 +662,9 @@
             <% } %>
 
             <script src="/js/app.js?v=12.3"></script>
-            <script defer src="/js/messages.js?v=12.2"></script>
-            <script defer src="/js/watchTogether.js?v=12.2"></script>
-            <script defer src="/js/calling.js?v=12.2"></script>
+            <script defer src="/js/messages.js?v=12.3"></script>
+            <script defer src="/js/watchTogether.js?v=12.3"></script>
+            <script defer src="/js/calling.js?v=12.3"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').then(function(reg) {

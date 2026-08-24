@@ -25,7 +25,7 @@
     }
 
     // ------------------------------------------------------------
-    //  2. WEBRTC CONFIGURATION
+    //  2. WEBRTC CONFIGURATION & EDGE SIGNALING
     // ------------------------------------------------------------
     const RTC_CONFIG = {
         iceServers: [
@@ -33,10 +33,94 @@
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' }
+            { urls: 'stun:stun4.l.google.com:19302' },
+            { urls: 'stun:global.stun.twilio.com:3478' },
+            { urls: 'stun:stun.cloudflare.com:3478' }
         ],
-        iceCandidatePoolSize: 4
+        iceCandidatePoolSize: 10,
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require'
     };
+
+    let edgeWs = null;
+    let edgeWsReady = false;
+    let edgeWsPingInterval = null;
+
+    function initEdgeSignaling() {
+        if (!currentUser) return;
+        fetch('/api/call/edge-token')
+            .then(res => res.json())
+            .then(data => {
+                if (data.enabled && data.signalingUrl) {
+                    connectEdgeWebSocket(data.signalingUrl);
+                }
+            })
+            .catch(() => {});
+    }
+
+    function connectEdgeWebSocket(url) {
+        try {
+            if (edgeWs) {
+                try { edgeWs.close(); } catch(e) {}
+            }
+            edgeWs = new WebSocket(url);
+            edgeWs.onopen = () => {
+                edgeWsReady = true;
+                callLog('EDGE_WS_CONNECTED', { transport: 'Cloudflare Edge WebSocket (<10ms)' });
+                if (edgeWsPingInterval) clearInterval(edgeWsPingInterval);
+                edgeWsPingInterval = setInterval(() => {
+                    if (edgeWs && edgeWs.readyState === WebSocket.OPEN) {
+                        edgeWs.send(JSON.stringify({ type: 'ping' }));
+                    }
+                }, 25000);
+            };
+
+            edgeWs.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'pong') return;
+                    handleIncomingEdgeSignal(msg);
+                } catch(e) {}
+            };
+
+            edgeWs.onclose = () => {
+                edgeWsReady = false;
+                if (edgeWsPingInterval) clearInterval(edgeWsPingInterval);
+                setTimeout(() => {
+                    if (document.visibilityState !== 'hidden') initEdgeSignaling();
+                }, 6000);
+            };
+
+            edgeWs.onerror = () => {
+                edgeWsReady = false;
+            };
+        } catch(e) {
+            edgeWsReady = false;
+        }
+    }
+
+    function handleIncomingEdgeSignal(msg) {
+        if (!msg || !msg.type) return;
+        callLog('EDGE_WS_RECV', { type: msg.type });
+
+        if (msg.type === 'offer' || msg.type === 'answer' || msg.type === 'ice-candidate' || msg.type === 'call-emoji' || msg.type === 'media-state' || msg.type === 'ice-restart') {
+            handleCallSignalEvent({
+                callId: msg.callId,
+                type: msg.type,
+                data: msg.data
+            });
+        } else if (msg.type === 'call:incoming' || msg.type === 'incoming') {
+            handleIncomingCallEvent(msg.data || msg);
+        } else if (msg.type === 'call:accepted' || msg.type === 'accepted') {
+            handleCallAcceptedEvent(msg.data || msg);
+        } else if (msg.type === 'call:rejected' || msg.type === 'rejected') {
+            if (msg.callId && msg.callId !== CallState.callId) return;
+            endCallLocally('Rejected');
+        } else if (msg.type === 'call:ended' || msg.type === 'ended') {
+            if (msg.callId && msg.callId !== CallState.callId) return;
+            endCallLocally('Ended');
+        }
+    }
 
     // ------------------------------------------------------------
     //  3. STATE MACHINE
@@ -529,16 +613,22 @@
     // ------------------------------------------------------------
     async function acquireLocalMedia(isVideo = false) {
         try {
+            const isCellular = !!(navigator.connection && (navigator.connection.type === 'cellular' || navigator.connection.effectiveType === '3g' || navigator.connection.effectiveType === '4g'));
             const constraints = {
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
-                    autoGainControl: true
+                    autoGainControl: true,
+                    sampleRate: 48000,
+                    sampleSize: 16,
+                    channelCount: { ideal: 2, max: 2 },
+                    latency: { ideal: 0.01 }
                 },
                 video: isVideo ? {
                     facingMode: 'user',
-                    width: { ideal: 1280, max: 1920 },
-                    height: { ideal: 720, max: 1080 }
+                    width: isCellular ? { ideal: 854, max: 1280 } : { ideal: 1280, max: 1920 },
+                    height: isCellular ? { ideal: 480, max: 720 } : { ideal: 720, max: 1080 },
+                    frameRate: { ideal: isCellular ? 24 : 30, max: 30 }
                 } : false
             };
 
@@ -682,6 +772,23 @@
 
     function sendSignalingMessage(type, data) {
         if (!CallState.callId) return;
+
+        // 1. Fast Path: Cloudflare Edge WebSocket (<10ms transmission)
+        if (edgeWsReady && edgeWs && edgeWs.readyState === WebSocket.OPEN) {
+            try {
+                edgeWs.send(JSON.stringify({
+                    callId: CallState.callId,
+                    type,
+                    data
+                }));
+                callLog('SIGNAL_SENT_EDGE_WS', { type });
+                return;
+            } catch (e) {
+                // Fall through to VPS HTTP fallback
+            }
+        }
+
+        // 2. Fallback Path: VPS HTTP POST
         fetch('/api/call/signal', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1530,6 +1637,7 @@
         });
 
         window.addEventListener('online', () => {
+            if (!edgeWsReady) initEdgeSignaling();
             if (CallState.state === 'reconnecting') {
                 callLog('NETWORK_ONLINE');
                 updateConnectionStatusUI('Reconnecting...');
@@ -1545,6 +1653,9 @@
                 }
             }
         });
+
+        // Start Cloudflare Edge WebSocket signaling in background
+        initEdgeSignaling();
     }
 
     function setupPipDraggable() {

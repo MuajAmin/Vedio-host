@@ -422,7 +422,88 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ---- Enhanced Multi-Stage Upload Progress (Device -> VPS -> Cloudflare R2) ----
+    // ---- Client-Side Video Metadata & Thumbnail Extractor (HTML5 Video + Canvas) ----
+    function extractClientVideoMetadata(file) {
+        return new Promise((resolve) => {
+            try {
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.muted = true;
+                video.playsInline = true;
+
+                const url = URL.createObjectURL(file);
+                video.src = url;
+
+                let settled = false;
+                const cleanup = () => {
+                    if (!settled) {
+                        settled = true;
+                        try { URL.revokeObjectURL(url); } catch {}
+                        try {
+                            video.removeAttribute('src');
+                            video.load();
+                        } catch {}
+                    }
+                };
+
+                const timeout = setTimeout(() => {
+                    cleanup();
+                    resolve({ duration: null, thumbnailBase64: null });
+                }, 5000);
+
+                video.addEventListener('loadedmetadata', () => {
+                    const dur = video.duration;
+                    let formattedDuration = null;
+                    if (Number.isFinite(dur) && dur > 0) {
+                        const h = Math.floor(dur / 3600);
+                        const m = Math.floor((dur % 3600) / 60);
+                        const s = Math.floor(dur % 60);
+                        if (h > 0) {
+                            formattedDuration = `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+                        } else {
+                            formattedDuration = `${m}:${s < 10 ? '0' : ''}${s}`;
+                        }
+                    }
+
+                    const seekTime = (Number.isFinite(dur) && dur > 3) ? Math.min(dur * 0.25, 30) : 0.5;
+                    video.currentTime = seekTime;
+
+                    video.addEventListener('seeked', () => {
+                        clearTimeout(timeout);
+                        try {
+                            const canvas = document.createElement('canvas');
+                            const targetWidth = 480;
+                            const vWidth = video.videoWidth || 640;
+                            const vHeight = video.videoHeight || 360;
+                            const targetHeight = Math.round((vHeight / vWidth) * targetWidth) || 270;
+
+                            canvas.width = targetWidth;
+                            canvas.height = targetHeight;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+
+                            const thumbnailBase64 = canvas.toDataURL('image/jpeg', 0.82);
+                            cleanup();
+                            resolve({ duration: formattedDuration, thumbnailBase64 });
+                        } catch (e) {
+                            cleanup();
+                            resolve({ duration: formattedDuration, thumbnailBase64: null });
+                        }
+                    }, { once: true });
+                }, { once: true });
+
+                video.addEventListener('error', () => {
+                    clearTimeout(timeout);
+                    cleanup();
+                    resolve({ duration: null, thumbnailBase64: null });
+                }, { once: true });
+            } catch (e) {
+                resolve({ duration: null, thumbnailBase64: null });
+            }
+        });
+    }
+
+    // ---- Enhanced Multi-Stage / Direct Upload Progress ----
     const uploadForm = document.getElementById('uploadForm');
     const uploadProgress = document.getElementById('uploadProgress');
     const progressFill = document.getElementById('progressFill');
@@ -430,6 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadBtn = document.getElementById('uploadBtn');
 
     // Stage 1 & Stage 2 UI Elements
+    const stage1Name = document.getElementById('stage1Name');
     const stageDeviceToVps = document.getElementById('stageDeviceToVps');
     const stageVpsToR2 = document.getElementById('stageVpsToR2');
     const stage1Badge = document.getElementById('stage1Badge');
@@ -446,10 +528,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (uploadForm && fileInput) {
         let activeXhr = null;
         let activeR2Sse = null;
+        let isUploadingActive = false;
 
-        uploadForm.addEventListener('submit', (e) => {
+        uploadForm.addEventListener('submit', async (e) => {
+            if (isUploadingActive) {
+                e.preventDefault();
+                return;
+            }
             if (!fileInput.files || fileInput.files.length === 0) return;
 
+            isUploadingActive = true;
             e.preventDefault();
 
             if (activeR2Sse) {
@@ -457,50 +545,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeR2Sse = null;
             }
 
-            const formData = new FormData(uploadForm);
-            const xhr = new XMLHttpRequest();
-            activeXhr = xhr;
+            const file = fileInput.files[0];
+            const titleInput = document.getElementById('title');
+            const customTitle = (titleInput ? titleInput.value.trim() : '') || file.name;
+            const csrfInput = uploadForm.querySelector('input[name="_csrf"]');
+            const csrfToken = csrfInput ? csrfInput.value : '';
 
-            const fileSize = fileInput.files[0].size;
-            let uploadStartTime = Date.now();
-
-            // Sliding window for accurate real-time speed (last 3 seconds)
-            const speedSamples = [];
-            const SPEED_WINDOW_MS = 3000;
-
-            function getRealtimeSpeed(loaded) {
-                const now = Date.now();
-                speedSamples.push({ time: now, bytes: loaded });
-
-                // Remove samples older than window
-                while (speedSamples.length > 1 && now - speedSamples[0].time > SPEED_WINDOW_MS) {
-                    speedSamples.shift();
-                }
-
-                if (speedSamples.length < 2) return 0;
-
-                const oldest = speedSamples[0];
-                const newest = speedSamples[speedSamples.length - 1];
-                const timeDiff = (newest.time - oldest.time) / 1000;
-                if (timeDiff < 0.3) return 0;
-
-                return (newest.bytes - oldest.bytes) / timeDiff;
-            }
-
-            // 15 minute timeout for large files
-            xhr.timeout = 15 * 60 * 1000;
-
-            // Reset & Show multi-stage progress
+            // Reset progress UI
             if (uploadProgress) uploadProgress.style.display = 'flex';
             if (stageDeviceToVps) stageDeviceToVps.className = 'upload-stage-item active';
-            if (stageVpsToR2) stageVpsToR2.className = 'upload-stage-item';
             if (stage1Badge) {
                 stage1Badge.className = 'upload-stage-badge badge-running';
-                stage1Badge.textContent = 'Uploading';
-            }
-            if (stage2Badge) {
-                stage2Badge.className = 'upload-stage-badge badge-pending';
-                stage2Badge.textContent = 'Waiting';
+                stage1Badge.textContent = 'Initializing';
             }
             if (progressFill) progressFill.style.width = '0%';
             if (r2ProgressFill) r2ProgressFill.style.width = '0%';
@@ -509,16 +565,81 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (uploadBtn) {
                 uploadBtn.disabled = true;
-                uploadBtn.innerHTML = '<span>Uploading to Server...</span>';
+                uploadBtn.innerHTML = '<span>Preparing Upload...</span>';
             }
 
-            // Stage 1 Progress: Device -> VPS
+            // Start client-side thumbnail & duration extraction concurrently
+            const metadataPromise = extractClientVideoMetadata(file);
+
+            // 1. Try Direct-to-R2 Upload ticket first
+            try {
+                const initRes = await fetch('/api/upload/init', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        title: customTitle,
+                        size: file.size,
+                        mimeType: file.type || 'video/mp4',
+                        _csrf: csrfToken
+                    })
+                });
+
+                const initData = await initRes.json();
+
+                if (initData && initData.success && initData.directUpload && initData.uploadUrl) {
+                    // Direct upload enabled! Stream directly to Cloudflare Edge (zero VPS outbound bandwidth)
+                    return runDirectUpload(file, initData, metadataPromise, customTitle, csrfToken);
+                }
+            } catch (initErr) {
+                console.warn('[upload] Direct upload initialization failed, using server fallback:', initErr);
+            }
+
+            // Fallback: standard server multipart upload
+            runServerRelayUpload(metadataPromise);
+        });
+
+        // ---- Direct Upload to Cloudflare Edge Function ----
+        function runDirectUpload(file, initData, metadataPromise, title, csrfToken) {
+            if (stage1Name) stage1Name.textContent = 'Direct Upload: Device ➔ Cloudflare Edge CDN';
+            if (stage1Badge) {
+                stage1Badge.className = 'upload-stage-badge badge-running';
+                stage1Badge.textContent = 'Uploading Direct';
+            }
+            if (stageVpsToR2) stageVpsToR2.style.display = 'none';
+            if (progressText) progressText.textContent = 'Uploading directly to Cloudflare R2... 0%';
+            if (uploadBtn) uploadBtn.innerHTML = '<span>Uploading Direct to Cloudflare Edge...</span>';
+
+            const xhr = new XMLHttpRequest();
+            activeXhr = xhr;
+
+            const speedSamples = [];
+            const SPEED_WINDOW_MS = 3000;
+
+            function getRealtimeSpeed(loaded) {
+                const now = Date.now();
+                speedSamples.push({ time: now, bytes: loaded });
+                while (speedSamples.length > 1 && now - speedSamples[0].time > SPEED_WINDOW_MS) {
+                    speedSamples.shift();
+                }
+                if (speedSamples.length < 2) return 0;
+                const oldest = speedSamples[0];
+                const newest = speedSamples[speedSamples.length - 1];
+                const timeDiff = (newest.time - oldest.time) / 1000;
+                if (timeDiff < 0.2) return 0;
+                return (newest.bytes - oldest.bytes) / timeDiff;
+            }
+
+            xhr.timeout = 20 * 60 * 1000;
+
             xhr.upload.addEventListener('progress', (e) => {
                 if (e.lengthComputable) {
-                    const percent = Math.round((e.loaded / e.total) * 100);
+                    const percent = Math.min(99, Math.round((e.loaded / e.total) * 100));
                     if (progressFill) progressFill.style.width = percent + '%';
 
-                    // Real-time speed using sliding window
                     const bytesPerSec = getRealtimeSpeed(e.loaded);
                     let speedText = '';
 
@@ -528,22 +649,182 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else {
                             speedText = ' • ' + (bytesPerSec / 1024).toFixed(0) + ' KB/s';
                         }
-                        // Accurate ETA based on current speed
                         if (percent < 100 && bytesPerSec > 0) {
                             const remaining = (e.total - e.loaded) / bytesPerSec;
                             if (remaining < 60) {
                                 speedText += ' • ~' + Math.ceil(remaining) + 's left';
-                            } else if (remaining < 3600) {
+                            } else {
                                 const mins = Math.floor(remaining / 60);
                                 const secs = Math.ceil(remaining % 60);
                                 speedText += ' • ~' + mins + 'm ' + secs + 's left';
-                            } else {
-                                speedText += ' • ~' + Math.floor(remaining / 3600) + 'h ' + Math.floor((remaining % 3600) / 60) + 'm left';
                             }
                         }
                     }
 
-                    // Uploaded / Total size display
+                    const uploadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
+                    const totalMB = (e.total / (1024 * 1024)).toFixed(1);
+                    const sizeText = ' • ' + uploadedMB + '/' + totalMB + ' MB';
+
+                    if (progressText) progressText.textContent = 'Direct Uploading... ' + percent + '%' + sizeText + speedText;
+                }
+            });
+
+            xhr.addEventListener('load', async () => {
+                activeXhr = null;
+
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    if (progressFill) progressFill.style.width = '100%';
+                    if (progressText) progressText.textContent = 'Upload complete! Finalizing metadata...';
+                    if (stage1Badge) {
+                        stage1Badge.className = 'upload-stage-badge badge-done';
+                        stage1Badge.textContent = '✓ Done';
+                    }
+
+                    // Await client-extracted thumbnail and duration
+                    let meta = { duration: null, thumbnailBase64: null };
+                    try {
+                        meta = await metadataPromise;
+                    } catch {}
+
+                    try {
+                        const finRes = await fetch('/api/upload/finalize', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                id: initData.id,
+                                filename: initData.filename,
+                                originalName: file.name,
+                                title: title || file.name,
+                                size: file.size,
+                                duration: meta.duration,
+                                thumbnailBase64: meta.thumbnailBase64,
+                                _csrf: csrfToken
+                            })
+                        });
+
+                        const finData = await finRes.json();
+
+                        if (finData && finData.success) {
+                            if (stageDeviceToVps) stageDeviceToVps.className = 'upload-stage-item completed';
+                            if (progressText) progressText.textContent = 'Uploaded directly to Cloudflare R2 Edge ✓';
+                            if (uploadCompleteActions) {
+                                uploadCompleteActions.style.display = 'flex';
+                                if (btnWatchNow && finData.id) {
+                                    btnWatchNow.href = '/watch/' + encodeURIComponent(finData.id);
+                                }
+                            }
+                            if (uploadBtn) {
+                                uploadBtn.disabled = false;
+                                uploadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg><span>✓ Complete</span>';
+                            }
+                            setTimeout(() => {
+                                if (window.location.pathname === '/upload') {
+                                    window.location.href = '/dashboard';
+                                }
+                            }, 2500);
+                            return;
+                        }
+                    } catch (finErr) {
+                        console.error('[upload] Finalization error:', finErr);
+                    }
+                }
+
+                // If direct PUT failed, seamlessly fallback to server relay upload
+                console.warn(`[upload] Direct upload returned status ${xhr.status}, switching to server fallback...`);
+                if (stageVpsToR2) stageVpsToR2.style.display = 'block';
+                if (stage1Name) stage1Name.textContent = 'Step 1: Device ➔ Server (VPS)';
+                runServerRelayUpload(metadataPromise);
+            });
+
+            xhr.addEventListener('error', () => {
+                activeXhr = null;
+                console.warn('[upload] Direct upload network error, switching to server fallback...');
+                if (stageVpsToR2) stageVpsToR2.style.display = 'block';
+                if (stage1Name) stage1Name.textContent = 'Step 1: Device ➔ Server (VPS)';
+                runServerRelayUpload(metadataPromise);
+            });
+
+            xhr.open('PUT', initData.uploadUrl);
+            const contentType = initData.headers && initData.headers['Content-Type']
+                ? initData.headers['Content-Type']
+                : (file.type || 'video/mp4');
+            xhr.setRequestHeader('Content-Type', contentType);
+            xhr.send(file);
+        }
+
+        // ---- Fallback Server Relay Upload Function ----
+        function runServerRelayUpload(metadataPromise) {
+            if (stage1Name) stage1Name.textContent = 'Step 1: Device ➔ Server (VPS)';
+            if (stageDeviceToVps) stageDeviceToVps.className = 'upload-stage-item active';
+            if (stage1Badge) {
+                stage1Badge.className = 'upload-stage-badge badge-running';
+                stage1Badge.textContent = 'Uploading';
+            }
+            if (stageVpsToR2) {
+                stageVpsToR2.style.display = 'block';
+                stageVpsToR2.className = 'upload-stage-item';
+            }
+            if (stage2Badge) {
+                stage2Badge.className = 'upload-stage-badge badge-pending';
+                stage2Badge.textContent = 'Waiting';
+            }
+            if (uploadBtn) {
+                uploadBtn.disabled = true;
+                uploadBtn.innerHTML = '<span>Uploading to Server...</span>';
+            }
+
+            const formData = new FormData(uploadForm);
+            const xhr = new XMLHttpRequest();
+            activeXhr = xhr;
+
+            const speedSamples = [];
+            const SPEED_WINDOW_MS = 3000;
+
+            function getRealtimeSpeed(loaded) {
+                const now = Date.now();
+                speedSamples.push({ time: now, bytes: loaded });
+                while (speedSamples.length > 1 && now - speedSamples[0].time > SPEED_WINDOW_MS) {
+                    speedSamples.shift();
+                }
+                if (speedSamples.length < 2) return 0;
+                const oldest = speedSamples[0];
+                const newest = speedSamples[speedSamples.length - 1];
+                const timeDiff = (newest.time - oldest.time) / 1000;
+                if (timeDiff < 0.3) return 0;
+                return (newest.bytes - oldest.bytes) / timeDiff;
+            }
+
+            xhr.timeout = 15 * 60 * 1000;
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    if (progressFill) progressFill.style.width = percent + '%';
+
+                    const bytesPerSec = getRealtimeSpeed(e.loaded);
+                    let speedText = '';
+
+                    if (bytesPerSec > 0) {
+                        if (bytesPerSec >= 1024 * 1024) {
+                            speedText = ' • ' + (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
+                        } else {
+                            speedText = ' • ' + (bytesPerSec / 1024).toFixed(0) + ' KB/s';
+                        }
+                        if (percent < 100 && bytesPerSec > 0) {
+                            const remaining = (e.total - e.loaded) / bytesPerSec;
+                            if (remaining < 60) {
+                                speedText += ' • ~' + Math.ceil(remaining) + 's left';
+                            } else {
+                                const mins = Math.floor(remaining / 60);
+                                const secs = Math.ceil(remaining % 60);
+                                speedText += ' • ~' + mins + 'm ' + secs + 's left';
+                            }
+                        }
+                    }
+
                     const uploadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
                     const totalMB = (e.total / (1024 * 1024)).toFixed(1);
                     const sizeText = ' • ' + uploadedMB + '/' + totalMB + ' MB';
@@ -556,7 +837,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeXhr = null;
 
                 if (xhr.status >= 200 && xhr.status < 400) {
-                    // Mark Stage 1 as completed
                     if (progressFill) progressFill.style.width = '100%';
                     if (progressText) progressText.textContent = 'Uploaded to Server ✓';
                     if (stageDeviceToVps) stageDeviceToVps.className = 'upload-stage-item completed';
@@ -570,7 +850,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         respData = JSON.parse(xhr.responseText);
                     } catch (parseErr) {}
 
-                    // Stage 2: Track Server -> Cloudflare R2 live sync
                     if (respData && respData.r2Enabled && respData.filename) {
                         if (stageVpsToR2) stageVpsToR2.className = 'upload-stage-item active';
                         if (stage2Badge) {
@@ -626,7 +905,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                         uploadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg><span>✓ Complete</span>';
                                     }
 
-                                    // Graceful auto redirect after 3 seconds
                                     setTimeout(() => {
                                         if (window.location.pathname === '/upload') {
                                             window.location.href = '/dashboard';
@@ -646,7 +924,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         };
 
                         sse.onerror = () => {
-                            // If SSE disconnects or times out, fallback to dashboard
                             setTimeout(() => {
                                 if (window.location.pathname === '/upload') {
                                     window.location.href = '/dashboard';
@@ -654,7 +931,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             }, 4000);
                         };
                     } else {
-                        // R2 not configured — complete immediately
                         if (uploadBtn) uploadBtn.innerHTML = '<span>Upload Complete! Redirecting...</span>';
                         setTimeout(() => {
                             window.location.href = '/dashboard';
@@ -723,7 +999,7 @@ document.addEventListener('DOMContentLoaded', () => {
             xhr.setRequestHeader('Accept', 'application/json');
             xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
             xhr.send(formData);
-        });
+        }
     }
 
     // ---- Custom Video Player Logic ----
@@ -1930,6 +2206,21 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteVideoModal.addEventListener('click', (e) => {
             if (e.target === deleteVideoModal) closeDeleteModal();
         });
+
+        const deleteForm = deleteVideoModal.querySelector('form');
+        if (deleteForm) {
+            deleteForm.addEventListener('submit', (e) => {
+                const submitBtn = deleteForm.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    if (submitBtn.disabled) {
+                        e.preventDefault();
+                        return;
+                    }
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<span>Deleting...</span>';
+                }
+            });
+        }
     }
 
     // ---- Profile Picture Modal Controller ----
@@ -4143,6 +4434,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 })
+                .catch(() => {});
+        }
+
         // --- 1-Click Cloudflare Edge Cache Purge ---
         window.purgeEdgeCache = async function(btn) {
             if (!confirm('Cloudflare Global Edge Cache সম্পূর্ণ Purge (ক্লিয়ার) করতে চাও?')) return;
@@ -4303,7 +4597,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     .catch(() => {});
             }, 4000);
         }
-    } // End admin block
+        }
     } // End initPageModules
 
     // Initialize SPA navigation engine & current page modules on startup

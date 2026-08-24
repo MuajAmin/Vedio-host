@@ -68,6 +68,52 @@ function getMimeType(filename) {
 // In-memory active uploads progress tracker (filename -> { loaded, total, percent, speed, eta, status, error, listeners: Set })
 const activeUploads = new Map();
 
+// In-flight upload deduplication map (filename -> Promise)
+const inFlightUploads = new Map();
+
+// Active upload controllers map (filename -> { upload, aborted: boolean })
+const activeUploadControllers = new Map();
+
+// Confirmed R2 objects cache
+const _r2ConfirmedCache = new Set();
+
+/**
+ * Check if a file is already in the in-memory confirmed R2 cache.
+ * @param {string} filename
+ * @returns {boolean}
+ */
+function isConfirmedOnR2(filename) {
+    if (!filename) return false;
+    return _r2ConfirmedCache.has(filename);
+}
+
+/**
+ * Mark a filename as confirmed to exist on R2.
+ * @param {string} filename
+ */
+function markConfirmedOnR2(filename) {
+    if (filename) _r2ConfirmedCache.add(filename);
+}
+
+/**
+ * Remove a filename from the confirmed R2 cache.
+ * @param {string} filename
+ */
+function unmarkConfirmedOnR2(filename) {
+    if (filename) _r2ConfirmedCache.delete(filename);
+}
+
+/**
+ * Bulk add filenames to the confirmed R2 cache.
+ * @param {string[]|Iterable<string>} filenames
+ */
+function bulkConfirmOnR2(filenames) {
+    if (!filenames) return;
+    for (const f of filenames) {
+        if (f) _r2ConfirmedCache.add(f);
+    }
+}
+
 /**
  * Get current upload progress for a file.
  * @param {string} filename
@@ -124,130 +170,192 @@ function registerProgressListener(filename, callback) {
 /**
  * Upload a video file to R2.
  * Streams the file to avoid loading it entirely into memory (safe for 1GB VPS).
+ * Includes concurrency deduplication, pre-upload faststart optimization, and cancellation support.
  * @param {string} filePath - Absolute path to the video file on disk
  * @param {string} filename - The filename to use as the R2 object key
  * @returns {Promise<boolean>} true if upload succeeded
  */
 async function uploadToR2(filePath, filename) {
     if (!r2Enabled) return false;
+    if (!filePath || !filename) return false;
 
-    const stat = await fs.promises.stat(filePath);
-    const contentType = getMimeType(filename);
-    const sizeMB = (stat.size / 1024 / 1024).toFixed(1);
-    const uploadStart = Date.now();
-    console.log(`[R2] ⬆ Upload start: ${filename} (${sizeMB} MB)`);
-
-    let progressEntry = activeUploads.get(filename);
-    if (!progressEntry) {
-        progressEntry = {
-            filename,
-            loaded: 0,
-            total: stat.size,
-            percent: 0,
-            speed: '',
-            eta: '',
-            status: 'uploading',
-            error: null,
-            listeners: new Set(),
-            startedAt: uploadStart,
-            lastUpdate: uploadStart
-        };
-        activeUploads.set(filename, progressEntry);
-    } else {
-        progressEntry.total = stat.size;
-        progressEntry.status = 'uploading';
-        progressEntry.startedAt = uploadStart;
+    // Concurrency Deduplication: If this exact file is already uploading, share the same Promise
+    if (inFlightUploads.has(filename)) {
+        console.log(`[R2] ⚡ Deduplicating upload: ${filename} is already in-flight.`);
+        return inFlightUploads.get(filename);
     }
 
-    const notify = () => {
-        if (!progressEntry || !progressEntry.listeners) return;
-        for (const cb of progressEntry.listeners) {
-            try { cb(progressEntry); } catch {}
-        }
-    };
-
-    notify();
-
-    let bytesStreamed = 0;
-    let lastNotifyTime = uploadStart;
-    let lastBytesStreamed = 0;
-
-    const progressStream = new Transform({
-        transform(chunk, encoding, callback) {
-            bytesStreamed += chunk.length;
-            const now = Date.now();
-            progressEntry.loaded = Math.min(stat.size, bytesStreamed);
-            progressEntry.total = stat.size;
-            progressEntry.percent = Math.min(99, Math.round((progressEntry.loaded / progressEntry.total) * 100));
-
-            // Throttle SSE updates to every 200ms for continuous smooth progress bar animation
-            if (now - lastNotifyTime >= 200) {
-                const timeDiff = (now - lastNotifyTime) / 1000;
-                const bytesDiff = progressEntry.loaded - lastBytesStreamed;
-                const bps = timeDiff > 0 ? Math.max(0, bytesDiff / timeDiff) : 0;
-                if (bps >= 1024 * 1024) {
-                    progressEntry.speed = (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
-                } else if (bps >= 1024) {
-                    progressEntry.speed = (bps / 1024).toFixed(0) + ' KB/s';
-                }
-                const remainingBytes = progressEntry.total - progressEntry.loaded;
-                if (bps > 0 && remainingBytes > 0) {
-                    const etaSec = Math.ceil(remainingBytes / bps);
-                    if (etaSec < 60) progressEntry.eta = `~${etaSec}s left`;
-                    else progressEntry.eta = `~${Math.floor(etaSec / 60)}m ${etaSec % 60}s left`;
-                }
-                lastNotifyTime = now;
-                lastBytesStreamed = progressEntry.loaded;
-                notify();
+    const uploadPromise = (async () => {
+        try {
+            // Verify file exists on disk
+            if (!fs.existsSync(filePath)) {
+                console.warn(`[R2] Upload skipped: file not found on disk: ${filePath}`);
+                return false;
             }
-            callback(null, chunk);
+
+            // Pre-upload Faststart Optimization: Ensure moov atom is at file start for instant CDN playback
+            const ext = path.extname(filename).toLowerCase();
+            if (ext === '.mp4' || ext === '.m4v') {
+                try {
+                    const { isFaststartOptimized, optimizeFaststart } = require('./faststart');
+                    const isOpt = await isFaststartOptimized(filePath);
+                    if (!isOpt) {
+                        console.log(`[R2] 🚀 Faststart optimizing ${filename} prior to R2 upload...`);
+                        await optimizeFaststart(filePath);
+                    }
+                } catch (fsErr) {
+                    console.warn(`[R2] Faststart check before upload skipped:`, fsErr.message);
+                }
+            }
+
+            const stat = await fs.promises.stat(filePath);
+            const contentType = getMimeType(filename);
+            const sizeMB = (stat.size / 1024 / 1024).toFixed(1);
+            const uploadStart = Date.now();
+            console.log(`[R2] ⬆ Upload start: ${filename} (${sizeMB} MB)`);
+
+            let progressEntry = activeUploads.get(filename);
+            if (!progressEntry) {
+                progressEntry = {
+                    filename,
+                    loaded: 0,
+                    total: stat.size,
+                    percent: 0,
+                    speed: '',
+                    eta: '',
+                    status: 'uploading',
+                    error: null,
+                    listeners: new Set(),
+                    startedAt: uploadStart,
+                    lastUpdate: uploadStart
+                };
+                activeUploads.set(filename, progressEntry);
+            } else {
+                progressEntry.total = stat.size;
+                progressEntry.status = 'uploading';
+                progressEntry.startedAt = uploadStart;
+            }
+
+            const notify = () => {
+                if (!progressEntry || !progressEntry.listeners) return;
+                for (const cb of progressEntry.listeners) {
+                    try { cb(progressEntry); } catch {}
+                }
+            };
+
+            notify();
+
+            let bytesStreamed = 0;
+            let lastNotifyTime = uploadStart;
+            let lastBytesStreamed = 0;
+
+            const progressStream = new Transform({
+                transform(chunk, encoding, callback) {
+                    bytesStreamed += chunk.length;
+                    const now = Date.now();
+                    progressEntry.loaded = Math.min(stat.size, bytesStreamed);
+                    progressEntry.total = stat.size;
+                    progressEntry.percent = Math.min(99, Math.round((progressEntry.loaded / progressEntry.total) * 100));
+
+                    // Throttle SSE updates to every 200ms for continuous smooth progress bar animation
+                    if (now - lastNotifyTime >= 200) {
+                        const timeDiff = (now - lastNotifyTime) / 1000;
+                        const bytesDiff = progressEntry.loaded - lastBytesStreamed;
+                        const bps = timeDiff > 0 ? Math.max(0, bytesDiff / timeDiff) : 0;
+                        if (bps >= 1024 * 1024) {
+                            progressEntry.speed = (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
+                        } else if (bps >= 1024) {
+                            progressEntry.speed = (bps / 1024).toFixed(0) + ' KB/s';
+                        }
+                        const remainingBytes = progressEntry.total - progressEntry.loaded;
+                        if (bps > 0 && remainingBytes > 0) {
+                            const etaSec = Math.ceil(remainingBytes / bps);
+                            if (etaSec < 60) progressEntry.eta = `~${etaSec}s left`;
+                            else progressEntry.eta = `~${Math.floor(etaSec / 60)}m ${etaSec % 60}s left`;
+                        }
+                        lastNotifyTime = now;
+                        lastBytesStreamed = progressEntry.loaded;
+                        notify();
+                    }
+                    callback(null, chunk);
+                }
+            });
+
+            const fileStream = fs.createReadStream(filePath);
+            const uploadBody = fileStream.pipe(progressStream);
+
+            const parallelUpload = new Upload({
+                client: s3Client,
+                params: {
+                    Bucket: R2_BUCKET,
+                    Key: filename,
+                    Body: uploadBody,
+                    ContentType: contentType,
+                    CacheControl: 'public, max-age=2592000, immutable', // 30 days — videos are UUID-named & never change
+                },
+                partSize: 5 * 1024 * 1024, // 5MB chunks (low memory footprint for 1GB VPS)
+                queueSize: 1, // 1 part in-flight (avoids TCP packet contention on 2 Mbps VPS outbound link)
+                leavePartsOnError: false,
+            });
+
+            const controller = { upload: parallelUpload, aborted: false };
+            activeUploadControllers.set(filename, controller);
+
+            await parallelUpload.done();
+
+            if (controller.aborted) {
+                console.warn(`[R2] Upload was aborted mid-flight for deleted video: ${filename}`);
+                // Clean up any uploaded object in case it completed right as abort was called
+                try {
+                    await s3Client.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: filename }));
+                } catch {}
+                _r2ConfirmedCache.delete(filename);
+                return false;
+            }
+
+            const elapsed = ((Date.now() - uploadStart) / 1000).toFixed(1);
+            console.log(`[R2] ✓ Upload done: ${filename} (${sizeMB} MB) in ${elapsed}s`);
+            _r2ConfirmedCache.add(filename);
+            progressEntry.percent = 100;
+            progressEntry.loaded = stat.size;
+            progressEntry.status = 'done';
+            progressEntry.speed = '';
+            progressEntry.eta = '';
+            notify();
+            // Remove active tracker after 5 minutes to avoid memory leak
+            setTimeout(() => activeUploads.delete(filename), 5 * 60 * 1000).unref();
+            return true;
+        } catch (err) {
+            const controller = activeUploadControllers.get(filename);
+            if (controller && controller.aborted) {
+                console.log(`[R2] Upload aborted cleanly for: ${filename}`);
+                return false;
+            }
+            let progressEntry = activeUploads.get(filename);
+            if (progressEntry) {
+                progressEntry.status = 'error';
+                progressEntry.error = err.message || 'R2 upload failed';
+                if (progressEntry.listeners) {
+                    for (const cb of progressEntry.listeners) {
+                        try { cb(progressEntry); } catch {}
+                    }
+                }
+            }
+            setTimeout(() => activeUploads.delete(filename), 5 * 60 * 1000).unref();
+            throw err;
+        } finally {
+            inFlightUploads.delete(filename);
+            activeUploadControllers.delete(filename);
         }
-    });
+    })();
 
-    const fileStream = fs.createReadStream(filePath);
-    const uploadBody = fileStream.pipe(progressStream);
-
-    const parallelUpload = new Upload({
-        client: s3Client,
-        params: {
-            Bucket: R2_BUCKET,
-            Key: filename,
-            Body: uploadBody,
-            ContentType: contentType,
-            CacheControl: 'public, max-age=2592000, immutable', // 30 days — videos are UUID-named & never change
-        },
-        partSize: 10 * 1024 * 1024, // 10MB chunks
-        queueSize: 4, // 4 concurrent chunks (~40MB in-flight, optimal balance)
-        leavePartsOnError: false,
-    });
-
-    try {
-        await parallelUpload.done();
-        const elapsed = ((Date.now() - uploadStart) / 1000).toFixed(1);
-        console.log(`[R2] ✓ Upload done: ${filename} (${sizeMB} MB) in ${elapsed}s`);
-        _r2ConfirmedCache.add(filename);
-        progressEntry.percent = 100;
-        progressEntry.loaded = stat.size;
-        progressEntry.status = 'done';
-        progressEntry.speed = '';
-        progressEntry.eta = '';
-        notify();
-        // Remove active tracker after 5 minutes to avoid memory leak
-        setTimeout(() => activeUploads.delete(filename), 5 * 60 * 1000).unref();
-        return true;
-    } catch (err) {
-        progressEntry.status = 'error';
-        progressEntry.error = err.message || 'R2 upload failed';
-        notify();
-        setTimeout(() => activeUploads.delete(filename), 5 * 60 * 1000).unref();
-        throw err;
-    }
+    inFlightUploads.set(filename, uploadPromise);
+    return uploadPromise;
 }
-
-const _r2ConfirmedCache = new Set();
 
 /**
  * Delete a video file from R2.
+ * Aborts any in-flight upload controller immediately to prevent zombie orphan objects.
  * @param {string} filename - The filename (R2 object key) to delete
  * @returns {Promise<boolean>} true if deletion succeeded
  */
@@ -255,15 +363,37 @@ async function deleteFromR2(filename) {
     if (!r2Enabled || !filename) return false;
 
     console.log(`[R2] ⬇ Delete start: ${filename}`);
+
+    // Abort any in-flight upload for this filename immediately
+    const activeController = activeUploadControllers.get(filename);
+    if (activeController) {
+        console.log(`[R2] 🛑 Aborting in-flight upload for deleted file: ${filename}`);
+        activeController.aborted = true;
+        try {
+            activeController.upload.abort();
+        } catch (abortErr) {
+            console.warn(`[R2] Error aborting upload:`, abortErr.message);
+        }
+        activeUploadControllers.delete(filename);
+        inFlightUploads.delete(filename);
+        activeUploads.delete(filename);
+    }
+
+    _r2ConfirmedCache.delete(filename);
+
     const command = new DeleteObjectCommand({
         Bucket: R2_BUCKET,
         Key: filename,
     });
 
-    await s3Client.send(command);
-    _r2ConfirmedCache.delete(filename);
-    console.log(`[R2] ✓ Delete done: ${filename}`);
-    return true;
+    try {
+        await s3Client.send(command);
+        console.log(`[R2] ✓ Delete done: ${filename}`);
+        return true;
+    } catch (delErr) {
+        console.error(`[R2] Delete failed for ${filename}:`, delErr.message);
+        return false;
+    }
 }
 
 /**
@@ -289,7 +419,45 @@ async function existsOnR2(filename) {
 }
 
 /**
+ * List all objects currently in the R2 bucket with full pagination.
+ * @returns {Promise<Array<{ key: string, size: number, uploaded: Date, etag: string }>>}
+ */
+async function listAllR2Objects() {
+    if (!r2Enabled || !s3Client) return [];
+    const { ListObjectsV2Command } = require('@aws-sdk/client-s3');
+    const objects = [];
+    let continuationToken = undefined;
+
+    do {
+        const res = await s3Client.send(new ListObjectsV2Command({
+            Bucket: R2_BUCKET,
+            MaxKeys: 1000,
+            ContinuationToken: continuationToken
+        }));
+
+        if (res.Contents && Array.isArray(res.Contents)) {
+            for (const item of res.Contents) {
+                if (item.Key) {
+                    objects.push({
+                        key: item.Key,
+                        size: item.Size || 0,
+                        uploaded: item.LastModified || new Date(),
+                        etag: item.ETag || ''
+                    });
+                    _r2ConfirmedCache.add(item.Key);
+                }
+            }
+        }
+
+        continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    return objects;
+}
+
+/**
  * Automatically scan database and upload any videos that are missing from Cloudflare R2.
+ * Uses single bulk bucket list to populate cache in one request instead of O(N) HEAD calls.
  * Run in background on server startup or on-demand.
  */
 async function backfillMissingR2Uploads() {
@@ -298,12 +466,21 @@ async function backfillMissingR2Uploads() {
         const db = require('../database');
         const videosDir = path.join(__dirname, '..', 'uploads', 'videos');
         const rows = db.prepare('SELECT id, title, filename FROM videos').all();
-        let synced = 0;
+        if (rows.length === 0) return;
 
+        // Fetch bucket inventory in one single bulk request
+        try {
+            await listAllR2Objects();
+            console.log(`[R2-Sync] Bucket inventory scanned. ${_r2ConfirmedCache.size} objects confirmed in R2.`);
+        } catch (listErr) {
+            console.warn('[R2-Sync] Bulk list failed, will check individually:', listErr.message);
+        }
+
+        let synced = 0;
         for (const row of rows) {
             if (!row.filename) continue;
             try {
-                const exists = await existsOnR2(row.filename);
+                const exists = isConfirmedOnR2(row.filename) || await existsOnR2(row.filename);
                 if (!exists) {
                     const localPath = path.join(videosDir, row.filename);
                     if (fs.existsSync(localPath)) {
@@ -319,6 +496,8 @@ async function backfillMissingR2Uploads() {
 
         if (synced > 0) {
             console.log(`[R2-Sync] ✓ Successfully synced ${synced} missing video(s) to Cloudflare R2.`);
+        } else {
+            console.log(`[R2-Sync] All ${rows.length} video(s) are synchronized with Cloudflare R2.`);
         }
     } catch (err) {
         console.warn('[R2-Sync] Error during background R2 sync:', err.message);
@@ -364,17 +543,31 @@ function getWorkerInventoryUrl(expiresInSeconds = 600) {
     return `${CF_WORKER_URL.replace(/\/$/, '')}/api/r2-inventory?sig=${sig}&exp=${exp}`;
 }
 
+function getWorkerCallSignalingUrl(user, expiresInSeconds = 7200) {
+    if (!CF_WORKER_URL || !user) return null;
+    const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
+    const sig = generateWorkerSignature(`call:${user}`, exp);
+    const wsBase = CF_WORKER_URL.replace(/^http/, 'ws').replace(/\/$/, '');
+    return `${wsBase}/call-signaling?user=${encodeURIComponent(user)}&sig=${sig}&exp=${exp}`;
+}
+
 module.exports = {
     isR2Enabled,
     getPublicUrl,
     uploadToR2,
     deleteFromR2,
     existsOnR2,
+    isConfirmedOnR2,
+    markConfirmedOnR2,
+    unmarkConfirmedOnR2,
+    bulkConfirmOnR2,
+    listAllR2Objects,
     getUploadProgress,
     registerProgressListener,
     getActiveUploadsList,
     backfillMissingR2Uploads,
     generateWorkerSignature,
     getWorkerUploadUrl,
-    getWorkerInventoryUrl
+    getWorkerInventoryUrl,
+    getWorkerCallSignalingUrl
 };
