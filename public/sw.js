@@ -5,7 +5,7 @@
 //  + Web Push Notification Handler for Messenger-style notifications
 // ============================================================
 
-const CACHE_NAME = 'videohost-v13.0';
+const CACHE_NAME = 'videohost-v13.1';
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [

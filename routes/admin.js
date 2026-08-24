@@ -35,7 +35,7 @@ async function listFiles(dir) {
             const fullPath = path.join(dir, name);
             try {
                 const stat = await fs.promises.stat(fullPath);
-                if (stat.isFile()) results.push({ name, fullPath, size: stat.size });
+                if (stat.isFile()) results.push({ name, fullPath, size: stat.size, mtimeMs: stat.mtimeMs });
             } catch {}
         }
         return results;
@@ -196,7 +196,7 @@ function collectSystemMetrics() {
     const totalMemBytes = os.totalmem();
     const freeMemBytes = os.freemem();
     const usedMemBytes = totalMemBytes - freeMemBytes;
-    const ramUsagePercent = Number(((usedMemBytes / totalMemBytes) * 100).toFixed(1));
+    const ramUsagePercent = Number(totalMemBytes > 0 ? ((usedMemBytes / totalMemBytes) * 100).toFixed(1) : 0);
 
     // Disk
     let diskTotalBytes = 0;
@@ -209,7 +209,7 @@ function collectSystemMetrics() {
         diskTotalBytes = disk.bsize * disk.blocks;
         diskFreeBytes = disk.bsize * disk.bavail;
         diskUsedBytes = diskTotalBytes - diskFreeBytes;
-        diskUsagePercent = Number(((diskUsedBytes / diskTotalBytes) * 100).toFixed(1));
+        diskUsagePercent = Number(diskTotalBytes > 0 ? ((diskUsedBytes / diskTotalBytes) * 100).toFixed(1) : 0);
     } catch {}
 
     // Process Memory
@@ -303,11 +303,16 @@ async function collectAdminStats(currentSid = null) {
         .filter(job => ['queued', 'starting', 'downloading'].includes(job.status))
         .map(job => job.id));
 
+    const nowTime = Date.now();
     const orphanVideos = videoFiles.filter(file => {
+        if (nowTime - file.mtimeMs < 15 * 60 * 1000) return false;
         if (dbVideoFiles.has(file.name)) return false;
         return !Array.from(activeImportIds).some(id => file.name.startsWith(id));
     });
-    const orphanThumbnails = thumbnailFiles.filter(file => !dbThumbnailFiles.has(file.name));
+    const orphanThumbnails = thumbnailFiles.filter(file => {
+        if (nowTime - file.mtimeMs < 15 * 60 * 1000) return false;
+        return !dbThumbnailFiles.has(file.name);
+    });
 
     // Fetch Hajera's watch status for all videos in the library
     const hajeraVideos = db.prepare(
@@ -345,12 +350,14 @@ async function collectAdminStats(currentSid = null) {
         completedCount: watchedVideos.filter(a => {
             const pos = Number(a.position_seconds || 0);
             const dur = Number(a.duration_seconds || 0);
-            return (dur > 0 && pos >= dur - 15);
+            const threshold = dur <= 15 ? dur * 0.9 : dur - 15;
+            return (dur > 0 && pos >= threshold);
         }).length,
         inProgressCount: watchedVideos.filter(a => {
             const pos = Number(a.position_seconds || 0);
             const dur = Number(a.duration_seconds || 0);
-            return pos >= 10 && (dur === 0 || pos < dur - 15);
+            const threshold = dur <= 15 ? dur * 0.9 : dur - 15;
+            return pos >= 10 && (dur === 0 || pos < threshold);
         }).length,
         openedCount: watchedVideos.filter(a => {
             const pos = Number(a.position_seconds || 0);
@@ -411,7 +418,7 @@ async function collectAdminStats(currentSid = null) {
             SELECT w.seconds_watched, v.size, wp.duration_seconds
             FROM watch_time_ledger w
             JOIN videos v ON v.id = w.video_id
-            LEFT JOIN watch_progress wp ON wp.video_id = v.id
+            LEFT JOIN watch_progress wp ON wp.video_id = w.video_id AND wp.user = w.user
         `).all();
         for (const r of rows) {
             const dur = Number(r.duration_seconds || 0);
@@ -524,8 +531,8 @@ router.post('/admin/r2/sync-video/:id', isMuaj, (req, res) => {
         return res.status(400).json({ success: false, error: 'Cloudflare R2 credentials not configured.' });
     }
     const video = db.prepare('SELECT id, filename, title, size FROM videos WHERE id = ?').get(req.params.id);
-    if (!video) {
-        return res.status(404).json({ success: false, error: 'Video not found in database.' });
+    if (!video || !video.filename) {
+        return res.status(404).json({ success: false, error: 'Video not found in database or filename missing.' });
     }
     const filePath = path.join(videosDir, video.filename);
     if (!fs.existsSync(filePath)) {
@@ -553,7 +560,7 @@ router.get('/admin/r2/edge-status', isMuaj, async (req, res) => {
     if (!invUrl) {
         return res.json({
             workerConfigured: false,
-            message: 'CF_WORKER_URL is not configured in .env'
+            message: 'CF_WORKER_URL or SESSION_SECRET is not configured in .env'
         });
     }
 
@@ -590,6 +597,7 @@ router.post('/admin/r2/scan-bucket', isMuaj, async (req, res) => {
 
         let r2Objects = [];
         let source = 'worker';
+        let workerHandled = false;
 
         // 1. Try Worker inventory endpoint first
         const workerScanUrl = getWorkerAdminSignedUrl('inventory');
@@ -600,6 +608,7 @@ router.post('/admin/r2/scan-bucket', isMuaj, async (req, res) => {
                     const data = await response.json();
                     if (data && Array.isArray(data.files)) {
                         r2Objects = data.files;
+                        workerHandled = true;
                     }
                 }
             } catch (wErr) {
@@ -608,7 +617,7 @@ router.post('/admin/r2/scan-bucket', isMuaj, async (req, res) => {
         }
 
         // 2. Fallback to S3 SDK if Worker is unavailable
-        if (r2Objects.length === 0 && r2.isR2Enabled()) {
+        if (!workerHandled && r2.isR2Enabled()) {
             source = 's3-fallback';
             try {
                 r2Objects = await r2.listAllR2Objects();
@@ -704,6 +713,12 @@ router.post('/admin/r2/clean-orphans', isMuaj, async (req, res) => {
             }
         }
 
+        for (const key of deletedKeys) {
+            if (typeof r2.unmarkConfirmedOnR2 === 'function') {
+                r2.unmarkConfirmedOnR2(key);
+            }
+        }
+
         res.json({
             success: true,
             deletedCount: deletedKeys.length,
@@ -735,7 +750,8 @@ router.post('/admin/cf/purge-cache', isMuaj, async (req, res) => {
                 'Authorization': `Bearer ${apiToken}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ purge_everything: true })
+            body: JSON.stringify({ purge_everything: true }),
+            signal: AbortSignal.timeout(10000)
         });
 
         const data = await cfRes.json();
@@ -784,6 +800,7 @@ router.post('/admin/cleanup', isMuaj, async (req, res) => {
 
 // Force logout all Hajera sessions
 router.post('/admin/hajera/logout-sessions', isMuaj, async (req, res) => {
+    _liveStatusCache = null; _liveStatusCacheAt = 0;
     const destroyed = db.destroyUserSessions('hajera');
     res.render('admin', {
         user: req.session.user,
@@ -814,18 +831,23 @@ router.post('/admin/muaj/logout-all-sessions', isMuaj, (req, res) => {
 
 // Terminate a single specific session
 router.post('/admin/sessions/destroy/:sid', isMuaj, async (req, res) => {
+    _liveStatusCache = null; _liveStatusCacheAt = 0;
     const targetSid = req.params.sid;
     const isSelf = (targetSid === req.sessionID);
     const destroyed = db.destroySingleSession(targetSid);
 
     if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
-        return res.json({ 
+        const respond = () => res.json({ 
             success: destroyed, 
             isSelf, 
             remainingSessions: db.getAllActiveSessions(req.sessionID),
             muajSessionCount: db.countUserSessions('muaj'),
             hajeraSessionCount: db.countUserSessions('hajera')
         });
+        if (isSelf) {
+            return req.session.destroy(respond);
+        }
+        return respond();
     }
 
     if (isSelf) {
@@ -844,6 +866,7 @@ router.post('/admin/sessions/destroy/:sid', isMuaj, async (req, res) => {
 
 // Block Hajera's access
 router.post('/admin/hajera/block', isMuaj, async (req, res) => {
+    _liveStatusCache = null; _liveStatusCacheAt = 0;
     const reason = (req.body.reason || '').trim() || 'Admin দ্বারা block করা হয়েছে';
     db.blockUser('hajera', reason);
     res.render('admin', {
@@ -856,6 +879,7 @@ router.post('/admin/hajera/block', isMuaj, async (req, res) => {
 
 // Unblock Hajera's access
 router.post('/admin/hajera/unblock', isMuaj, async (req, res) => {
+    _liveStatusCache = null; _liveStatusCacheAt = 0;
     db.unblockUser('hajera');
     res.render('admin', {
         user: req.session.user,
@@ -874,7 +898,10 @@ const LIVE_STATUS_CACHE_TTL = 2000;
 router.get('/admin/hajera/live-status', isMuaj, (req, res) => {
     const now = Date.now();
     if (_liveStatusCache && (now - _liveStatusCacheAt) < LIVE_STATUS_CACHE_TTL) {
-        return res.json(_liveStatusCache);
+        return res.json({
+            ..._liveStatusCache,
+            detailedSessions: db.getAllActiveSessions(req.sessionID)
+        });
     }
 
     const presence = db.getUserPresence('hajera');
@@ -927,6 +954,7 @@ router.get('/admin/system/live-metrics', isMuaj, (req, res) => {
 
 // POST /admin/hajera/clear-logs — Clear older activity logs
 router.post('/admin/hajera/clear-logs', isMuaj, (req, res) => {
+    _liveStatusCache = null; _liveStatusCacheAt = 0;
     db.clearOldActivityLogs('hajera');
     res.json({ success: true });
 });

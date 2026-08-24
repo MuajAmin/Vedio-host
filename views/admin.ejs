@@ -1,5 +1,6 @@
 <%
 const h = escapeHtml;
+const safeStats = (typeof stats !== 'undefined' && stats) ? stats : {};
 const currentUnread = (typeof unreadCount !== 'undefined' && unreadCount > 0) ? unreadCount : 0;
 const unreadDisplay = currentUnread > 0 ? (currentUnread > 99 ? '99+' : currentUnread) : '0';
 const unreadStyle = currentUnread > 0 ? 'display:flex;' : 'display:none;';
@@ -77,9 +78,9 @@ function timeAgo(dateString) {
     return years + 'y ago';
 }
 
-const importJobs = (stats && Array.isArray(stats.importJobs)) ? stats.importJobs : [];
-const videoList = (stats && Array.isArray(stats.videos)) ? stats.videos : [];
-const cfSavings = (stats && stats.cloudflareSavings) ? stats.cloudflareSavings : {
+const importJobs = (safeStats && Array.isArray(safeStats.importJobs)) ? safeStats.importJobs : [];
+const videoList = (safeStats && Array.isArray(safeStats.videos)) ? safeStats.videos : [];
+const cfSavings = (safeStats && safeStats.cloudflareSavings) ? safeStats.cloudflareSavings : {
     enabled: false,
     workerUrl: null,
     zoneConfigured: false,
@@ -95,7 +96,7 @@ const cfSavings = (stats && stats.cloudflareSavings) ? stats.cloudflareSavings :
 const activeJobs = importJobs.filter(job => ['queued', 'starting', 'downloading'].includes(job.status));
 const failedJobs = importJobs.filter(job => ['error', 'canceled'].includes(job.status)).slice(0, 8);
 const recentVideos = videoList.slice(0, 12);
-const hajeraStats = (stats && stats.hajeraStats) ? stats.hajeraStats : { totalWatched: 0, completedCount: 0, inProgressCount: 0, openedCount: 0, recentActivity: [] };
+const hajeraStats = (safeStats && safeStats.hajeraStats) ? safeStats.hajeraStats : { totalWatched: 0, completedCount: 0, inProgressCount: 0, openedCount: 0, recentActivity: [] };
 const hajeraActivityList = hajeraStats.recentActivity || [];
 
 const totalVideos = hajeraStats.totalLibrary || videoList.length || 0;
@@ -211,12 +212,12 @@ const timelineHtml = activityTimeline.length === 0
         </div>`;
     }).join('');
 
-const hajeraBlocked = stats && stats.hajeraBlocked;
-const muajSessionCount = (stats && stats.muajSessionCount) || 0;
-const hajeraSessionCount = (stats && stats.hajeraSessionCount) || 0;
-const totalSessionCount = (stats && typeof stats.sessionCount === 'number') ? stats.sessionCount : (muajSessionCount + hajeraSessionCount);
-const detailedSessions = (stats && Array.isArray(stats.detailedSessions)) ? stats.detailedSessions : [];
-const hajeraBlockReason = (stats && stats.hajeraBlockReason) || '';
+const hajeraBlocked = safeStats && safeStats.hajeraBlocked;
+const muajSessionCount = (safeStats && safeStats.muajSessionCount) || 0;
+const hajeraSessionCount = (safeStats && safeStats.hajeraSessionCount) || 0;
+const totalSessionCount = (safeStats && typeof safeStats.sessionCount === 'number') ? safeStats.sessionCount : (muajSessionCount + hajeraSessionCount);
+const detailedSessions = (safeStats && Array.isArray(safeStats.detailedSessions)) ? safeStats.detailedSessions : [];
+const hajeraBlockReason = (safeStats && safeStats.hajeraBlockReason) || '';
 const accessMsg = (typeof accessMessage !== 'undefined' && accessMessage) ? accessMessage : null;
 
 let sessionsTableRows = '';
@@ -327,7 +328,7 @@ const cleanupHtml = (typeof cleanupResult !== 'undefined' && cleanupResult)
     ? `<div class="alert admin-alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg><span>${h(cleanupResult.deleted)} files cleaned up, ${h(formatBytes(cleanupResult.bytesFreed))} space freed.</span></div>`
     : '';
 
-const sys = (stats && stats.systemMetrics) ? stats.systemMetrics : null;
+const sys = (safeStats && safeStats.systemMetrics) ? safeStats.systemMetrics : null;
 
 let vpsMonitorHtml = '';
 if (sys) {
@@ -404,7 +405,7 @@ if (sys) {
                 </div>
                 <div class="metric-bottom-info">
                     <span>Load Avg (1m, 5m, 15m)</span>
-                    <strong id="vpsLoadAvg">${h(sys.cpu.loadAvg.join(' • '))}</strong>
+                    <strong id="vpsLoadAvg">${h(Array.isArray(sys.cpu.loadAvg) ? sys.cpu.loadAvg.join(' • ') : '—')}</strong>
                 </div>
             </div>
 
@@ -464,7 +465,7 @@ if (sys) {
                 </div>
                 <div class="metric-bottom-info">
                     <span>Used: <strong id="vpsDiskUsed">${h(sys.disk.usedFormatted)}</strong></span>
-                    <span>Videos: <strong>${h(formatBytes(stats.storageBytes || 0))}</strong></span>
+                    <span>Videos: <strong>${h(formatBytes(safeStats.storageBytes || 0))}</strong></span>
                 </div>
             </div>
 
@@ -528,7 +529,7 @@ if (sys) {
                     </div>
                     <div class="runtime-chip">
                         <span class="chip-k">DB Sessions</span>
-                        <strong class="chip-v">${h(stats.sessionCount || 0)}</strong>
+                        <strong class="chip-v">${h(safeStats.sessionCount || 0)}</strong>
                     </div>
                 </div>
             </div>
@@ -571,31 +572,31 @@ if (sys) {
     </section>`;
 }
 
-const r2Stats = (stats && stats.r2Stats) ? stats.r2Stats : {
+const r2Stats = (safeStats && safeStats.r2Stats) ? safeStats.r2Stats : {
     enabled: false,
     totalVideos: videoList.length,
     r2Count: 0,
     r2TotalBytes: 0,
     r2Percent: 0,
     vpsCount: videoList.length,
-    vpsTotalBytes: stats.videoBytes || 0,
+    vpsTotalBytes: safeStats.videoBytes || 0,
     unsyncedCount: 0,
     unsyncedVideos: []
 };
 
 const r2HubHtml = `
 <section class="admin-section-card r2-storage-hub-section" id="r2StorageHub">
-    <div class="admin-section-header">
-        <div class="admin-header-title-group">
-            <div class="admin-section-icon icon-cyan">
+    <div class="section-card-header">
+        <div class="card-title-group">
+            <div class="icon-bubble icon-cyan">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                     <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
                     <path d="M12 13v6"/><path d="m9 16 3-3 3 3"/>
                 </svg>
             </div>
             <div>
-                <h2 class="admin-section-title">Cloudflare R2 &amp; VPS Storage Tracker</h2>
-                <p class="admin-section-subtitle">Real-time edge CDN sync status &amp; video distribution</p>
+                <h2>Cloudflare R2 &amp; VPS Storage Tracker</h2>
+                <p style="margin: 4px 0 0; font-size: 0.85rem; color: #888;">Real-time edge CDN sync status &amp; video distribution</p>
             </div>
         </div>
         <div class="r2-hub-actions" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -733,7 +734,7 @@ const r2HubHtml = `
                                 <span>Synced on Cloudflare Edge CDN</span>
                             </div>
                         ` : `
-                            <button type="button" class="btn-android-sync-r2" onclick="syncSingleVideo('${safeId}', '${safeFn}', ${safeSize}, this)">
+                            <button type="button" class="btn-android-sync-r2" data-video-id="${safeId}" data-filename="${safeFn}" data-size="${safeSize}" onclick="syncSingleVideo(this.dataset.videoId, this.dataset.filename, Number(this.dataset.size), this)">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                     <polyline points="17 8 12 3 7 8"/>
@@ -1047,7 +1048,7 @@ const videoRows = recentVideos.length === 0
         <div class="admin-quick-toolbar">
             <div class="quick-toolbar-info">
                 <span class="live-dot-indicator"></span>
-                <span><strong>${h(videoList.length)}</strong> Videos stored • <strong>${h(formatBytes(stats.storageBytes || 0))}</strong> Total</span>
+                <span><strong>${h(videoList.length)}</strong> Videos stored • <strong>${h(formatBytes(safeStats.storageBytes || 0))}</strong> Total</span>
             </div>
             <form action="/admin/cleanup" method="POST" data-confirm="Clean up orphan upload files that are not referenced in the database?">
                 <input type="hidden" name="_csrf" value="${h(csrfToken)}">
@@ -1429,8 +1430,8 @@ const videoRows = recentVideos.length === 0
                         <circle cx="11" cy="11" r="8"/>
                         <line x1="21" y1="21" x2="16.65" y2="16.65"/>
                     </svg>
-                    <input type="text" id="hajeraSearchInput" class="hajera-search-input" placeholder="Search Hajera's video logs..." autocomplete="off" />
-                    <button type="button" class="search-clear-btn" id="hajeraSearchClear" style="display:none;" title="Clear search">
+                    <input type="text" id="hajeraSearchInput" class="hajera-search-input" placeholder="Search Hajera's video logs..." aria-label="Search Hajera's video logs" autocomplete="off" />
+                    <button type="button" class="search-clear-btn" id="hajeraSearchClear" style="display:none;" title="Clear search" aria-label="Clear search">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                             <line x1="18" y1="6" x2="6" y2="18"/>
                             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -1536,7 +1537,7 @@ const videoRows = recentVideos.length === 0
                     </div>
                     <h2>Recent Videos</h2>
                 </div>
-                <span class="count-pill">${h(formatBytes(stats.videoBytes))} stored</span>
+                <span class="count-pill">${h(formatBytes(safeStats.videoBytes))} stored</span>
             </div>
 
             <!-- Desktop Table -->

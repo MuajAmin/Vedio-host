@@ -5,8 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="description" content="VideoHost — Private Video Hosting Platform">
-    <title>VideoHost - <%= typeof pageTitle !=='undefined' ? pageTitle : 'Private Video Hub' %>
-    </title>
+    <title>VideoHost - <%= typeof pageTitle !=='undefined' ? pageTitle : 'Private Video Hub' %></title>
     <meta name="theme-color" content="#060609">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,12 +14,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <script src="/js/theme-init.js?v=13.0"></script>
-    <script src="/js/twemoji.min.js?v=13.0"></script>
-    <link rel="stylesheet" href="/css/style.css?v=13.0">
-    <link rel="stylesheet" href="/css/messages.css?v=13.0">
-    <link rel="stylesheet" href="/css/calling.css?v=13.0">
-    <link rel="stylesheet" href="/css/minimal.css?v=13.0">
+    <script src="/js/theme-init.js?v=13.1"></script>
+    <script src="/js/twemoji.min.js?v=13.1"></script>
+    <link rel="stylesheet" href="/css/style.css?v=13.1">
+    <link rel="stylesheet" href="/css/messages.css?v=13.1">
+    <link rel="stylesheet" href="/css/calling.css?v=13.1">
+    <link rel="stylesheet" href="/css/minimal.css?v=13.1">
     <meta name="csrf-token" content="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 </head>
 
@@ -674,10 +673,10 @@
             <audio id="remoteAudioTrack" autoplay playsinline style="display:none;"></audio>
             <% } %>
 
-            <script src="/js/app.js?v=13.0"></script>
-            <script defer src="/js/messages.js?v=13.0"></script>
-            <script defer src="/js/watchTogether.js?v=13.0"></script>
-            <script defer src="/js/calling.js?v=13.0"></script>
+            <script src="/js/app.js?v=13.1"></script>
+            <script defer src="/js/messages.js?v=13.1"></script>
+            <script defer src="/js/watchTogether.js?v=13.1"></script>
+            <script defer src="/js/calling.js?v=13.1"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').then(function(reg) {

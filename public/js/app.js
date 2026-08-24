@@ -131,6 +131,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(vpsPollingInterval);
                 vpsPollingInterval = null;
             }
+            if (window.hajeraLiveInterval) {
+                clearInterval(window.hajeraLiveInterval);
+                window.hajeraLiveInterval = null;
+            }
+            if (window.r2LiveInterval) {
+                clearInterval(window.r2LiveInterval);
+                window.r2LiveInterval = null;
+            }
             window.dispatchEvent(new CustomEvent('page:cleanup'));
         }
 
@@ -2825,7 +2833,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Persist to database in background
                     fetch('/api/settings/ui-mode', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'x-csrf-token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
                         body: JSON.stringify({ ui_mode: mode })
                     }).catch(() => {});
 
@@ -2865,7 +2873,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Persist to database in background
                     fetch('/api/settings/theme', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'x-csrf-token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
                         body: JSON.stringify({ theme: theme })
                     }).catch(() => {});
 
@@ -3435,7 +3443,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Continuous spawn
-            setInterval(spawnHeart, spawnInterval);
+            if (window.__HEART_INTERVAL__) clearInterval(window.__HEART_INTERVAL__);
+            window.__HEART_INTERVAL__ = setInterval(spawnHeart, spawnInterval);
         }
 
         // ---- 2. Typewriter Effect ----
@@ -3512,7 +3521,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ];
             let quoteIndex = 0;
 
-            setInterval(() => {
+            if (window.__QUOTE_INTERVAL__) clearInterval(window.__QUOTE_INTERVAL__);
+            window.__QUOTE_INTERVAL__ = setInterval(() => {
                 quoteIndex = (quoteIndex + 1) % quotes.length;
                 loveQuoteEl.style.opacity = '0';
                 loveQuoteEl.style.transform = 'translateY(6px)';
@@ -4020,10 +4030,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Update Detailed Sessions Table & Cards (if available)
                     if (Array.isArray(data.detailedSessions)) {
+                        function escHtml(str) {
+                            if (!str) return '';
+                            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                        }
                         const tableBody = document.getElementById('sessionsTableBody');
                         const mobileList = document.getElementById('sessionsMobileList');
-                        const csrfInput = document.querySelector('input[name="_csrf"]');
-                        const currentCsrf = csrfInput ? csrfInput.value : '';
+                        const currentCsrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
                         if (tableBody) {
                             if (data.detailedSessions.length === 0) {
@@ -4043,18 +4056,18 @@ document.addEventListener('DOMContentLoaded', () => {
                                     const devIcon = (s.device && (s.device.toLowerCase().includes('android') || s.device.toLowerCase().includes('iphone'))) ? '📱' : '💻';
 
                                     return `
-                                        <tr class="session-row ${s.isCurrent ? 'is-current-session' : ''}" id="session-row-${s.sid}">
+                                        <tr class="session-row ${s.isCurrent ? 'is-current-session' : ''}" id="session-row-${escHtml(s.sid)}">
                                             <td>${userBadge}</td>
                                             <td>
                                                 <div class="session-device-cell">
                                                     <span class="device-icon">${devIcon}</span>
                                                     <div class="device-meta">
-                                                        <span class="device-name">${s.device || 'Web Browser'}</span>
-                                                        <span class="device-sid" title="Session ID: ${s.sid}">${shortSid}</span>
+                                                        <span class="device-name">${escHtml(s.device || 'Web Browser')}</span>
+                                                        <span class="device-sid" title="Session ID: ${escHtml(s.sid)}">${escHtml(shortSid)}</span>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td><code class="session-ip-code">${s.ip || '—'}</code></td>
+                                            <td><code class="session-ip-code">${escHtml(s.ip || '—')}</code></td>
                                             <td><span class="session-time">${loginTimeFmt}</span></td>
                                             <td><span class="session-active-time">⏱️ ${lastActiveFmt}</span></td>
                                             <td>${currentTag}</td>
@@ -4092,7 +4105,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     const loginTimeFmt = s.loginTime ? new Date(parseSqliteDateHelper(s.loginTime)).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' }) : '-';
 
                                     return `
-                                        <div class="session-mobile-card ${s.isCurrent ? 'is-current-card' : ''}" id="session-card-${s.sid}">
+                                        <div class="session-mobile-card ${s.isCurrent ? 'is-current-card' : ''}" id="session-card-${escHtml(s.sid)}">
                                             <div class="session-card-top">
                                                 <div class="session-card-user-info">
                                                     ${userBadge}
@@ -4112,11 +4125,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                             <div class="session-card-body">
                                                 <div class="session-card-detail-row">
                                                     <span class="session-detail-lbl">📱 Device:</span>
-                                                    <strong class="session-detail-val">${s.device || 'Web Browser'}</strong>
+                                                    <strong class="session-detail-val">${escHtml(s.device || 'Web Browser')}</strong>
                                                 </div>
                                                 <div class="session-card-detail-row">
                                                     <span class="session-detail-lbl">🌐 IP Address:</span>
-                                                    <code class="session-detail-ip">${s.ip || '—'}</code>
+                                                    <code class="session-detail-ip">${escHtml(s.ip || '—')}</code>
                                                 </div>
                                                 <div class="session-card-detail-row">
                                                     <span class="session-detail-lbl">⏱️ Last Active:</span>
@@ -4183,7 +4196,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Start live polling every 4 seconds
-        setInterval(pollHajeraLiveStatus, 8000);
+        if (window.hajeraLiveInterval) clearInterval(window.hajeraLiveInterval);
+        window.hajeraLiveInterval = setInterval(pollHajeraLiveStatus, 8000);
+        } // End of Hajera 'if' block
 
         // ========================================
         // VPS Telemetry & Real-Time Resource Polling
@@ -4304,7 +4319,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Start VPS live polling if on admin page
-        if (document.getElementById('vpsHealthPill') || document.getElementById('vpsCpuFill')) {
+        if (document.getElementById('vpsHealthPill') || document.getElementById('vpsCpuBar')) {
             if (vpsPollingInterval) clearInterval(vpsPollingInterval);
             vpsPollingInterval = setInterval(pollVpsMetrics, 10000);
         }
@@ -4411,6 +4426,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             es.onerror = function() {
+                es.close();
                 fetch('/admin/r2/live-status')
                     .then(r => r.json())
                     .then(data => {
@@ -4430,9 +4446,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     method: 'POST',
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'x-csrf-token': document.querySelector('meta[name="csrf-token"]')?.content || ''
                     }
                 });
+                if (!res.ok) throw new Error('Server error: ' + res.status);
                 const data = await res.json();
                 if (data.success) {
                     attachR2ProgressListener(videoId, filename, totalSize);
@@ -4457,9 +4475,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     method: 'POST',
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'x-csrf-token': document.querySelector('meta[name="csrf-token"]')?.content || ''
                     }
                 });
+                if (!res.ok) throw new Error('Server error: ' + res.status);
                 const data = await res.json();
                 if (data.success) {
                     const pendingRows = document.querySelectorAll('.r2-row.is-pending');
@@ -4518,8 +4538,9 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const res = await fetch('/admin/cf/purge-cache', {
                     method: 'POST',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'x-csrf-token': document.querySelector('meta[name="csrf-token"]')?.content || '' }
                 });
+                if (!res.ok) throw new Error('Server error: ' + res.status);
                 const data = await res.json();
                 if (data.success) {
                     alert('✅ ' + (data.message || 'Cloudflare edge cache purged successfully!'));
@@ -4552,8 +4573,9 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const res = await fetch('/admin/r2/scan-bucket', {
                     method: 'POST',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'x-csrf-token': document.querySelector('meta[name="csrf-token"]')?.content || '' }
                 });
+                if (!res.ok) throw new Error('Server error: ' + res.status);
                 const data = await res.json();
                 if (!data.success) {
                     if (resultsBox) resultsBox.innerHTML = `<div style="color:#ef4444; font-size:13px;">❌ স্ক্যান ব্যর্থ: ${data.error || 'Unknown error'}</div>`;
@@ -4625,9 +4647,10 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const res = await fetch('/admin/r2/clean-orphans', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'x-csrf-token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
                     body: JSON.stringify({ keys })
                 });
+                if (!res.ok) throw new Error('Server error: ' + res.status);
                 const data = await res.json();
                 if (data.success) {
                     alert(`✅ ${data.deletedCount}টি orphan ফাইল R2 বাকেট থেকে সফলভাবে মুছে ফেলা হয়েছে!`);
@@ -4648,7 +4671,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Live monitor active uploads on admin page every 4s
         if (document.getElementById('r2StorageHub')) {
-            setInterval(() => {
+            if (window.r2LiveInterval) clearInterval(window.r2LiveInterval);
+            window.r2LiveInterval = setInterval(() => {
                 if (window.location.pathname !== '/admin') return;
                 fetch('/admin/r2/live-status')
                     .then(r => r.json())
@@ -4666,7 +4690,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     })
                     .catch(() => {});
             }, 4000);
-        }
         }
     } // End initPageModules
 
