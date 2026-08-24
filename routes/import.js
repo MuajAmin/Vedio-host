@@ -951,9 +951,10 @@ async function startDownload(job) {
                     // Upload to R2 CDN in background
                     if (r2.isR2Enabled()) {
                         const videoPath = path.join(uploadsDir, downloaded.finalFilename);
+                        console.log(`[import] R2 background upload starting: ${downloaded.finalFilename}`);
                         r2.uploadToR2(videoPath, downloaded.finalFilename)
-                            .then(() => console.log(`[R2] Import upload done: ${downloaded.finalFilename}`))
-                            .catch(err => console.error(`[R2] Import upload failed: ${err.message}`));
+                            .then(() => console.log(`[import] R2 upload done: ${downloaded.finalFilename}`))
+                            .catch(err => console.error(`[import] R2 upload failed: ${downloaded.finalFilename}: ${err.message}`));
                     }
 
                     job.status = 'done';

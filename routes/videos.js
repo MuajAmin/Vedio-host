@@ -235,15 +235,18 @@ router.post('/upload', isAuthenticated, (req, res) => {
             db.prepare(
                 'INSERT INTO videos (id, title, filename, original_name, size, thumbnail, duration, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
             ).run(id, title || req.file.originalname, req.file.filename, req.file.originalname, req.file.size, thumbnail, duration, uploader);
+            console.log(`[upload] DB saved: id=${id} file=${req.file.filename} size=${(req.file.size / 1024 / 1024).toFixed(1)}MB by=${uploader}`);
         } catch (dbError) {
+            console.error(`[upload] DB save failed for ${req.file.filename}:`, dbError.message);
             return fail(500, 'Could not save video metadata.');
         }
 
         // Upload to R2 CDN in background (non-blocking — user sees dashboard immediately)
         if (r2.isR2Enabled()) {
             const videoPath = path.join(uploadsDir, req.file.filename);
+            console.log(`[upload] R2 background upload starting: ${req.file.filename}`);
             r2.uploadToR2(videoPath, req.file.filename)
-                .catch(err => console.error(`[R2] Upload failed for ${req.file.filename}:`, err.message));
+                .catch(err => console.error(`[upload] R2 upload failed for ${req.file.filename}:`, err.message));
         }
 
         res.redirect('/dashboard');
@@ -330,39 +333,51 @@ router.post('/rename/:id', isAuthenticated, (req, res) => {
 });
 
 // POST /delete/:id — Delete video (any authenticated user)
-router.post('/delete/:id', isAuthenticated, (req, res) => {
+router.post('/delete/:id', isAuthenticated, async (req, res) => {
     try {
         const videoId = String(req.params.id || '').trim();
         const video = db.prepare('SELECT * FROM videos WHERE id = ? OR filename = ?').get(videoId, videoId);
 
         if (video) {
+            console.log(`[delete] Start: video=${video.id} file=${video.filename} by=${req.session.user}`);
+
             // Invalidate stream cache
             invalidateVideoCache(video.id);
             invalidateVideoCache(video.filename);
+            // Clear R2 confirmed cache so stale 302 redirects don't hit a deleted object
+            _r2ConfirmedFiles.delete(video.filename);
 
-            // Delete video file from disk
-            const filePath = getSafeVideoPath(video.filename);
-            if (filePath && fs.existsSync(filePath)) {
-                fs.promises.unlink(filePath).catch(() => {});
-            }
-
-            // Delete from R2 CDN
+            // 1. Delete from R2 CDN first (await — ensures object is removed before DB record vanishes)
             if (r2.isR2Enabled()) {
-                r2.deleteFromR2(video.filename)
-                    .catch(err => console.error(`[R2] Delete failed for ${video.filename}:`, err.message));
-            }
-
-            // Delete thumbnail file if exists
-            if (video.thumbnail) {
-                const thumbPath = getSafeThumbnailPath(video.thumbnail);
-                if (thumbPath && fs.existsSync(thumbPath)) {
-                    fs.promises.unlink(thumbPath).catch(() => {});
+                try {
+                    await r2.deleteFromR2(video.filename);
+                    console.log(`[delete] R2 delete success: ${video.filename}`);
+                } catch (err) {
+                    // Log but continue — R2 DeleteObject on non-existent keys returns success,
+                    // so real failures are transient (network issue). Don't block DB cleanup.
+                    console.error(`[delete] R2 delete failed for ${video.filename}:`, err.message);
                 }
             }
 
-            // Delete from database (foreign keys handle comments & watch_progress)
+            // 2. Delete video file from disk
+            const filePath = getSafeVideoPath(video.filename);
+            if (filePath && fs.existsSync(filePath)) {
+                await fs.promises.unlink(filePath).catch(() => {});
+                console.log(`[delete] Local file removed: ${video.filename}`);
+            }
+
+            // 3. Delete thumbnail file if exists
+            if (video.thumbnail) {
+                const thumbPath = getSafeThumbnailPath(video.thumbnail);
+                if (thumbPath && fs.existsSync(thumbPath)) {
+                    await fs.promises.unlink(thumbPath).catch(() => {});
+                }
+            }
+
+            // 4. Delete from database last (foreign keys handle comments & watch_progress)
             db.prepare('DELETE FROM videos WHERE id = ?').run(video.id);
-            console.log(`[videos] Deleted video: ${video.id} (${video.title}) by ${req.session.user}`);
+            console.log(`[delete] DB record removed: ${video.id} (${video.title})`);
+            console.log(`[delete] Complete: ${video.id}`);
         }
 
         const isAjax = req.xhr || 
@@ -375,7 +390,7 @@ router.post('/delete/:id', isAuthenticated, (req, res) => {
 
         res.redirect('/dashboard');
     } catch (err) {
-        console.error('[videos] Error deleting video:', err.message);
+        console.error('[delete] Error:', err.message);
         const isAjax = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));
         if (isAjax) {
             return res.status(500).json({ error: 'Could not delete video.' });

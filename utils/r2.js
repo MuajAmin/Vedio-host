@@ -74,6 +74,9 @@ async function uploadToR2(filePath, filename) {
 
     const stat = await fs.promises.stat(filePath);
     const contentType = getMimeType(filename);
+    const sizeMB = (stat.size / 1024 / 1024).toFixed(1);
+    const uploadStart = Date.now();
+    console.log(`[R2] ⬆ Upload start: ${filename} (${sizeMB} MB)`);
 
     const parallelUpload = new Upload({
         client: s3Client,
@@ -82,14 +85,16 @@ async function uploadToR2(filePath, filename) {
             Key: filename,
             Body: fs.createReadStream(filePath),
             ContentType: contentType,
+            CacheControl: 'public, max-age=2592000, immutable', // 30 days — videos are UUID-named & never change
         },
         partSize: 5 * 1024 * 1024, // 5MB chunks (minimal memory overhead)
-        queueSize: 1, // upload 1 chunk at a time for stable 1GB VPS RAM usage
+        queueSize: 2, // 2 concurrent chunks — safe for 1GB VPS (max 10MB in-flight)
         leavePartsOnError: false,
     });
 
     await parallelUpload.done();
-    console.log(`[R2] ✓ Uploaded: ${filename} (${(stat.size / 1024 / 1024).toFixed(1)} MB)`);
+    const elapsed = ((Date.now() - uploadStart) / 1000).toFixed(1);
+    console.log(`[R2] ✓ Upload done: ${filename} (${sizeMB} MB) in ${elapsed}s`);
     return true;
 }
 
@@ -101,13 +106,14 @@ async function uploadToR2(filePath, filename) {
 async function deleteFromR2(filename) {
     if (!r2Enabled || !filename) return false;
 
+    console.log(`[R2] ⬇ Delete start: ${filename}`);
     const command = new DeleteObjectCommand({
         Bucket: R2_BUCKET,
         Key: filename,
     });
 
     await s3Client.send(command);
-    console.log(`[R2] ✓ Deleted: ${filename}`);
+    console.log(`[R2] ✓ Delete done: ${filename}`);
     return true;
 }
 
