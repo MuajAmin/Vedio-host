@@ -2146,6 +2146,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 Number.isFinite(localSavedTime) ? localSavedTime : 0
             );
 
+            const edgeTrackerUrl = vid.getAttribute('data-edge-tracker-url');
+            const videoTitle = vid.getAttribute('data-video-title') || '';
+
+            function sendEdgeWatchTelemetry(options = {}) {
+                const ended = options.ended === true || vid.ended;
+                const position = Number.isFinite(vid.currentTime) ? Math.floor(vid.currentTime) : 0;
+                const duration = Number.isFinite(vid.duration) ? Math.floor(vid.duration) : 0;
+                const playing = options.playing !== undefined ? !!options.playing : (!vid.paused && !vid.ended);
+
+                const payload = JSON.stringify({
+                    videoId,
+                    videoTitle,
+                    position,
+                    duration,
+                    playing,
+                    ended,
+                    source: ('ontouchstart' in window) ? 'mobile' : 'desktop'
+                });
+
+                if (edgeTrackerUrl) {
+                    if (options.beacon && navigator.sendBeacon) {
+                        try {
+                            const blob = new Blob([payload], { type: 'application/json' });
+                            const queued = navigator.sendBeacon(edgeTrackerUrl, blob);
+                            if (queued) return;
+                        } catch (e) {}
+                    }
+
+                    fetch(edgeTrackerUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: payload,
+                        keepalive: options.keepalive === true
+                    }).catch(() => {
+                        saveWatchProgress(options);
+                    });
+                    return;
+                }
+
+                saveWatchProgress(options);
+            }
+
             function saveWatchProgress(options = {}) {
                 if (!progressUrl) return;
 
@@ -2177,28 +2219,40 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             vid.addEventListener('play', () => {
+                sendEdgeWatchTelemetry({ playing: true });
                 if (typeof window.__sendPresenceAction === 'function') {
                     window.__sendPresenceAction('watch_start');
                 }
             });
 
+            let lastEdgeTelemetry = 0;
             let lastPositionSave = 0;
             vid.addEventListener('timeupdate', () => {
                 const now = Date.now();
-                if (vid.currentTime > 2 && !vid.ended && now - lastPositionSave > 15000) {
-                    lastPositionSave = now;
-                    saveWatchProgress();
+                if (vid.currentTime > 1 && !vid.ended) {
+                    // Edge Telemetry: throttled to 3.5s for live real-time presence
+                    if (now - lastEdgeTelemetry > 3500) {
+                        lastEdgeTelemetry = now;
+                        sendEdgeWatchTelemetry({ playing: true });
+                    }
+                    // SQLite persistent progress save fallback (if Edge Worker is not configured)
+                    if (!edgeTrackerUrl && now - lastPositionSave > 15000) {
+                        lastPositionSave = now;
+                        saveWatchProgress();
+                    }
                 }
             });
 
             vid.addEventListener('seeked', () => {
-                if (!vid.ended && vid.currentTime > 2) {
+                if (!vid.ended && vid.currentTime > 1) {
                     storage.setItem(savedPosKey, String(Math.floor(vid.currentTime)));
+                    sendEdgeWatchTelemetry();
                 }
             });
 
             vid.addEventListener('pause', () => {
-                if (!vid.ended && vid.currentTime > 2) {
+                if (!vid.ended && vid.currentTime > 1) {
+                    sendEdgeWatchTelemetry({ playing: false });
                     saveWatchProgress();
                 }
                 if (typeof window.__sendPresenceAction === 'function') {
@@ -2207,29 +2261,29 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             vid.addEventListener('ended', () => {
+                sendEdgeWatchTelemetry({ ended: true, playing: false });
                 saveWatchProgress({ ended: true });
                 if (typeof window.__sendPresenceAction === 'function') {
                     window.__sendPresenceAction('watch_complete');
                 }
             });
 
-            window.addEventListener('beforeunload', () => {
-                if (!vid.ended && vid.currentTime > 2) {
+            const handleUnloadSave = () => {
+                if (!vid.ended && vid.currentTime > 1) {
+                    sendEdgeWatchTelemetry({ keepalive: true, beacon: true, playing: false });
                     saveWatchProgress({ keepalive: true });
+                }
+            };
+
+            window.addEventListener('beforeunload', handleUnloadSave, playerSignal);
+            window.addEventListener('pagehide', handleUnloadSave, playerSignal);
+            window.addEventListener('page:cleanup', handleUnloadSave, { once: true });
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden && !vid.ended && vid.currentTime > 1) {
+                    sendEdgeWatchTelemetry({ keepalive: true, beacon: true, playing: !vid.paused });
                 }
             }, playerSignal);
-
-            window.addEventListener('pagehide', () => {
-                if (!vid.ended && vid.currentTime > 2) {
-                    saveWatchProgress({ keepalive: true });
-                }
-            }, playerSignal);
-
-            window.addEventListener('page:cleanup', () => {
-                if (!vid.ended && vid.currentTime > 2) {
-                    saveWatchProgress({ keepalive: true });
-                }
-            }, { once: true });
         }
 
         // --- Keyboard Shortcuts ---

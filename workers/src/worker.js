@@ -187,6 +187,18 @@ const routes = [
     pattern: '/call-signaling',
     handler: handleCallSignalingWebSocket,
   },
+  // Edge Watch Progress & Presence Tracker (Hajera / Muaj)
+  {
+    method: 'POST',
+    pattern: '/api/edge-watch-progress',
+    handler: handleEdgeWatchProgress,
+  },
+  // Edge Live Presence for Admin Dashboard
+  {
+    method: 'GET',
+    pattern: '/api/edge-presence-live',
+    handler: handleEdgePresenceLive,
+  },
 ];
 
 /**
@@ -1565,6 +1577,168 @@ async function handleCallSignalingWebSocket(request, env, ctx, _capturedKey, url
     status: 101,
     webSocket: client,
   });
+}
+
+// =============================================================================
+//  Edge Watch Progress Tracker & Live Presence Engine
+// =============================================================================
+
+/** Module-level live user presence tracking (user -> presence data) */
+const liveUserPresence = new Map();
+const lastVpsSyncMap = new Map();
+
+/**
+ * Generates an HMAC hex signature for internal edge-to-origin relays.
+ * @param {string} message
+ * @param {string} secret
+ * @returns {Promise<string>}
+ */
+async function generateHmacHex(message, secret) {
+  const key = await getHmacKey(secret);
+  const encoder = new TextEncoder();
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+  return arrayBufferToHex(signature);
+}
+
+/**
+ * Handles real-time telemetry from video player (Hajera / Muaj)
+ * - Updates Edge in-memory live playback state
+ * - Asynchronously relays to VPS SQLite database via /api/internal-presence-sync
+ *
+ * @param {Request} request
+ * @param {{ ORIGIN_URL?: string, WORKER_HMAC_SECRET?: string, SESSION_SECRET?: string }} env
+ * @param {ExecutionContext} ctx
+ * @param {string|null} _capturedKey
+ * @param {URL} url
+ * @returns {Promise<Response>}
+ */
+async function handleEdgeWatchProgress(request, env, ctx, _capturedKey, url) {
+  const secret = env.WORKER_HMAC_SECRET || env.SESSION_SECRET;
+  if (!secret) {
+    return jsonError('Server misconfigured — no auth secret', 500);
+  }
+
+  const user = url.searchParams.get('user') || '';
+  if (!user || (user !== 'muaj' && user !== 'hajera')) {
+    return jsonError('Invalid user', 400);
+  }
+
+  // Validate signed tracker token
+  const isValid = await validateSignedUrl(`tracker:${user}`, url.searchParams, secret);
+  if (!isValid) {
+    return jsonError('Unauthorized — invalid tracker token', 401);
+  }
+
+  let body = {};
+  try {
+    body = await request.json();
+  } catch {
+    return jsonError('Invalid JSON payload', 400);
+  }
+
+  const { videoId, videoTitle, position, duration, playing, ended, source } = body;
+  const posNum = Number(position) || 0;
+  const durNum = Number(duration) || 0;
+
+  // 1. Update Edge in-memory live presence state
+  const presenceData = {
+    user,
+    videoId: String(videoId || ''),
+    videoTitle: String(videoTitle || ''),
+    position: posNum,
+    duration: durNum,
+    playing: !!playing,
+    ended: !!ended,
+    source: source || 'web',
+    percent: durNum > 0 ? Math.min(100, Math.round((posNum / durNum) * 100)) : 0,
+    updatedAt: Date.now(),
+    ip: request.headers.get('CF-Connecting-IP') || '',
+    country: request.headers.get('CF-IPCountry') || 'BD',
+    colo: request.cf?.colo || 'DAC'
+  };
+
+  liveUserPresence.set(user, presenceData);
+
+  // 2. Smart Throttle: Only relay to VPS SQLite if 15s elapsed OR critical event (pause/ended/completed)
+  const lastSyncTime = lastVpsSyncMap.get(user) || 0;
+  const now = Date.now();
+  const isCriticalEvent = ended || !playing || (durNum > 0 && posNum >= durNum - 10);
+  const shouldRelayToVps = isCriticalEvent || (now - lastSyncTime >= 15000);
+
+  if (shouldRelayToVps) {
+    lastVpsSyncMap.set(user, now);
+
+    const originBase = env.ORIGIN_URL || 'https://origin.muaj.bro.bd';
+    const syncUrl = `${originBase.replace(/\/$/, '')}/api/internal-presence-sync`;
+    const exp = Math.floor(now / 1000) + 300;
+
+    const syncPromise = (async () => {
+      try {
+        const sig = await generateHmacHex(`sync:${exp}`, secret);
+        await fetch(`${syncUrl}?sig=${sig}&exp=${exp}&user=${encodeURIComponent(user)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Edge-Worker-Loop': '1',
+            'Host': 'muaj.bro.bd'
+          },
+          body: JSON.stringify({
+            user,
+            videoId,
+            position: posNum,
+            duration: durNum,
+            playing: !!playing,
+            ended: !!ended,
+            videoTitle
+          }),
+          signal: AbortSignal.timeout(8000)
+        });
+      } catch {}
+    })();
+
+    ctx.waitUntil(syncPromise);
+  }
+
+  return jsonOk({ success: true, ts: now, percent: presenceData.percent });
+}
+
+/**
+ * Returns Edge live presence state for Admin Dashboard
+ * @param {Request} request
+ * @param {{ WORKER_HMAC_SECRET?: string, SESSION_SECRET?: string }} env
+ * @param {ExecutionContext} ctx
+ * @param {string|null} _capturedKey
+ * @param {URL} url
+ * @returns {Promise<Response>}
+ */
+async function handleEdgePresenceLive(request, env, ctx, _capturedKey, url) {
+  const secret = env.WORKER_HMAC_SECRET || env.SESSION_SECRET;
+  if (!secret) {
+    return jsonError('Server misconfigured', 500);
+  }
+
+  const isValid = await validateSignedUrl('admin-presence', url.searchParams, secret);
+  if (!isValid) {
+    return jsonError('Unauthorized', 401);
+  }
+
+  const presenceObj = {};
+  const now = Date.now();
+
+  for (const [uname, data] of liveUserPresence.entries()) {
+    const isRecent = (now - data.updatedAt) < 60000; // active within last 60s
+    presenceObj[uname] = {
+      ...data,
+      isLive: isRecent,
+      secondsAgo: Math.floor((now - data.updatedAt) / 1000)
+    };
+  }
+
+  return jsonOk({
+    success: true,
+    presence: presenceObj,
+    serverTime: now
+  }, 200, { 'Cache-Control': 'no-cache, no-store' });
 }
 
 // =============================================================================

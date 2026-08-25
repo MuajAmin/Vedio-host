@@ -952,11 +952,32 @@ router.get('/admin/system/live-metrics', isMuaj, (req, res) => {
     res.json(_sysMetricsCache);
 });
 
-// POST /admin/hajera/clear-logs — Clear older activity logs
-router.post('/admin/hajera/clear-logs', isMuaj, (req, res) => {
-    _liveStatusCache = null; _liveStatusCacheAt = 0;
-    db.clearOldActivityLogs('hajera');
-    res.json({ success: true });
+// GET /admin/api/presence-live — Real-time live presence from Edge Worker + VPS SQLite
+router.get('/admin/api/presence-live', isMuaj, async (req, res) => {
+    let edgePresence = null;
+    const workerUrl = process.env.CF_WORKER_URL;
+    const secret = process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET;
+
+    if (workerUrl && secret) {
+        try {
+            const exp = Math.floor(Date.now() / 1000) + 60;
+            const sig = crypto.createHmac('sha256', secret).update(`admin-presence:${exp}`).digest('hex');
+            const url = `${workerUrl.replace(/\/$/, '')}/api/edge-presence-live?exp=${exp}&sig=${sig}`;
+            const r = await fetch(url, { signal: AbortSignal.timeout(2500) });
+            if (r.ok) {
+                const json = await r.json();
+                edgePresence = json.presence || null;
+            }
+        } catch {}
+    }
+
+    const sqliteHajera = db.getUserPresence('hajera');
+    res.json({
+        success: true,
+        hajera: (edgePresence && edgePresence.hajera) || sqliteHajera,
+        edgeActive: !!edgePresence,
+        timestamp: Date.now()
+    });
 });
 
 module.exports = router;

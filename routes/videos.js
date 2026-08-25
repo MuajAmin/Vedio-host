@@ -565,11 +565,14 @@ router.get('/watch/:id', isAuthenticated, async (req, res) => {
         LIMIT 30`
     ).all(req.session.user, req.params.id);
 
+    const edgeTrackerUrl = getWorkerTrackerUrl(req.session.user);
+
     res.render('watch', {
         user: req.session.user,
         video,
         isOnR2,
         directStreamUrl,
+        edgeTrackerUrl,
         comments,
         progress,
         suggestedVideos,
@@ -847,6 +850,96 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
     // Normal progress saves only update watch_progress, not the watch_time_ledger.
 
     res.json({ success: true });
+});
+
+// POST /api/internal-presence-sync — Authenticated relay from Cloudflare Edge Worker
+router.post('/api/internal-presence-sync', (req, res) => {
+    const secret = process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET;
+    const { exp, sig } = req.query;
+    if (!secret || !exp || !sig) {
+        return res.status(401).json({ error: 'Unauthorized — missing credentials' });
+    }
+
+    const expiryTs = parseInt(exp, 10);
+    if (!Number.isFinite(expiryTs) || Date.now() > expiryTs * 1000) {
+        return res.status(401).json({ error: 'Unauthorized — expired token' });
+    }
+
+    const expectedSig = crypto.createHmac('sha256', secret).update(`sync:${exp}`).digest('hex');
+    if (sig.toLowerCase() !== expectedSig.toLowerCase()) {
+        return res.status(401).json({ error: 'Unauthorized — invalid signature' });
+    }
+
+    const { user, videoId, position, duration, playing, ended, videoTitle } = req.body || {};
+    if (!user || !videoId || (user !== 'muaj' && user !== 'hajera')) {
+        return res.status(400).json({ error: 'Invalid payload' });
+    }
+
+    const posNum = Number(position) || 0;
+    const durNum = Number(duration) || 0;
+    const nearEnd = durNum > 0 && posNum >= durNum - 10;
+    const isCompleted = ended === true || nearEnd;
+
+    const v = videoTitle ? { title: videoTitle } : db.prepare('SELECT title FROM videos WHERE id = ?').get(videoId);
+    const title = v ? v.title : (videoTitle || null);
+    const deviceInfo = parseUserAgent(req.headers['user-agent'] || 'Cloudflare-Edge-Worker');
+    const ipAddress = getClientIp(req);
+
+    try {
+        if (isCompleted) {
+            db.prepare(
+                `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
+                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                 ON CONFLICT(video_id, user) DO UPDATE SET
+                    position_seconds = excluded.position_seconds,
+                    duration_seconds = excluded.duration_seconds,
+                    updated_at = CURRENT_TIMESTAMP`
+            ).run(videoId, user, Math.floor(durNum || posNum), Math.floor(durNum));
+
+            db.recordWatchPulse(user, videoId, durNum || posNum, durNum, true, 5);
+            db.logActivity(user, 'watch_complete', {
+                videoId,
+                videoTitle: title,
+                position: durNum || posNum,
+                duration: durNum,
+                details: `Completed 100% of "${title || 'video'}"`,
+                deviceInfo,
+                ipAddress
+            });
+        } else {
+            const savePos = posNum < 5 ? 1 : Math.floor(posNum);
+            db.prepare(
+                `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
+                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                 ON CONFLICT(video_id, user) DO UPDATE SET
+                    position_seconds = excluded.position_seconds,
+                    duration_seconds = excluded.duration_seconds,
+                    updated_at = CURRENT_TIMESTAMP`
+            ).run(videoId, user, savePos, Math.floor(durNum));
+
+            if (playing && posNum >= 5) {
+                db.recordWatchPulse(user, videoId, savePos, Math.floor(durNum), false, 4);
+            }
+        }
+
+        // Update live presence in SQLite
+        db.updateUserPresence(user, {
+            status: playing ? 'watching' : 'online',
+            isPlaying: !!playing,
+            videoId,
+            videoTitle: title,
+            currentTime: Math.floor(posNum),
+            duration: Math.floor(durNum),
+            page: `/watch/${videoId}`,
+            deviceInfo,
+            ipAddress
+        });
+
+        res.json({ success: true, updated: true });
+    } catch (err) {
+        console.error('[InternalSync] Error updating presence/progress:', err.message);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // POST /thumbnail/:id - Upload a custom thumbnail for a video (Admin / Muaj only)
@@ -1180,6 +1273,23 @@ function getWorkerStreamUrl(filename) {
         .update(message)
         .digest('hex');
     return `${CF_WORKER_URL}/stream/${encodeURIComponent(filename)}?exp=${exp}&sig=${sig}`;
+}
+
+/**
+ * Generates a signed Edge Worker URL for live watch progress and presence telemetry.
+ * Token = HMAC-SHA256("tracker:" + user + ":" + expiry, SESSION_SECRET)
+ * @param {string} user - The username
+ * @returns {string|null} Signed Edge Tracker URL or null if not configured
+ */
+function getWorkerTrackerUrl(user) {
+    if (!CF_WORKER_URL || !user || !(process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET)) return null;
+    const exp = Math.floor(Date.now() / 1000) + 86400; // 24 hours from now
+    const message = `tracker:${user}:${exp}`;
+    const secret = process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET;
+    const sig = crypto.createHmac('sha256', secret)
+        .update(message)
+        .digest('hex');
+    return `${CF_WORKER_URL.replace(/\/$/, '')}/api/edge-watch-progress?user=${encodeURIComponent(user)}&exp=${exp}&sig=${sig}`;
 }
 
 
