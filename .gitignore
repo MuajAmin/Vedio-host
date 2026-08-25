@@ -21,7 +21,10 @@ data/*.sqlite3
 data/*cookies*
 data/*.txt
 
-# Temporary scripts
+# Temporary scripts & scratch directories
+scratch/
+*.py
+*.pyc
 extract_cookies.py
 
 # Uploaded Files / Media
