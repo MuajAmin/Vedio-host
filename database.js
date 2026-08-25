@@ -1,4 +1,9 @@
-const Database = require('better-sqlite3');
+let Database;
+if (typeof Bun !== 'undefined') {
+    Database = require('bun:sqlite').Database;
+} else {
+    Database = require('better-sqlite3');
+}
 const path = require('path');
 
 const fs = require('fs');
@@ -18,6 +23,13 @@ if (fs.existsSync(oldDbPath) && !fs.existsSync(dbPath)) {
 }
 
 const db = new Database(dbPath);
+
+// Ensure compatibility for db.pragma across Bun and Node
+if (!db.pragma) {
+    db.pragma = function (sql) {
+        return db.exec('PRAGMA ' + sql);
+    };
+}
 
 // Keep SQLite efficient for a small single-process server.
 db.pragma('journal_mode = WAL');

@@ -4,8 +4,9 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "npx -y nodemon server.js",
+    "start": "bun server.js",
+    "dev": "bun --watch server.js",
+    "start:node": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
