@@ -278,25 +278,31 @@ function uploadToR2(filePath, filename) {
                 transform(chunk, encoding, callback) {
                     bytesStreamed += chunk.length;
                     const now = Date.now();
-                    progressEntry.loaded = Math.min(stat.size, bytesStreamed);
-                    progressEntry.total = stat.size;
-                    progressEntry.percent = Math.min(99, Math.round((progressEntry.loaded / progressEntry.total) * 100));
+                    if (progressEntry.loaded >= stat.size) {
+                        progressEntry.percent = 99;
+                        progressEntry.eta = 'Finalizing with R2...';
+                        progressEntry.speed = 'Saving...';
+                    } else {
+                        progressEntry.percent = Math.min(99, Math.round((progressEntry.loaded / progressEntry.total) * 100));
+                    }
 
                     // Throttle SSE updates to every 200ms for continuous smooth progress bar animation
                     if (now - lastNotifyTime >= 200) {
                         const timeDiff = (now - lastNotifyTime) / 1000;
                         const bytesDiff = progressEntry.loaded - lastBytesStreamed;
                         const bps = timeDiff > 0 ? Math.max(0, bytesDiff / timeDiff) : 0;
-                        if (bps >= 1024 * 1024) {
-                            progressEntry.speed = (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
-                        } else if (bps >= 1024) {
-                            progressEntry.speed = (bps / 1024).toFixed(0) + ' KB/s';
-                        }
-                        const remainingBytes = progressEntry.total - progressEntry.loaded;
-                        if (bps > 0 && remainingBytes > 0) {
-                            const etaSec = Math.ceil(remainingBytes / bps);
-                            if (etaSec < 60) progressEntry.eta = `~${etaSec}s left`;
-                            else progressEntry.eta = `~${Math.floor(etaSec / 60)}m ${etaSec % 60}s left`;
+                        if (progressEntry.loaded < stat.size) {
+                            if (bps >= 1024 * 1024) {
+                                progressEntry.speed = (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
+                            } else if (bps >= 1024) {
+                                progressEntry.speed = (bps / 1024).toFixed(0) + ' KB/s';
+                            }
+                            const remainingBytes = progressEntry.total - progressEntry.loaded;
+                            if (bps > 0 && remainingBytes > 0) {
+                                const etaSec = Math.ceil(remainingBytes / bps);
+                                if (etaSec < 60) progressEntry.eta = `~${etaSec}s left`;
+                                else progressEntry.eta = `~${Math.floor(etaSec / 60)}m ${etaSec % 60}s left`;
+                            }
                         }
                         lastNotifyTime = now;
                         lastBytesStreamed = progressEntry.loaded;
@@ -576,9 +582,9 @@ async function backfillMissingR2Uploads() {
             console.warn('[R2-Sync] Bulk list failed, will check individually:', listErr.message);
         }
 
-        // Find videos that need R2 upload: cdn_status is 'vps', 'upload_failed', or NULL
+        // Find videos that need R2 upload: cdn_status is not yet confirmed ('r2_ready' / 'r2_only')
         const rows = db.prepare(
-            "SELECT id, title, filename FROM videos WHERE cdn_status IN ('vps', 'upload_failed') OR cdn_status IS NULL"
+            "SELECT id, title, filename FROM videos WHERE cdn_status NOT IN ('r2_ready', 'r2_only') OR cdn_status IS NULL"
         ).all();
         if (rows.length === 0) {
             console.log(`[R2-Sync] All videos are synchronized with Cloudflare R2.`);
