@@ -4661,9 +4661,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetch('/admin/r2/live-status')
                     .then(r => r.json())
                     .then(data => {
-                        if (data && Array.isArray(data.activeUploads)) {
+                        if (!data) return;
+                        if (Array.isArray(data.activeUploads)) {
                             const u = data.activeUploads.find(x => x.filename === filename);
-                            if (u) updateUI(u);
+                            if (u) {
+                                updateUI(u);
+                                return;
+                            }
+                        }
+                        if (Array.isArray(data.videos)) {
+                            const v = data.videos.find(x => x.id === videoId || x.filename === filename);
+                            if (v && (v.onR2 || v.cdn_status === 'r2_ready' || v.cdn_status === 'r2_only')) {
+                                updateUI({ filename, percent: 100, status: 'done' });
+                                return;
+                            }
                         }
                     })
                     .catch(() => {});
@@ -4684,6 +4695,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!res.ok) throw new Error('Server error: ' + res.status);
                 const data = await res.json();
                 if (data.success) {
+                    if (data.alreadySynced || data.onR2) {
+                        const actionCell = document.getElementById('r2Action_' + videoId);
+                        const pillCell = document.getElementById('r2Pill_' + videoId);
+                        const rowEl = document.getElementById('r2Row_' + videoId);
+                        if (actionCell) {
+                            actionCell.innerHTML = `
+                                <div class="r2-synced-pill glow-emerald">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                                    <span>Synced on Cloudflare Edge CDN</span>
+                                </div>
+                            `;
+                        }
+                        if (pillCell) {
+                            pillCell.className = 'r2-mini-chip chip-r2';
+                            pillCell.innerHTML = '⚡ Cloudflare R2';
+                        }
+                        if (rowEl) {
+                            rowEl.classList.remove('is-pending');
+                            rowEl.classList.add('is-synced');
+                        }
+                        if (typeof refreshR2DashboardStats === 'function') refreshR2DashboardStats();
+                        return;
+                    }
                     attachR2ProgressListener(videoId, filename, totalSize);
                 } else {
                     alert('Sync failed: ' + (data.error || 'Unknown error'));

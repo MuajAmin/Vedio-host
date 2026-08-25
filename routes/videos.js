@@ -442,7 +442,7 @@ router.get('/api/r2-progress/:filename', isAuthenticated, (req, res) => {
         r2.existsOnR2(filename).then((exists) => {
             if (exists) {
                 send({ filename, percent: 100, loaded: 0, total: 0, speed: '', eta: '', status: 'done' });
-                res.end();
+                setTimeout(() => { try { res.end(); } catch {} }, 500);
             } else {
                 send({ filename, percent: 0, loaded: 0, total: 0, speed: '', eta: '', status: 'starting' });
             }
@@ -461,7 +461,8 @@ router.get('/api/r2-progress/:filename', isAuthenticated, (req, res) => {
             error: current.error
         });
         if (current.status === 'done' || current.status === 'error') {
-            return res.end();
+            setTimeout(() => { try { res.end(); } catch {} }, 500);
+            return;
         }
     }
 

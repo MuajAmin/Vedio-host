@@ -530,10 +530,25 @@ router.post('/admin/r2/sync-video/:id', isMuaj, (req, res) => {
     if (!r2.isR2Enabled()) {
         return res.status(400).json({ success: false, error: 'Cloudflare R2 credentials not configured.' });
     }
-    const video = db.prepare('SELECT id, filename, title, size FROM videos WHERE id = ?').get(req.params.id);
+    const video = db.prepare('SELECT id, filename, title, size, cdn_status FROM videos WHERE id = ?').get(req.params.id);
     if (!video || !video.filename) {
         return res.status(404).json({ success: false, error: 'Video not found in database or filename missing.' });
     }
+
+    const isAlreadyOnR2 = r2.isConfirmedOnR2(video.filename) || video.cdn_status === 'r2_ready' || video.cdn_status === 'r2_only';
+    if (isAlreadyOnR2) {
+        return res.json({
+            success: true,
+            alreadySynced: true,
+            onR2: true,
+            filename: video.filename,
+            videoId: video.id,
+            title: video.title,
+            size: video.size,
+            message: `"${video.title}" is already synced on Cloudflare R2.`
+        });
+    }
+
     const filePath = path.join(videosDir, video.filename);
     if (!fs.existsSync(filePath)) {
         return res.status(404).json({ success: false, error: 'Video file missing from VPS disk.' });
