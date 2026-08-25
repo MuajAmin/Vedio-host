@@ -31,9 +31,9 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 db.pragma('synchronous = NORMAL');
 db.pragma('temp_store = MEMORY');
-db.pragma('cache_size = -4096'); // 4MB — optimized for 1GB RAM VPS
+db.pragma('cache_size = -8192'); // 8MB page cache in RAM for instant query results
 db.pragma('busy_timeout = 5000'); // Wait up to 5s for locks during concurrent writes
-db.pragma('mmap_size = 67108864'); // 64MB memory-mapped I/O for zero-copy reads
+db.pragma('mmap_size = 268435456'); // 256MB OS memory-mapped I/O for zero-copy reads
 db.pragma('wal_autocheckpoint = 1000');
 
 // Create tables
