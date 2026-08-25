@@ -42,8 +42,11 @@ const UPLOAD_KEY_RE = /^\/upload\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{
 /** Valid R2 check key pattern — same as video key. */
 const R2_CHECK_KEY_RE = /^\/api\/r2-check\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i;
 
-/** Valid image / thumbnail optimization route pattern. */
-const IMAGE_OPT_KEY_RE = /^\/(?:img-opt|thumbnail-opt)\/([a-zA-Z0-9_.\-\/]+)$/;
+/** Valid image / thumbnail optimization route pattern — supports URL-encoded and nested keys. */
+const IMAGE_OPT_KEY_RE = /^\/(?:img-opt|thumbnail-opt)\/([a-zA-Z0-9_.\-\/%~+@]+)$/;
+
+/** HTTP status codes that MUST NOT contain a message body per WHATWG Fetch spec. */
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
 
 /** Allowed CORS origins — restrict to our own domain. */
 const ALLOWED_ORIGINS = new Set([
@@ -61,8 +64,9 @@ const STATIC_EXTENSIONS = new Set([
 
 const STATIC_PREFIXES = ['/css/', '/js/', '/fonts/', '/icons/', '/img/', '/images/', '/favicon.ico', '/robots.txt', '/manifest.json'];
 
-/** Private / dynamic path prefixes that MUST NEVER be treated as static assets. */
+/** Private / dynamic path prefixes and sensitive files that MUST NEVER be edge-cached. */
 const DYNAMIC_OR_PRIVATE_PREFIXES = [
+  '/sw.js',
   '/thumbnails/',
   '/avatars/',
   '/voice/',
@@ -237,8 +241,15 @@ export default {
         return new Response('Expected WebSocket upgrade', { status: 426 });
       }
 
-      // Extract capture group (videoKey / imageKey) if regex matched
-      const capturedKey = match ? match[1] : null;
+      // Extract capture group (videoKey / imageKey) if regex matched and safely decode
+      let capturedKey = null;
+      if (match && match[1]) {
+        try {
+          capturedKey = decodeURIComponent(match[1]);
+        } catch {
+          return jsonError('Invalid URL encoding in request path', 400);
+        }
+      }
       const response = await route.handler(request, env, ctx, capturedKey, url);
       return addCorsHeaders(response, request);
     }
@@ -376,8 +387,8 @@ async function validateSignedUrl(videoKey, params, secret) {
   const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
   const expectedSig = arrayBufferToHex(signature);
 
-  // Constant-time comparison — prevents timing side-channel attacks
-  return timingSafeEqual(expectedSig, sig);
+  // Constant-time comparison — prevents timing side-channel attacks (case-insensitive hex comparison)
+  return timingSafeEqual(expectedSig, String(sig).toLowerCase());
 }
 
 /**
@@ -434,7 +445,7 @@ async function validateImageSignedUrl(imageKey, params, secret) {
   const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
   const expectedSig = arrayBufferToHex(signature);
 
-  if (!timingSafeEqual(expectedSig, sig)) {
+  if (!timingSafeEqual(expectedSig, String(sig).toLowerCase())) {
     return { valid: false, error: 'Unauthorized — invalid signature or parameter tampering detected' };
   }
 
@@ -459,6 +470,7 @@ function arrayBufferToHex(buffer) {
  * @returns {boolean}
  */
 function timingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
   if (a.length !== b.length) return false;
   let result = 0;
   for (let i = 0; i < a.length; i++) {
@@ -539,9 +551,16 @@ async function handleVideoStream(request, env, ctx, videoKey, url) {
 
   // ─── Range Response (206 Partial Content) ──────────────────────────
   if (object.range) {
-    const offset = 'offset' in object.range ? object.range.offset : 0;
-    const length = 'length' in object.range ? object.range.length : object.size;
-    const end = offset + length - 1;
+    let offset = 0;
+    let length = object.size;
+    if ('offset' in object.range) {
+      offset = object.range.offset;
+      length = 'length' in object.range ? object.range.length : (object.size - offset);
+    } else if ('suffix' in object.range) {
+      offset = Math.max(0, object.size - object.range.suffix);
+      length = Math.min(object.range.suffix, object.size);
+    }
+    const end = Math.min(object.size - 1, Math.max(offset, offset + length - 1));
 
     headers.set('Content-Range', `bytes ${offset}-${end}/${object.size}`);
     headers.set('Content-Length', length.toString());
@@ -691,7 +710,9 @@ async function handleImageOptimization(request, env, ctx, imageKey, url) {
 
   // 3. Transformation via Cloudflare Image Resizing subrequest
   const originBase = env.ORIGIN_URL || 'https://origin.muaj.bro.bd';
-  const sourceSubpath = imageKey.startsWith('avatars/') ? `/${imageKey}` : `/thumbnails/${imageKey}`;
+  const sourceSubpath = (imageKey.startsWith('avatars/') || imageKey.startsWith('thumbnails/'))
+    ? `/${imageKey}`
+    : `/thumbnails/${imageKey}`;
   const sourceUrl = new URL(sourceSubpath, originBase);
 
   const originHeaders = new Headers(request.headers);
@@ -805,9 +826,19 @@ async function handleStaticAsset(request, env, ctx, url) {
   // 1. Check Cloudflare Edge Cache
   let cached = await cache.match(cacheKey);
   if (cached) {
+    // Conditional GET: Respond 304 if ETag matches
+    const ifNoneMatch = request.headers.get('If-None-Match');
+    const cachedEtag = cached.headers.get('ETag');
+    if (ifNoneMatch && cachedEtag && ifNoneMatch === cachedEtag) {
+      const notModHeaders = new Headers(cached.headers);
+      notModHeaders.set('CF-Edge-Cache', 'HIT');
+      return new Response(null, { status: 304, headers: notModHeaders });
+    }
+
     const headers = new Headers(cached.headers);
     headers.set('CF-Edge-Cache', 'HIT');
-    return new Response(cached.body, {
+    const isNullBody = NULL_BODY_STATUSES.has(cached.status) || request.method === 'HEAD';
+    return new Response(isNullBody ? null : cached.body, {
       status: cached.status,
       statusText: cached.statusText,
       headers,
@@ -862,8 +893,9 @@ async function handleStaticAsset(request, env, ctx, url) {
       return responseToCache;
     }
 
-    // If private or non-200, return directly without inserting into public cache
-    return new Response(originResponse.body, {
+    // If private or non-200, return directly without inserting into public cache (safely handle null-body status)
+    const isNullBody = NULL_BODY_STATUSES.has(originResponse.status) || request.method === 'HEAD';
+    return new Response(isNullBody ? null : originResponse.body, {
       status: originResponse.status,
       statusText: originResponse.statusText,
       headers,
@@ -943,7 +975,9 @@ async function handleOriginWithFailover(request, env, ctx, url) {
     const newHeaders = new Headers(originResponse.headers);
     applyEdgeSecurityHeaders(newHeaders);
 
-    return new Response(originResponse.body, {
+    // Safely construct Response without throwing TypeError on null-body statuses (304, 204, etc.)
+    const isNullBody = NULL_BODY_STATUSES.has(originResponse.status) || request.method === 'HEAD';
+    return new Response(isNullBody ? null : originResponse.body, {
       status: originResponse.status,
       statusText: originResponse.statusText,
       headers: newHeaders,
@@ -1322,7 +1356,10 @@ async function handleR2Check(request, env, ctx, videoKey, url) {
   if (authErr) return authErr;
 
   try {
-    const head = await env.R2_BUCKET.head(videoKey);
+    let head = await env.R2_BUCKET.head(videoKey);
+    if (!head && !videoKey.includes('.')) {
+      head = await env.R2_BUCKET.head(`${videoKey}.mp4`);
+    }
     if (!head) {
       return jsonOk({ exists: false, key: videoKey }, 404);
     }
@@ -1512,7 +1549,7 @@ function handleCors(request) {
     headers: {
       'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Methods': 'GET, HEAD, PUT, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Range, If-None-Match, X-Requested-With',
+      'Access-Control-Allow-Headers': 'Content-Type, Range, If-None-Match, X-Requested-With, Cache-Control, Authorization',
       'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges, ETag',
       'Access-Control-Max-Age': '86400',
     },
@@ -1520,6 +1557,11 @@ function handleCors(request) {
 }
 
 function addCorsHeaders(response, request) {
+  // Never reconstruct WebSocket upgrade (101) responses — preserves webSocket binding
+  if (response.status === 101 || response.webSocket) {
+    return response;
+  }
+
   const origin = request.headers.get('Origin');
   // Only add CORS headers if origin is allowed (or same-origin requests with no Origin header)
   const allowedOrigin = isAllowedOrigin(origin) ? origin : null;
@@ -1528,7 +1570,10 @@ function addCorsHeaders(response, request) {
   const headers = new Headers(response.headers);
   headers.set('Access-Control-Allow-Origin', allowedOrigin);
   headers.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges, ETag');
-  return new Response(response.body, {
+
+  // Handle null-body statuses and HEAD requests safely
+  const isNullBody = NULL_BODY_STATUSES.has(response.status) || request.method === 'HEAD';
+  return new Response(isNullBody ? null : response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
