@@ -498,7 +498,7 @@ if (sys) {
                 </div>
             </div>
 
-            <!-- 5. Node.js & Runtime Card -->
+            <!-- 5. Bun & Runtime Card -->
             <div class="vps-metric-box metric-node">
                 <div class="metric-top-row">
                     <div class="metric-icon-title">
@@ -510,7 +510,7 @@ if (sys) {
                             </svg>
                         </div>
                         <div>
-                            <span class="metric-name">Node.js Runtime</span>
+                            <span class="metric-name" id="vpsRuntimeName">${h(sys.process.runtimeName || 'Bun Runtime')}</span>
                             <span class="metric-sub">Version <strong id="vpsNodeVer">${h(sys.process.nodeVersion)}</strong></span>
                         </div>
                     </div>

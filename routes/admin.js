@@ -257,7 +257,10 @@ function collectSystemMetrics() {
         process: {
             uptimeSec: process.uptime(),
             uptimeFormatted: formatDuration(process.uptime()),
-            nodeVersion: process.version,
+            runtimeName: typeof Bun !== 'undefined' ? 'Bun Runtime' : 'Node.js Runtime',
+            runtimeVersion: typeof Bun !== 'undefined' ? ('v' + Bun.version) : process.version,
+            nodeVersion: typeof Bun !== 'undefined' ? ('Bun v' + Bun.version) : process.version,
+            isBun: typeof Bun !== 'undefined',
             rssMb: (procMem.rss / (1024 * 1024)).toFixed(1),
             heapUsedMb: (procMem.heapUsed / (1024 * 1024)).toFixed(1),
             heapTotalMb: (procMem.heapTotal / (1024 * 1024)).toFixed(1)

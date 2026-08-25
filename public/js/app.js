@@ -4520,10 +4520,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     // Runtime
+                    const runtimeNameEl = document.getElementById('vpsRuntimeName');
+                    const nodeVerEl = document.getElementById('vpsNodeVer');
                     const srvUptimeEl = document.getElementById('vpsServerUptime');
                     const appUptimeEl = document.getElementById('vpsAppUptime');
                     const heapUsedEl = document.getElementById('vpsHeapUsed');
                     const heapTotalEl = document.getElementById('vpsHeapTotal');
+                    if (runtimeNameEl && sys.process && sys.process.runtimeName) runtimeNameEl.textContent = sys.process.runtimeName;
+                    if (nodeVerEl && sys.process && sys.process.nodeVersion) nodeVerEl.textContent = sys.process.nodeVersion;
                     if (srvUptimeEl && sys.os) srvUptimeEl.textContent = sys.os.uptimeFormatted;
                     if (appUptimeEl && sys.process) appUptimeEl.textContent = `App Up: ${sys.process.uptimeFormatted}`;
                     if (heapUsedEl && sys.process) heapUsedEl.textContent = `${sys.process.heapUsedMb} MB`;
