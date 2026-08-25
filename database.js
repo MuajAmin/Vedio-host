@@ -215,9 +215,11 @@ try {
     ensureColumn('source_url', 'source_url TEXT');
     ensureColumn('import_quality', 'import_quality TEXT');
     ensureColumn('uploaded_by', "uploaded_by TEXT DEFAULT 'muaj'");
+    ensureColumn('cdn_status', "cdn_status TEXT DEFAULT 'vps'");
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_videos_uploaded_by ON videos(uploaded_by)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_videos_source_url ON videos(source_url)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_videos_cdn_status ON videos(cdn_status)');
 
     const progressInfo = db.prepare("PRAGMA table_info(watch_progress)").all();
     const hasDurationSeconds = progressInfo.some(col => col.name === 'duration_seconds');

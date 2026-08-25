@@ -1,5 +1,7 @@
 const { S3Client, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
+const { NodeHttpHandler } = require('@smithy/node-http-handler');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -15,6 +17,14 @@ const CF_WORKER_URL = process.env.CF_WORKER_URL || '';
 let r2Enabled = false;
 let s3Client = null;
 
+// Persistent HTTPS agent — reuses TCP connections across multipart PUT requests.
+// Without this, each 5MB part opens a new TLS handshake → TCP slow-start kills throughput.
+const r2Agent = new https.Agent({
+    keepAlive: true,
+    keepAliveMsecs: 30000,
+    maxSockets: 8,
+});
+
 if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY) {
     s3Client = new S3Client({
         region: 'auto',
@@ -23,6 +33,12 @@ if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY) {
             accessKeyId: R2_ACCESS_KEY_ID,
             secretAccessKey: R2_SECRET_ACCESS_KEY,
         },
+        requestHandler: new NodeHttpHandler({
+            httpsAgent: r2Agent,
+            connectionTimeout: 10000,
+            socketTimeout: 120000,
+        }),
+        maxAttempts: 5,
     });
     r2Enabled = true;
     console.log('[R2] Cloudflare R2 CDN configured successfully.');
@@ -302,8 +318,8 @@ function uploadToR2(filePath, filename) {
                     ContentType: contentType,
                     CacheControl: 'public, max-age=2592000, immutable', // 30 days — videos are UUID-named & never change
                 },
-                partSize: 5 * 1024 * 1024, // 5MB chunks (low memory footprint for 1GB VPS)
-                queueSize: 1, // 1 part in-flight (avoids TCP packet contention on 2 Mbps VPS outbound link)
+                partSize: 16 * 1024 * 1024, // 16MB chunks — optimal for high-latency long-haul uploads
+                queueSize: 3,               // 3 concurrent parts — fills the bandwidth-delay product on APAC links
                 leavePartsOnError: false,
             });
 
@@ -326,9 +342,51 @@ function uploadToR2(filePath, filename) {
                 return false;
             }
 
+            // Verify upload integrity: HEAD the object to confirm size and accessibility.
+            // R2 has an eventual consistency window — wait until the object is actually readable.
+            let verified = false;
+            for (let attempt = 0; attempt < 5; attempt++) {
+                try {
+                    const head = await s3Client.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: filename }));
+                    if (Number(head.ContentLength) === stat.size) {
+                        verified = true;
+                        break;
+                    }
+                    console.warn(`[R2] Verification attempt ${attempt + 1}/5: size mismatch for ${filename} (expected ${stat.size}, got ${head.ContentLength})`);
+                } catch (headErr) {
+                    console.warn(`[R2] Verification attempt ${attempt + 1}/5: HEAD failed for ${filename}: ${headErr.message}`);
+                }
+                await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // 1s, 2s, 3s, 4s, 5s
+            }
+
+            if (!verified) {
+                console.error(`[R2] ✗ Upload verification failed for ${filename} — object not accessible or size mismatch`);
+                if (progressEntry) {
+                    progressEntry.status = 'error';
+                    progressEntry.error = 'R2 verification failed after upload';
+                    notify();
+                }
+                // Update DB status to failed so backfill can retry
+                try {
+                    const dbModule = require('../database');
+                    dbModule.prepare("UPDATE videos SET cdn_status = 'upload_failed' WHERE filename = ?").run(filename);
+                } catch {}
+                setTimeout(() => activeUploads.delete(filename), 5 * 60 * 1000).unref();
+                return false;
+            }
+
             const elapsed = ((Date.now() - uploadStart) / 1000).toFixed(1);
-            console.log(`[R2] ✓ Upload done: ${filename} (${sizeMB} MB) in ${elapsed}s`);
+            console.log(`[R2] ✓ Upload verified: ${filename} (${sizeMB} MB) in ${elapsed}s`);
             _r2ConfirmedCache.add(filename);
+
+            // Update DB: mark video as R2-ready (authoritative source of truth for fallback)
+            try {
+                const dbModule = require('../database');
+                dbModule.prepare("UPDATE videos SET cdn_status = 'r2_ready' WHERE filename = ?").run(filename);
+            } catch (dbErr) {
+                console.warn('[R2] Could not update cdn_status in DB:', dbErr.message);
+            }
+
             progressEntry.percent = 100;
             progressEntry.loaded = stat.size;
             progressEntry.status = 'done';
@@ -493,7 +551,8 @@ async function listAllR2Objects() {
 
 /**
  * Automatically scan database and upload any videos that are missing from Cloudflare R2.
- * Uses single bulk bucket list to populate cache in one request instead of O(N) HEAD calls.
+ * Uses cdn_status column for targeted queries instead of checking every video.
+ * Runs 2 uploads concurrently to speed up backfill without overwhelming 1GB VPS.
  * Run in background on server startup or on-demand.
  */
 async function backfillMissingR2Uploads() {
@@ -501,10 +560,15 @@ async function backfillMissingR2Uploads() {
     try {
         const db = require('../database');
         const videosDir = path.join(__dirname, '..', 'uploads', 'videos');
-        const rows = db.prepare('SELECT id, title, filename FROM videos').all();
-        if (rows.length === 0) return;
 
-        // Fetch bucket inventory in one single bulk request
+        // Seed in-memory cache from DB for videos already confirmed on R2
+        const confirmedRows = db.prepare("SELECT filename FROM videos WHERE cdn_status IN ('r2_ready', 'r2_only')").all();
+        for (const row of confirmedRows) {
+            if (row.filename) _r2ConfirmedCache.add(row.filename);
+        }
+        console.log(`[R2-Sync] Seeded in-memory cache with ${confirmedRows.length} confirmed R2 video(s) from DB.`);
+
+        // Also bulk-list R2 bucket to catch any files confirmed on R2 but not yet marked in DB
         try {
             await listAllR2Objects();
             console.log(`[R2-Sync] Bucket inventory scanned. ${_r2ConfirmedCache.size} objects confirmed in R2.`);
@@ -512,28 +576,62 @@ async function backfillMissingR2Uploads() {
             console.warn('[R2-Sync] Bulk list failed, will check individually:', listErr.message);
         }
 
-        let synced = 0;
+        // Find videos that need R2 upload: cdn_status is 'vps', 'upload_failed', or NULL
+        const rows = db.prepare(
+            "SELECT id, title, filename FROM videos WHERE cdn_status IN ('vps', 'upload_failed') OR cdn_status IS NULL"
+        ).all();
+        if (rows.length === 0) {
+            console.log(`[R2-Sync] All videos are synchronized with Cloudflare R2.`);
+            return;
+        }
+
+        // Check which of these actually need uploading (might already be on R2 but DB not updated)
+        const needsUpload = [];
         for (const row of rows) {
             if (!row.filename) continue;
-            try {
-                const exists = isConfirmedOnR2(row.filename) || await existsOnR2(row.filename);
-                if (!exists) {
-                    const localPath = path.join(videosDir, row.filename);
-                    if (fs.existsSync(localPath)) {
-                        console.log(`[R2-Sync] 🔄 Backfilling missing video to Cloudflare R2: ${row.filename} (${row.title})`);
-                        await uploadToR2(localPath, row.filename);
-                        synced++;
-                    }
+            const exists = isConfirmedOnR2(row.filename) || await existsOnR2(row.filename);
+            if (exists) {
+                // Already on R2, just update DB status
+                try {
+                    db.prepare("UPDATE videos SET cdn_status = 'r2_ready' WHERE id = ?").run(row.id);
+                } catch {}
+            } else {
+                const localPath = path.join(videosDir, row.filename);
+                if (fs.existsSync(localPath)) {
+                    needsUpload.push(row);
                 }
-            } catch (err) {
-                console.warn(`[R2-Sync] Failed to backfill ${row.filename}:`, err.message);
+            }
+        }
+
+        if (needsUpload.length === 0) {
+            console.log(`[R2-Sync] All ${rows.length} video(s) are synchronized with Cloudflare R2.`);
+            return;
+        }
+
+        console.log(`[R2-Sync] 🔄 Backfilling ${needsUpload.length} missing video(s) to Cloudflare R2...`);
+
+        // Run 2 concurrent uploads to speed up backfill
+        const CONCURRENCY = 2;
+        let synced = 0;
+        for (let i = 0; i < needsUpload.length; i += CONCURRENCY) {
+            const batch = needsUpload.slice(i, i + CONCURRENCY);
+            const results = await Promise.allSettled(
+                batch.map(async (row) => {
+                    const localPath = path.join(videosDir, row.filename);
+                    console.log(`[R2-Sync] 🔄 Backfilling: ${row.filename} (${row.title})`);
+                    try {
+                        db.prepare("UPDATE videos SET cdn_status = 'r2_uploading' WHERE id = ?").run(row.id);
+                    } catch {}
+                    return uploadToR2(localPath, row.filename);
+                })
+            );
+            for (const r of results) {
+                if (r.status === 'fulfilled' && r.value) synced++;
             }
         }
 
         if (synced > 0) {
             console.log(`[R2-Sync] ✓ Successfully synced ${synced} missing video(s) to Cloudflare R2.`);
-        } else {
-            console.log(`[R2-Sync] All ${rows.length} video(s) are synchronized with Cloudflare R2.`);
         }
     } catch (err) {
         console.warn('[R2-Sync] Error during background R2 sync:', err.message);
@@ -558,9 +656,9 @@ function getActiveUploadsList() {
 }
 
 function generateWorkerSignature(key, expiry) {
-    const secret = process.env.SESSION_SECRET;
+    const secret = process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET;
     if (!secret) {
-        throw new Error('SESSION_SECRET is required for Worker signed URLs.');
+        throw new Error('WORKER_HMAC_SECRET (or SESSION_SECRET) is required for Worker signed URLs.');
     }
     return crypto
         .createHmac('sha256', secret)
@@ -569,25 +667,127 @@ function generateWorkerSignature(key, expiry) {
 }
 
 function getWorkerUploadUrl(filename, expiresInSeconds = 3600) {
-    if (!CF_WORKER_URL || !filename || !process.env.SESSION_SECRET) return null;
+    if (!CF_WORKER_URL || !filename || !(process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET)) return null;
     const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
     const sig = generateWorkerSignature(filename, exp);
     return `${CF_WORKER_URL.replace(/\/$/, '')}/upload/${encodeURIComponent(filename)}?sig=${sig}&exp=${exp}`;
 }
 
 function getWorkerInventoryUrl(expiresInSeconds = 600) {
-    if (!CF_WORKER_URL || !process.env.SESSION_SECRET) return null;
+    if (!CF_WORKER_URL || !(process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET)) return null;
     const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
     const sig = generateWorkerSignature('inventory', exp);
     return `${CF_WORKER_URL.replace(/\/$/, '')}/api/r2-inventory?sig=${sig}&exp=${exp}`;
 }
 
 function getWorkerCallSignalingUrl(user, expiresInSeconds = 7200) {
-    if (!CF_WORKER_URL || !user || !process.env.SESSION_SECRET) return null;
+    if (!CF_WORKER_URL || !user || !(process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET)) return null;
     const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
     const sig = generateWorkerSignature(`call:${user}`, exp);
     const wsBase = CF_WORKER_URL.replace(/^http/, 'ws').replace(/\/$/, '');
     return `${wsBase}/call-signaling?user=${encodeURIComponent(user)}&sig=${sig}&exp=${exp}`;
+}
+
+function generateWorkerImageSignature({ filename, width = 480, height = 0, quality = 80, format = 'webp', exp }) {
+    const secret = process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET;
+    if (!secret) {
+        throw new Error('WORKER_HMAC_SECRET (or SESSION_SECRET) is required for Worker signed URLs.');
+    }
+    const normW = (Number.isInteger(Number(width)) && Number(width) >= 16 && Number(width) <= 1920) ? Number(width) : 480;
+    const normH = (Number.isInteger(Number(height)) && Number(height) >= 0 && Number(height) <= 1920) ? Number(height) : 0;
+    const normQ = (Number.isInteger(Number(quality)) && Number(quality) >= 10 && Number(quality) <= 100) ? Number(quality) : 80;
+    const allowedFormats = new Set(['webp', 'avif', 'jpeg', 'png', 'auto']);
+    const normF = allowedFormats.has(String(format).toLowerCase()) ? String(format).toLowerCase() : 'webp';
+
+    const message = `${filename}:${normW}:${normH}:${normQ}:${normF}:${exp}`;
+    return crypto
+        .createHmac('sha256', secret)
+        .update(message)
+        .digest('hex');
+}
+
+function getWorkerOptimizedImageUrl(filename, options = {}, expiresInSeconds = 86400) {
+    if (!CF_WORKER_URL || !filename || !(process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET)) return null;
+    const width = options.width !== undefined ? Number(options.width) : 480;
+    const height = options.height !== undefined ? Number(options.height) : 0;
+    const quality = options.quality !== undefined ? Number(options.quality) : 80;
+    const format = options.format || 'webp';
+    const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
+
+    const sig = generateWorkerImageSignature({ filename, width, height, quality, format, exp });
+    const base = CF_WORKER_URL.replace(/\/$/, '');
+    let query = `w=${width}&q=${quality}&format=${format}`;
+    if (height > 0) query += `&h=${height}`;
+    query += `&exp=${exp}&sig=${sig}`;
+    return `${base}/img-opt/${encodeURIComponent(filename)}?${query}`;
+}
+
+/**
+ * Upload to R2 with automatic retry and exponential backoff.
+ * Wraps uploadToR2 with up to 3 retries on failure.
+ * @param {string} filePath - Absolute path to the video file on disk
+ * @param {string} filename - The filename to use as the R2 object key
+ * @param {number} [maxAttempts=3] - Max retry attempts
+ * @returns {Promise<boolean>} true if upload ultimately succeeded
+ */
+async function uploadToR2WithRetry(filePath, filename, maxAttempts = 3) {
+    const delays = [5000, 30000, 120000]; // 5s, 30s, 2min between retries
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const ok = await uploadToR2(filePath, filename);
+            if (ok) return true;
+            console.warn(`[R2-Retry] Upload returned false for ${filename} (attempt ${attempt}/${maxAttempts})`);
+        } catch (err) {
+            console.error(`[R2-Retry] Attempt ${attempt}/${maxAttempts} failed for ${filename}: ${err.message}`);
+        }
+        if (attempt < maxAttempts) {
+            const delay = delays[attempt - 1] || 120000;
+            console.log(`[R2-Retry] Retrying ${filename} in ${delay / 1000}s...`);
+            await new Promise(r => setTimeout(r, delay));
+            // Re-check if file still exists before retrying (might have been deleted)
+            if (!fs.existsSync(filePath)) {
+                console.warn(`[R2-Retry] File no longer exists, abandoning: ${filePath}`);
+                return false;
+            }
+        }
+    }
+    console.error(`[R2-Retry] Permanently failed after ${maxAttempts} attempts: ${filename}`);
+    // Mark as failed in DB so admin can see it
+    try {
+        const dbModule = require('../database');
+        dbModule.prepare("UPDATE videos SET cdn_status = 'upload_failed' WHERE filename = ?").run(filename);
+    } catch {}
+    return false;
+}
+
+/**
+ * Delete local VPS copy of a video after confirming it is safely stored on R2.
+ * Only deletes if R2 object exists and size matches local file.
+ * @param {string} filePath - Absolute path to the local video file
+ * @param {string} filename - R2 object key
+ * @returns {Promise<boolean>}
+ */
+async function cleanupLocalAfterR2Migration(filePath, filename) {
+    try {
+        const [localStat, r2Meta] = await Promise.all([
+            fs.promises.stat(filePath),
+            getObjectMetadata(filename)
+        ]);
+        if (!r2Meta || r2Meta.size !== localStat.size) {
+            console.warn(`[R2-Cleanup] Size mismatch for ${filename} — keeping local copy`);
+            return false;
+        }
+        await fs.promises.unlink(filePath);
+        console.log(`[R2-Cleanup] ✓ Deleted local copy: ${filename} (${(localStat.size / 1024 / 1024).toFixed(1)} MB freed)`);
+        try {
+            const dbModule = require('../database');
+            dbModule.prepare("UPDATE videos SET cdn_status = 'r2_only' WHERE filename = ?").run(filename);
+        } catch {}
+        return true;
+    } catch (err) {
+        console.warn(`[R2-Cleanup] Failed to clean up ${filename}:`, err.message);
+        return false;
+    }
 }
 
 module.exports = {
@@ -595,6 +795,7 @@ module.exports = {
     getPublicUrl,
     getMimeType,
     uploadToR2,
+    uploadToR2WithRetry,
     deleteFromR2,
     existsOnR2,
     getObjectMetadata,
@@ -607,8 +808,11 @@ module.exports = {
     registerProgressListener,
     getActiveUploadsList,
     backfillMissingR2Uploads,
+    cleanupLocalAfterR2Migration,
     generateWorkerSignature,
+    generateWorkerImageSignature,
     getWorkerUploadUrl,
     getWorkerInventoryUrl,
-    getWorkerCallSignalingUrl
+    getWorkerCallSignalingUrl,
+    getWorkerOptimizedImageUrl
 };

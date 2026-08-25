@@ -8,6 +8,15 @@ workers_dev = true
 binding = "R2_BUCKET"
 bucket_name = "videohost"
 
+# ─── Variables ──────────────────────────────────────────────────────
+[vars]
+# ORIGIN_URL must point to the origin hostname (outside Worker zone route to avoid loop)
+ORIGIN_URL = "https://origin.muaj.bro.bd"
+
 # ─── Secrets (set via CLI) ───────────────────────────────────────────
-# SESSION_SECRET — same value as your VPS .env SESSION_SECRET
+# WORKER_HMAC_SECRET — separate auth secret for Worker signed URLs (defense-in-depth)
+# Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# Set with: npx wrangler secret put WORKER_HMAC_SECRET
+# Fallback: SESSION_SECRET is also supported for backward compatibility
 # Set with: npx wrangler secret put SESSION_SECRET
+

@@ -948,13 +948,16 @@ async function startDownload(job) {
                     // Clean up any other leftover stream chunks for this job
                     await cleanupJobExtraFiles(job.id, downloaded.finalFilename);
 
-                    // Upload to R2 CDN in background
+                    // Upload to R2 CDN in background with automatic retry
                     if (r2.isR2Enabled()) {
                         const videoPath = path.join(uploadsDir, downloaded.finalFilename);
                         console.log(`[import] R2 background upload starting: ${downloaded.finalFilename}`);
-                        r2.uploadToR2(videoPath, downloaded.finalFilename)
-                            .then(() => console.log(`[import] R2 upload done: ${downloaded.finalFilename}`))
-                            .catch(err => console.error(`[import] R2 upload failed: ${downloaded.finalFilename}: ${err.message}`));
+                        try {
+                            db.prepare("UPDATE videos SET cdn_status = 'r2_uploading' WHERE filename = ?").run(downloaded.finalFilename);
+                        } catch {}
+                        r2.uploadToR2WithRetry(videoPath, downloaded.finalFilename)
+                            .then((ok) => { if (ok) console.log(`[import] R2 upload done: ${downloaded.finalFilename}`); })
+                            .catch(err => console.error(`[import] R2 upload permanently failed: ${downloaded.finalFilename}: ${err.message}`));
                     }
 
                     job.status = 'done';

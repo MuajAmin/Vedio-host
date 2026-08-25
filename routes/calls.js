@@ -148,10 +148,10 @@ function parseRequestBody(req) {
 // ------------------------------------------------------------
 router.get('/api/call/edge-token', isAuthenticated, (req, res) => {
     const user = req.session.user;
-    const signalingUrl = r2.getWorkerCallSignalingUrl(user, 7200);
+    // Direct VPS SSE / HTTP signaling is the reliable centralized architecture
     res.json({
-        enabled: !!signalingUrl,
-        signalingUrl,
+        enabled: false,
+        signalingUrl: null,
         user
     });
 });

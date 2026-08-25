@@ -248,8 +248,13 @@ router.post('/upload', isAuthenticated, (req, res) => {
         if (r2.isR2Enabled()) {
             const videoPath = path.join(uploadsDir, req.file.filename);
             console.log(`[upload] R2 background upload starting: ${req.file.filename}`);
-            r2.uploadToR2(videoPath, req.file.filename)
-                .catch(err => console.error(`[upload] R2 upload failed for ${req.file.filename}:`, err.message));
+            // Set DB status to uploading
+            try {
+                db.prepare("UPDATE videos SET cdn_status = 'r2_uploading' WHERE filename = ?").run(req.file.filename);
+            } catch {}
+            // Use retry wrapper: 3 attempts with exponential backoff (5s, 30s, 2min)
+            r2.uploadToR2WithRetry(videoPath, req.file.filename)
+                .catch(err => console.error(`[upload] R2 upload permanently failed for ${req.file.filename}:`, err.message));
         }
 
         if (isXHR) {
@@ -1157,10 +1162,11 @@ const CF_WORKER_URL = process.env.CF_WORKER_URL; // e.g. https://videohost-edge.
  * @returns {string|null} Signed Worker URL or null if not configured
  */
 function getWorkerStreamUrl(filename) {
-    if (!CF_WORKER_URL || !process.env.SESSION_SECRET) return null;
+    if (!CF_WORKER_URL || !(process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET)) return null;
     const exp = Math.floor(Date.now() / 1000) + 86400; // 24 hours from now
     const message = `${filename}:${exp}`;
-    const sig = crypto.createHmac('sha256', process.env.SESSION_SECRET)
+    const secret = process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET;
+    const sig = crypto.createHmac('sha256', secret)
         .update(message)
         .digest('hex');
     return `${CF_WORKER_URL}/stream/${encodeURIComponent(filename)}?exp=${exp}&sig=${sig}`;
@@ -1172,40 +1178,41 @@ async function handleStream(req, res) {
 
     // Try LRU cache first (avoids DB query on every 206 range request)
     let filename = getCachedVideoFilename(videoKey);
+    let cdnStatus = null;
+    if (filename) {
+        // LRU cache stores "filename|cdn_status" — split to extract both
+        const pipeIdx = filename.indexOf('|');
+        if (pipeIdx !== -1) {
+            cdnStatus = filename.slice(pipeIdx + 1);
+            filename = filename.slice(0, pipeIdx);
+        }
+    }
     if (!filename) {
-        const video = db.prepare('SELECT filename FROM videos WHERE id = ? OR filename = ?').get(videoKey, videoKey);
+        const video = db.prepare('SELECT filename, cdn_status FROM videos WHERE id = ? OR filename = ?').get(videoKey, videoKey);
         if (!video) {
             return res.status(404).send('File not found');
         }
         filename = video.filename;
-        setCachedVideoFilename(videoKey, filename);
+        cdnStatus = video.cdn_status || 'vps';
+        // Cache both filename and cdn_status to avoid DB query on subsequent 206 range requests
+        setCachedVideoFilename(videoKey, `${filename}|${cdnStatus}`);
     }
 
     // R2 CDN: Redirect to Cloudflare edge — zero VPS bandwidth usage.
-    // Prefers Worker CDN (signed URL) over raw R2 public URL when configured.
-    // R2/Worker handles Range/206 requests natively, so seeking works out of the box.
-    // Uses an in-memory Set to track confirmed R2 files (avoids HEAD on every request).
+    // Uses DB cdn_status as the authoritative source of truth for R2 readiness.
+    // Only redirects when cdn_status is 'r2_ready' or 'r2_only' (verified uploaded).
+    // The in-memory isConfirmedOnR2 cache is a secondary fast-path for the same decision.
     if (r2.isR2Enabled()) {
-        // Generate redirect URL: Worker CDN (signed) or R2 public
-        const workerUrl = getWorkerStreamUrl(filename);
-        const cdnUrl = workerUrl || r2.getPublicUrl(filename);
-        if (cdnUrl) {
-            // Fast path: already confirmed on R2 (O(1) lookup, 0 network overhead)
-            if (r2.isConfirmedOnR2(filename)) {
+        const shouldUseR2 = cdnStatus === 'r2_ready' || cdnStatus === 'r2_only' || r2.isConfirmedOnR2(filename);
+        if (shouldUseR2) {
+            const workerUrl = getWorkerStreamUrl(filename);
+            const cdnUrl = workerUrl || r2.getPublicUrl(filename);
+            if (cdnUrl) {
                 res.setHeader('Cache-Control', 'private, no-cache');
                 return res.redirect(302, cdnUrl);
             }
-            // Slow path: check R2 once, cache result
-            try {
-                const exists = await r2.existsOnR2(filename);
-                if (exists) {
-                    res.setHeader('Cache-Control', 'private, no-cache');
-                    return res.redirect(302, cdnUrl);
-                }
-            } catch {
-                // R2 check failed — fall through to VPS streaming
-            }
         }
+        // cdn_status is 'vps', 'r2_uploading', 'upload_failed', or null → serve from VPS
     }
 
     // Fallback: serve from VPS disk (when R2 is not configured or URL unavailable)

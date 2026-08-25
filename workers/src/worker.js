@@ -1,7 +1,10 @@
 // =============================================================================
 //  VideoHost — Cloudflare Edge Worker
-//  R2 Video CDN with Signed URL authentication.
-//  Works without root domain — VPS redirects to workers.dev URL.
+//  - R2 Video CDN with Signed URL authentication
+//  - [Feature 1] On-the-Fly Image & Thumbnail Optimization
+//  - [Feature 2] Zero-Downtime Auto-Failover Maintenance Mode
+//  - [Feature 3] Edge Caching for Static Assets & Security Headers
+//  - WebRTC Call Signaling WebSocket Bridge
 // =============================================================================
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -18,6 +21,18 @@ const VIDEO_MIME_MAP = {
   '.m4v': 'video/mp4',
 };
 
+/** MIME type mapping for image file extensions. */
+const IMAGE_MIME_MAP = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+};
+
 /** Valid video key pattern — UUID with optional extension. */
 const VIDEO_KEY_RE = /^\/stream\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i;
 
@@ -27,11 +42,48 @@ const UPLOAD_KEY_RE = /^\/upload\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{
 /** Valid R2 check key pattern — same as video key. */
 const R2_CHECK_KEY_RE = /^\/api\/r2-check\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:\.[a-z0-9]+)?)$/i;
 
+/** Valid image / thumbnail optimization route pattern. */
+const IMAGE_OPT_KEY_RE = /^\/(?:img-opt|thumbnail-opt)\/([a-zA-Z0-9_.\-\/]+)$/;
+
 /** Allowed CORS origins — restrict to our own domain. */
 const ALLOWED_ORIGINS = new Set([
   'https://muaj.bro.bd',
   'https://www.muaj.bro.bd',
 ]);
+
+/** Static file extensions for edge caching. */
+const STATIC_EXTENSIONS = new Set([
+  '.css', '.js', '.mjs', '.map',
+  '.woff', '.woff2', '.ttf', '.eot', '.otf',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.svg', '.ico',
+  '.webmanifest', '.json', '.xml', '.txt'
+]);
+
+const STATIC_PREFIXES = ['/css/', '/js/', '/fonts/', '/icons/', '/img/', '/images/', '/favicon.ico', '/robots.txt', '/manifest.json'];
+
+/** Private / dynamic path prefixes that MUST NEVER be treated as static assets. */
+const DYNAMIC_OR_PRIVATE_PREFIXES = [
+  '/thumbnails/',
+  '/avatars/',
+  '/voice/',
+  '/stream/',
+  '/upload',
+  '/api/',
+  '/messages',
+  '/watch-together',
+  '/import',
+  '/call',
+  '/admin',
+  '/login',
+  '/logout',
+  '/dashboard',
+  '/watch/',
+  '/profile',
+  '/comment/',
+  '/delete/',
+  '/rename/',
+  '/health'
+];
 
 /** WebSocket idle timeout for call signaling (5 minutes). */
 const CALL_WS_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -66,6 +118,12 @@ const routes = [
     method: 'PUT',
     pattern: UPLOAD_KEY_RE,
     handler: handleDirectUpload,
+  },
+  // Edge image/thumbnail optimizer
+  {
+    method: ['GET', 'HEAD'],
+    pattern: IMAGE_OPT_KEY_RE,
+    handler: handleImageOptimization,
   },
   // Edge R2 inventory & audit
   {
@@ -118,6 +176,34 @@ function matchRoute(method, pathname) {
   return null;
 }
 
+/**
+ * Checks whether a given request path is a public static asset suitable for Edge Caching.
+ * @param {string} pathname
+ * @returns {boolean}
+ */
+function isStaticAsset(pathname) {
+  // 1. Explicitly reject any private, authenticated, streaming, or dynamic paths
+  if (DYNAMIC_OR_PRIVATE_PREFIXES.some(p => pathname.startsWith(p))) {
+    return false;
+  }
+
+  // 2. Check known static directory prefixes
+  if (STATIC_PREFIXES.some(p => pathname.startsWith(p))) {
+    return true;
+  }
+
+  // 3. Check static file extensions for public files
+  const dot = pathname.lastIndexOf('.');
+  if (dot !== -1) {
+    const ext = pathname.slice(dot).toLowerCase();
+    if (STATIC_EXTENSIONS.has(ext)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // =============================================================================
 //  Entry Point
 // =============================================================================
@@ -125,34 +211,47 @@ function matchRoute(method, pathname) {
 export default {
   /**
    * @param {Request} request
-   * @param {{ R2_BUCKET: R2Bucket, SESSION_SECRET: string }} env
+   * @param {{ R2_BUCKET?: R2Bucket, SESSION_SECRET?: string, WORKER_HMAC_SECRET?: string, ORIGIN_URL?: string }} env
    * @param {ExecutionContext} ctx
    */
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    // ─── Loop protection ──────────────────────────────────────────────
+    if (request.headers.get('X-Edge-Worker-Loop')) {
+      return new Response('Proxy loop detected at Edge. Check ORIGIN_URL configuration.', { status: 508 });
+    }
 
     // ─── CORS preflight ──────────────────────────────────────────────
     if (request.method === 'OPTIONS') {
       return handleCors(request);
     }
 
-    // ─── Route matching ──────────────────────────────────────────────
+    // ─── 1. Route matching (Edge-specific endpoints) ──────────────────
     const found = matchRoute(request.method, url.pathname);
-    if (!found) {
-      return new Response('Not Found', { status: 404 });
+    if (found) {
+      const { route, match } = found;
+
+      // Special case: WebSocket upgrade check
+      if (url.pathname === '/call-signaling' && request.headers.get('Upgrade') !== 'websocket') {
+        return new Response('Expected WebSocket upgrade', { status: 426 });
+      }
+
+      // Extract capture group (videoKey / imageKey) if regex matched
+      const capturedKey = match ? match[1] : null;
+      const response = await route.handler(request, env, ctx, capturedKey, url);
+      return addCorsHeaders(response, request);
     }
 
-    const { route, match } = found;
-
-    // Special case: WebSocket upgrade check
-    if (url.pathname === '/call-signaling' && request.headers.get('Upgrade') !== 'websocket') {
-      return new Response('Expected WebSocket upgrade', { status: 426 });
+    // ─── 2. Feature 3: Static Asset Edge Caching ─────────────────────
+    if (request.method === 'GET' && isStaticAsset(url.pathname)) {
+      const staticResponse = await handleStaticAsset(request, env, ctx, url);
+      return addCorsHeaders(staticResponse, request);
     }
 
-    // Extract capture group (videoKey) if regex matched
-    const capturedKey = match ? match[1] : null;
-    const response = await route.handler(request, env, ctx, capturedKey, url);
-    return addCorsHeaders(response, request);
+    // ─── 3. Feature 2: Origin Pass-Through & Auto-Failover ───────────
+    const originResponse = await handleOriginWithFailover(request, env, ctx, url);
+    return addCorsHeaders(originResponse, request);
   },
 };
 
@@ -195,7 +294,7 @@ function jsonOk(data, status = 200, extraHeaders = {}) {
  * Authenticate a signed admin/API request. Returns null if auth passed,
  * or a Response to return immediately on failure.
  *
- * @param {{ SESSION_SECRET?: string, R2_BUCKET?: R2Bucket }} env
+ * @param {{ SESSION_SECRET?: string, WORKER_HMAC_SECRET?: string, R2_BUCKET?: R2Bucket }} env
  * @param {string} signatureKey - The key used in HMAC signature (videoKey, 'inventory', etc.)
  * @param {URL} url
  * @param {{ requireR2?: boolean }} [options]
@@ -203,10 +302,12 @@ function jsonOk(data, status = 200, extraHeaders = {}) {
  */
 async function authenticate(env, signatureKey, url, options = {}) {
   const { requireR2 = true } = options;
-  if (!env.SESSION_SECRET) {
-    return jsonError('Server misconfigured', 500);
+  // Prefer WORKER_HMAC_SECRET (defense-in-depth), fall back to SESSION_SECRET for backward compat
+  const secret = env.WORKER_HMAC_SECRET || env.SESSION_SECRET;
+  if (!secret) {
+    return jsonError('Server misconfigured — no auth secret', 500);
   }
-  const isValid = await validateSignedUrl(signatureKey, url.searchParams, env.SESSION_SECRET);
+  const isValid = await validateSignedUrl(signatureKey, url.searchParams, secret);
   if (!isValid) {
     return jsonError('Unauthorized — invalid or expired token', 401);
   }
@@ -280,6 +381,67 @@ async function validateSignedUrl(videoKey, params, secret) {
 }
 
 /**
+ * Validates an image optimization signed URL token.
+ * Canonical payload covers: filename/key, width, height, quality, format, expiry.
+ *
+ * @param {string} imageKey - The image filename/key
+ * @param {URLSearchParams} params - Query parameters (sig, exp, w, h, q, format)
+ * @param {string} secret - The shared SESSION_SECRET or WORKER_HMAC_SECRET
+ * @returns {Promise<{ valid: boolean, error?: string, width?: number, height?: number, quality?: number, format?: string }>}
+ */
+async function validateImageSignedUrl(imageKey, params, secret) {
+  const sig = params.get('sig');
+  const exp = params.get('exp');
+
+  if (!sig || !exp) {
+    return { valid: false, error: 'Unauthorized — missing signature or expiry token' };
+  }
+
+  const expiryTs = parseInt(exp, 10);
+  if (!Number.isFinite(expiryTs) || Date.now() > expiryTs * 1000) {
+    return { valid: false, error: 'Unauthorized — token has expired' };
+  }
+
+  // Parse and validate parameters with strict boundaries
+  const rawW = params.get('w');
+  const rawH = params.get('h');
+  const rawQ = params.get('q');
+  const rawF = params.get('format');
+
+  const width = rawW ? parseInt(rawW, 10) : 480;
+  const height = rawH ? parseInt(rawH, 10) : 0;
+  const quality = rawQ ? parseInt(rawQ, 10) : 80;
+  const format = rawF ? String(rawF).toLowerCase() : 'webp';
+
+  if (!Number.isInteger(width) || width < 16 || width > 1920) {
+    return { valid: false, error: 'Invalid width: must be between 16 and 1920' };
+  }
+  if (!Number.isInteger(height) || height < 0 || height > 1920) {
+    return { valid: false, error: 'Invalid height: must be between 0 and 1920' };
+  }
+  if (!Number.isInteger(quality) || quality < 10 || quality > 100) {
+    return { valid: false, error: 'Invalid quality: must be between 10 and 100' };
+  }
+  const allowedFormats = new Set(['webp', 'avif', 'jpeg', 'png', 'auto']);
+  if (!allowedFormats.has(format)) {
+    return { valid: false, error: 'Invalid format: must be webp, avif, jpeg, png, or auto' };
+  }
+
+  // Canonical HMAC signature check: ${imageKey}:${width}:${height}:${quality}:${format}:${exp}
+  const message = `${imageKey}:${width}:${height}:${quality}:${format}:${exp}`;
+  const encoder = new TextEncoder();
+  const key = await getHmacKey(secret);
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+  const expectedSig = arrayBufferToHex(signature);
+
+  if (!timingSafeEqual(expectedSig, sig)) {
+    return { valid: false, error: 'Unauthorized — invalid signature or parameter tampering detected' };
+  }
+
+  return { valid: true, width, height, quality, format };
+}
+
+/**
  * Converts an ArrayBuffer to a hex string.
  * @param {ArrayBuffer} buffer
  * @returns {string}
@@ -343,10 +505,16 @@ async function handleVideoStream(request, env, ctx, videoKey, url) {
   // ─── 304 Not Modified ──────────────────────────────────────────────
   // R2 returns null when onlyIf conditional check fails (ETag matches).
   // Respond with 304 to save bandwidth — browser already has this data.
+  // RFC 7232 requires 304 to include ETag and Cache-Control headers.
   if (!object && r2Options.onlyIf) {
+    const notModHeaders = new Headers();
+    notModHeaders.set('Cache-Control', 'public, max-age=86400, no-transform');
+    // Pass through If-None-Match as ETag so browser can continue validating
+    const ifNoneMatch = request.headers.get('If-None-Match');
+    if (ifNoneMatch) notModHeaders.set('ETag', ifNoneMatch);
     return new Response(null, {
       status: 304,
-      headers: { 'Cache-Control': 'private, max-age=86400, no-transform' },
+      headers: notModHeaders,
     });
   }
 
@@ -359,7 +527,8 @@ async function handleVideoStream(request, env, ctx, videoKey, url) {
   const contentType = object.httpMetadata?.contentType || getVideoMimeType(objectKey);
   headers.set('Content-Type', contentType);
   headers.set('Accept-Ranges', 'bytes');
-  headers.set('Cache-Control', 'private, max-age=86400, no-transform');
+  // Allow Cloudflare edge to cache video responses — signed URL ensures only authorized clients get them
+  headers.set('Cache-Control', 'public, max-age=86400, no-transform');
   headers.set('X-Content-Type-Options', 'nosniff');
 
   if (object.httpEtag) headers.set('ETag', object.httpEtag);
@@ -458,6 +627,639 @@ async function handleDirectUpload(request, env, ctx, videoKey, url) {
   } catch (err) {
     return jsonError(err.message || 'Upload failed', 500);
   }
+}
+
+// =============================================================================
+//  [Feature 1] Image & Thumbnail Optimization Handler
+// =============================================================================
+
+/**
+ * On-the-fly Image/Thumbnail Optimizer with WebP/AVIF support and Edge Caching.
+ * - Mandatory HMAC verification protecting key, dimensions, quality, and format.
+ * - Bounds check on all transformation parameters (16..1920 width, 10..100 quality).
+ * - Cache key deterministically reflects: source + width + height + quality + format.
+ * - Uses Cloudflare Image Resizing when available, or serves R2/Origin with optimal headers.
+ *
+ * @param {Request} request
+ * @param {{ R2_BUCKET?: R2Bucket, SESSION_SECRET?: string, WORKER_HMAC_SECRET?: string, ORIGIN_URL?: string }} env
+ * @param {ExecutionContext} ctx
+ * @param {string} imageKey
+ * @param {URL} url
+ * @returns {Promise<Response>}
+ */
+async function handleImageOptimization(request, env, ctx, imageKey, url) {
+  // Path traversal guard
+  if (!imageKey || imageKey.includes('..') || imageKey.startsWith('/') || imageKey.includes('\\')) {
+    return jsonError('Invalid image key', 400);
+  }
+
+  const secret = env.WORKER_HMAC_SECRET || env.SESSION_SECRET;
+  if (!secret) {
+    return jsonError('Server misconfigured — missing signature secret', 500);
+  }
+
+  // 1. Mandatory HMAC Token & Parameter Validation
+  const auth = await validateImageSignedUrl(imageKey, url.searchParams, secret);
+  if (!auth.valid) {
+    return jsonError(auth.error || 'Unauthorized', 401);
+  }
+
+  const { width, height, quality, format } = auth;
+
+  // 2. Deterministic Edge Cache Key (Source + Dimensions + Quality + Format)
+  const cacheParams = new URLSearchParams();
+  cacheParams.set('w', width.toString());
+  if (height > 0) cacheParams.set('h', height.toString());
+  cacheParams.set('q', quality.toString());
+  cacheParams.set('format', format);
+
+  const cacheKeyUrl = `${url.origin}/img-opt/${encodeURIComponent(imageKey)}?${cacheParams.toString()}`;
+  const cacheKey = new Request(cacheKeyUrl, {
+    method: 'GET',
+    headers: { 'Accept': request.headers.get('Accept') || '' }
+  });
+
+  const cache = caches.default;
+  let cached = await cache.match(cacheKey);
+  if (cached) {
+    const headers = new Headers(cached.headers);
+    headers.set('CF-Edge-Cache', 'HIT');
+    return new Response(cached.body, { status: cached.status, headers });
+  }
+
+  let imageResponse = null;
+
+  // 3. Transformation via Cloudflare Image Resizing subrequest
+  const originBase = env.ORIGIN_URL || 'https://origin.muaj.bro.bd';
+  const sourceSubpath = imageKey.startsWith('avatars/') ? `/${imageKey}` : `/thumbnails/${imageKey}`;
+  const sourceUrl = new URL(sourceSubpath, originBase);
+
+  const originHeaders = new Headers(request.headers);
+  originHeaders.set('X-Edge-Worker-Loop', '1');
+  originHeaders.set('Host', 'muaj.bro.bd');
+
+  const resizeOptions = {
+    method: 'GET',
+    headers: originHeaders,
+    cf: {
+      image: {
+        width,
+        height: height > 0 ? height : undefined,
+        quality,
+        format: format === 'auto' ? 'auto' : format,
+        fit: 'scale-down',
+        metadata: 'none',
+      },
+    },
+  };
+
+  try {
+    const resizedRes = await fetch(sourceUrl.toString(), resizeOptions);
+    if (resizedRes.ok) {
+      imageResponse = resizedRes;
+    }
+  } catch {}
+
+  // 4. Fallback: Fetch directly from R2 if Cloudflare Image Resizing is not active
+  if (!imageResponse && env.R2_BUCKET) {
+    try {
+      let obj = await env.R2_BUCKET.get(imageKey);
+      if (!obj && !imageKey.startsWith('thumbnails/')) {
+        obj = await env.R2_BUCKET.get(`thumbnails/${imageKey}`);
+      }
+      if (!obj && !imageKey.startsWith('avatars/')) {
+        obj = await env.R2_BUCKET.get(`avatars/${imageKey}`);
+      }
+      if (obj) {
+        const mime = obj.httpMetadata?.contentType || getImageMimeType(imageKey);
+        const headers = new Headers();
+        headers.set('Content-Type', mime);
+        if (obj.httpEtag) headers.set('ETag', obj.httpEtag);
+        if (obj.uploaded) headers.set('Last-Modified', obj.uploaded.toUTCString());
+        imageResponse = new Response(obj.body, { headers });
+      }
+    } catch {}
+  }
+
+  // 5. Fallback: Fetch from Origin Server directly
+  if (!imageResponse) {
+    try {
+      const fallbackRes = await fetch(sourceUrl.toString(), {
+        headers: originHeaders,
+        signal: AbortSignal.timeout(10000),
+      });
+      if (fallbackRes.ok) {
+        imageResponse = fallbackRes;
+      }
+    } catch {}
+  }
+
+  if (!imageResponse) {
+    return new Response('Image not found', { status: 404 });
+  }
+
+  // 6. Cache-Control Strategy:
+  // - UUID/content-hashed thumbnails: immutable (30 days)
+  // - Mutable avatars (e.g. user profile avatars): 1 day with stale-while-revalidate
+  const isVersionedKey = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}/i.test(imageKey) || imageKey.includes('_v');
+  const cacheControlValue = isVersionedKey
+    ? 'public, max-age=2592000, immutable'
+    : 'public, max-age=86400, stale-while-revalidate=43200';
+
+  const responseHeaders = new Headers(imageResponse.headers);
+  responseHeaders.set('Cache-Control', cacheControlValue);
+  responseHeaders.set('Vary', 'Accept');
+  responseHeaders.set('CF-Edge-Cache', 'MISS');
+  applyEdgeSecurityHeaders(responseHeaders);
+
+  const finalResponse = new Response(imageResponse.body, {
+    status: 200,
+    headers: responseHeaders,
+  });
+
+  // Store in Cloudflare Edge Cache
+  ctx.waitUntil(cache.put(cacheKey, finalResponse.clone()));
+  return finalResponse;
+}
+
+// =============================================================================
+//  [Feature 3] Static Asset Edge Caching Handler
+// =============================================================================
+
+/**
+ * Handles caching of CSS, JS, fonts, and images at the Cloudflare Edge.
+ * Guards against caching any private or authenticated responses.
+ * @param {Request} request
+ * @param {{ ORIGIN_URL?: string }} env
+ * @param {ExecutionContext} ctx
+ * @param {URL} url
+ * @returns {Promise<Response>}
+ */
+async function handleStaticAsset(request, env, ctx, url) {
+  const cache = caches.default;
+  const cacheKey = new Request(url.toString(), {
+    method: 'GET',
+    headers: { 'Accept-Encoding': request.headers.get('Accept-Encoding') || '' }
+  });
+
+  // 1. Check Cloudflare Edge Cache
+  let cached = await cache.match(cacheKey);
+  if (cached) {
+    const headers = new Headers(cached.headers);
+    headers.set('CF-Edge-Cache', 'HIT');
+    return new Response(cached.body, {
+      status: cached.status,
+      statusText: cached.statusText,
+      headers,
+    });
+  }
+
+  // 2. Fetch from Origin with loop protection
+  const originBase = env.ORIGIN_URL || 'https://origin.muaj.bro.bd';
+  const originUrl = new URL(url.pathname + url.search, originBase);
+
+  const originHeaders = new Headers(request.headers);
+  originHeaders.set('X-Edge-Worker-Loop', '1');
+  originHeaders.set('Host', 'muaj.bro.bd');
+
+  try {
+    const originResponse = await fetch(originUrl.toString(), {
+      method: request.method,
+      headers: originHeaders,
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!originResponse.ok) {
+      if ([502, 503, 504].includes(originResponse.status)) {
+        return renderFailoverResponse(request, originResponse.status);
+      }
+      return originResponse;
+    }
+
+    const originCc = (originResponse.headers.get('Cache-Control') || '').toLowerCase();
+    const hasSetCookie = originResponse.headers.has('Set-Cookie');
+
+    // Security Guard: Never publicly cache private, no-store, no-cache, or cookie-setting responses
+    const isPrivate = originCc.includes('private') ||
+                      originCc.includes('no-store') ||
+                      originCc.includes('no-cache') ||
+                      hasSetCookie;
+
+    const headers = new Headers(originResponse.headers);
+    headers.set('CF-Edge-Cache', 'MISS');
+    applyEdgeSecurityHeaders(headers);
+
+    if (!isPrivate && originResponse.status === 200) {
+      // Safe public static asset — cache at Edge for 7 days
+      headers.set('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+      const responseToCache = new Response(originResponse.body, {
+        status: originResponse.status,
+        statusText: originResponse.statusText,
+        headers,
+      });
+
+      ctx.waitUntil(cache.put(cacheKey, responseToCache.clone()));
+      return responseToCache;
+    }
+
+    // If private or non-200, return directly without inserting into public cache
+    return new Response(originResponse.body, {
+      status: originResponse.status,
+      statusText: originResponse.statusText,
+      headers,
+    });
+  } catch (err) {
+    return renderFailoverResponse(request, 503, err.message);
+  }
+}
+
+// =============================================================================
+//  [Feature 2] Origin Pass-Through & Auto-Failover Maintenance Mode
+// =============================================================================
+
+/** Long-running routes that must NOT be aborted by a short failover timeout. */
+const LONG_RUNNING_PREFIXES = [
+  '/upload',
+  '/api/upload',
+  '/import-url',
+  '/import-progress',
+  '/messages/stream',
+  '/watch-together/stream',
+  '/api/r2-progress',
+  '/api/call/events',
+  '/download/'
+];
+
+/**
+ * Forwards requests to Origin VPS and catches 502/503/504/timeout with a maintenance page.
+ * Preserves streaming request bodies and long-running SSE connections.
+ * @param {Request} request
+ * @param {{ ORIGIN_URL?: string }} env
+ * @param {ExecutionContext} ctx
+ * @param {URL} url
+ * @returns {Promise<Response>}
+ */
+async function handleOriginWithFailover(request, env, ctx, url) {
+  const originBase = env.ORIGIN_URL || 'https://origin.muaj.bro.bd';
+  const targetUrl = new URL(url.pathname + url.search, originBase);
+
+  // Preserve request headers & attach forwarding & loop-protection headers
+  const headers = new Headers(request.headers);
+  headers.set('X-Edge-Worker-Loop', '1');
+  headers.set('X-Forwarded-Host', url.host);
+  headers.set('X-Forwarded-Proto', url.protocol.replace(':', ''));
+  headers.set('Host', 'muaj.bro.bd');
+
+  const isLongRunning = LONG_RUNNING_PREFIXES.some(p => url.pathname.startsWith(p));
+  const isStreamBody = !['GET', 'HEAD'].includes(request.method) && request.body;
+
+  const fetchOpts = {
+    method: request.method,
+    headers,
+    body: isStreamBody ? request.body : null,
+    redirect: 'manual',
+  };
+
+  // Cloudflare Workers requires duplex: 'half' when request.body is a ReadableStream
+  if (isStreamBody) {
+    fetchOpts.duplex = 'half';
+  }
+
+  // Only apply failover timeout to ordinary short-lived requests (15s); never abort uploads or SSE streams
+  if (!isLongRunning) {
+    fetchOpts.signal = AbortSignal.timeout(15000);
+  }
+
+  try {
+    const originResponse = await fetch(targetUrl.toString(), fetchOpts);
+
+    // Failover only on infrastructure availability errors (502/503/504)
+    // NEVER intercept ordinary application-level 500 errors
+    if ([502, 503, 504].includes(originResponse.status)) {
+      return renderFailoverResponse(request, originResponse.status);
+    }
+
+    // Apply security headers to live response
+    const newHeaders = new Headers(originResponse.headers);
+    applyEdgeSecurityHeaders(newHeaders);
+
+    return new Response(originResponse.body, {
+      status: originResponse.status,
+      statusText: originResponse.statusText,
+      headers: newHeaders,
+    });
+  } catch (err) {
+    // Network level error / Connection refused / Gateway Timeout
+    return renderFailoverResponse(request, 503, err.message);
+  }
+}
+
+/**
+ * Returns either an aesthetic HTML Maintenance Page or a JSON/text error on server downtime.
+ * Guarantees API and media endpoints never receive HTML payloads.
+ * @param {Request} request
+ * @param {number} status
+ * @param {string} [detail]
+ * @returns {Response}
+ */
+function renderFailoverResponse(request, status = 503, detail = '') {
+  const url = new URL(request.url);
+  const accept = request.headers.get('Accept') || '';
+  const isApi = url.pathname.startsWith('/api/') || url.pathname.startsWith('/call') || accept.includes('application/json');
+  const isHtml = accept.includes('text/html') && !isApi;
+
+  if (isHtml && request.method === 'GET') {
+    return new Response(getMaintenanceHtml(), {
+      status: 503,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Retry-After': '5',
+      },
+    });
+  }
+
+  if (isApi) {
+    return jsonError('Server is temporarily undergoing maintenance or restarting. Please retry in a few seconds.', 503);
+  }
+
+  return new Response('503 Service Temporarily Unavailable — Server is undergoing maintenance', {
+    status: 503,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Retry-After': '5',
+    },
+  });
+}
+
+/**
+ * Generates the animated, dark-mode Maintenance HTML with smart /health polling.
+ * @returns {string}
+ */
+function getMaintenanceHtml() {
+  return `<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>সার্ভার আপডেট চলছে • VideoHost</title>
+  <style>
+    :root {
+      --bg: #090a0f;
+      --card-bg: rgba(18, 20, 29, 0.88);
+      --card-border: rgba(255, 255, 255, 0.09);
+      --primary: #6366f1;
+      --primary-glow: rgba(99, 102, 241, 0.35);
+      --accent: #ec4899;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at top center, #1e1b4b 0%, #090a0f 65%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .maintenance-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 1.5rem;
+      padding: 2.5rem 2rem;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px var(--primary-glow);
+      animation: floatIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes floatIn {
+      from { opacity: 0; transform: translateY(20px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .icon-container {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pulse-ring {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: var(--primary);
+      opacity: 0.3;
+      animation: pulseRing 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.8); opacity: 0.6; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+    .icon-box {
+      position: relative;
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      border-radius: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 20px rgba(99, 102, 241, 0.4);
+    }
+    .icon-box svg {
+      width: 32px;
+      height: 32px;
+      fill: none;
+      stroke: white;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin-bottom: 1.75rem;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 9999px;
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+      font-size: 0.82rem;
+      font-weight: 500;
+      margin-bottom: 1.75rem;
+      transition: all 0.3s ease;
+    }
+    .status-badge.online {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f59e0b;
+      box-shadow: 0 0 8px #f59e0b;
+      animation: blink 1.5s infinite;
+    }
+    .status-badge.online .status-dot {
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .retry-bar-container {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 9999px;
+      height: 6px;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+    .retry-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      width: 0%;
+      border-radius: 9999px;
+      transition: width 1s linear;
+    }
+    .btn-retry {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      background: linear-gradient(135deg, #4f46e5, #6366f1);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.75rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+    .btn-retry:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+    }
+    .btn-retry:active {
+      transform: translateY(1px);
+    }
+    .btn-retry:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="maintenance-card">
+    <div class="icon-container">
+      <div class="pulse-ring"></div>
+      <div class="icon-box">
+        <svg viewBox="0 0 24 24"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+      </div>
+    </div>
+    <h1>সার্ভার আপডেট চলছে</h1>
+    <p class="subtitle">VideoHost সার্ভারে একটি দ্রুত রক্ষণাবেক্ষণ/রিস্টার্ট চলছে। পেজটি স্বয়ংক্রিয়ভাবে রিকানেক্ট হবে।</p>
+    <div class="status-badge" id="statusBadge">
+      <span class="status-dot"></span>
+      <span id="statusText">Checking server in <strong id="countdown">5</strong>s...</span>
+    </div>
+    <div class="retry-bar-container">
+      <div class="retry-bar" id="progressBar"></div>
+    </div>
+    <button class="btn-retry" id="reloadBtn" onclick="manualCheck()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+      <span>এখনই রিলোড দিন (Reload Now)</span>
+    </button>
+  </div>
+  <script>
+    const INTERVAL = 5;
+    let timeLeft = INTERVAL;
+    const countdownEl = document.getElementById('countdown');
+    const progressBar = document.getElementById('progressBar');
+    const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    const reloadBtn = document.getElementById('reloadBtn');
+    let isChecking = false;
+
+    async function checkHealth() {
+      if (isChecking) return;
+      isChecking = true;
+      try {
+        const res = await fetch('/health?ts=' + Date.now(), {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(3500)
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({ status: 'ok' }));
+          if (data && data.status === 'ok') {
+            statusBadge.classList.add('online');
+            statusText.textContent = 'সার্ভার অনলাইন! পেজ লোড হচ্ছে...';
+            setTimeout(() => { window.location.reload(); }, 600);
+            return true;
+          }
+        }
+      } catch (e) {
+        // Server still unreachable
+      } finally {
+        isChecking = false;
+      }
+      return false;
+    }
+
+    async function manualCheck() {
+      if (reloadBtn) reloadBtn.disabled = true;
+      statusText.textContent = 'সার্ভার চেক করা হচ্ছে...';
+      const isUp = await checkHealth();
+      if (!isUp) {
+        statusText.innerHTML = 'সার্ভার এখনও প্রস্তুত নয়। আবার <strong id="countdown">5</strong>s পরে চেষ্টা করা হবে...';
+        timeLeft = INTERVAL;
+        if (reloadBtn) reloadBtn.disabled = false;
+      }
+    }
+
+    setInterval(async () => {
+      if (document.hidden) return; // Pause polling when tab is inactive
+      timeLeft--;
+      if (countdownEl && timeLeft > 0) countdownEl.textContent = timeLeft;
+      if (progressBar) progressBar.style.width = ((INTERVAL - timeLeft) / INTERVAL * 100) + '%';
+      if (timeLeft <= 0) {
+        timeLeft = INTERVAL;
+        if (progressBar) progressBar.style.width = '0%';
+        await checkHealth();
+      }
+    }, 1000);
+  </script>
+</body>
+</html>`;
 }
 
 // =============================================================================
@@ -642,8 +1444,15 @@ function addCorsHeaders(response, request) {
 }
 
 // =============================================================================
-//  Utilities
+//  Utilities & Security
 // =============================================================================
+
+function applyEdgeSecurityHeaders(headers) {
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Frame-Options', 'SAMEORIGIN');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+}
 
 function getVideoMimeType(filename) {
   const dot = filename.lastIndexOf('.');
@@ -651,97 +1460,13 @@ function getVideoMimeType(filename) {
   return VIDEO_MIME_MAP[filename.slice(dot).toLowerCase()] || 'video/mp4';
 }
 
+function getImageMimeType(filename) {
+  const dot = filename.lastIndexOf('.');
+  if (dot === -1) return 'image/jpeg';
+  return IMAGE_MIME_MAP[filename.slice(dot).toLowerCase()] || 'image/jpeg';
+}
+
 function encodeBasename(name) {
   return name.replace(/["\\\\r\n\x00-\x1F\x7F]/g, '_');
 }
 
-// =============================================================================
-//  Edge WebRTC Call Signaling WebSocket Handler
-// =============================================================================
-
-// NOTE: connectedCallUsers lives in module-level memory and does NOT survive
-// isolate eviction (cold starts, scaling). Cloudflare can evict isolates at any
-// time, silently breaking active WebSocket connections. The client-side call UI
-// must handle reconnection gracefully. For durable WebSocket state, use Durable
-// Objects (which this project already has infrastructure for via Watch Together).
-const connectedCallUsers = new Map(); // username -> Set<WebSocket>
-
-async function handleCallSignalingWebSocket(request, env, ctx, _capturedKey, url) {
-  const user = url.searchParams.get('user');
-  if (!user || (user !== 'muaj' && user !== 'hajera')) {
-    return new Response('Invalid user', { status: 400 });
-  }
-
-  // Mandatory signed token validation — consistent with all other handlers
-  if (!env.SESSION_SECRET) {
-    return new Response('Server misconfigured', { status: 500 });
-  }
-  const isValid = await validateSignedUrl(`call:${user}`, url.searchParams, env.SESSION_SECRET);
-  if (!isValid) {
-    return new Response('Unauthorized token', { status: 401 });
-  }
-
-  const pair = new WebSocketPair();
-  const [client, server] = Object.values(pair);
-
-  server.accept();
-
-  if (!connectedCallUsers.has(user)) {
-    connectedCallUsers.set(user, new Set());
-  }
-  connectedCallUsers.get(user).add(server);
-
-  const partner = user === 'muaj' ? 'hajera' : 'muaj';
-
-  // ─── Idle timeout — close stale connections after 5 minutes of silence ─
-  let lastActivity = Date.now();
-  const idleTimer = setInterval(() => {
-    if (Date.now() - lastActivity > CALL_WS_IDLE_TIMEOUT_MS) {
-      try { server.close(1000, 'Idle timeout'); } catch {}
-      clearInterval(idleTimer);
-    }
-  }, 30000);
-
-  server.addEventListener('message', async (event) => {
-    lastActivity = Date.now();
-    try {
-      const data = JSON.parse(event.data);
-      if (data.type === 'ping') {
-        server.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
-        return;
-      }
-
-      // Forward signal directly to partner
-      const partnerSockets = connectedCallUsers.get(partner);
-      if (partnerSockets && partnerSockets.size > 0) {
-        const payload = JSON.stringify({ ...data, sender: user, ts: Date.now() });
-        for (const sock of partnerSockets) {
-          try {
-            sock.send(payload);
-          } catch (e) {
-            partnerSockets.delete(sock);
-          }
-        }
-      }
-    } catch (err) {
-      // ignore parsing error
-    }
-  });
-
-  const cleanup = () => {
-    clearInterval(idleTimer);
-    const sockets = connectedCallUsers.get(user);
-    if (sockets) {
-      sockets.delete(server);
-      if (sockets.size === 0) connectedCallUsers.delete(user);
-    }
-  };
-
-  server.addEventListener('close', cleanup);
-  server.addEventListener('error', cleanup);
-
-  return new Response(null, {
-    status: 101,
-    webSocket: client,
-  });
-}

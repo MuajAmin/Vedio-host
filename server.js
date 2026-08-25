@@ -76,9 +76,16 @@ app.use((req, res, next) => {
     if (isProduction) {
         res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     }
+    const cfWorkerHost = process.env.CF_WORKER_URL ? new URL(process.env.CF_WORKER_URL).host : '';
+    const mediaSrc = cfWorkerHost
+        ? `media-src 'self' blob: https://${cfWorkerHost} https://*.r2.dev`
+        : "media-src 'self' blob: https://*.r2.dev";
+    const imgSrc = cfWorkerHost
+        ? `img-src 'self' data: https://${cfWorkerHost} https://*.r2.dev`
+        : "img-src 'self' data: https://*.r2.dev";
     res.setHeader(
         'Content-Security-Policy',
-        "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; media-src 'self' blob: https: https://*.r2.dev; img-src 'self' data: https: https://*.r2.dev; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'"
+        `default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; ${mediaSrc}; ${imgSrc}; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'`
     );
     next();
 });
@@ -88,7 +95,12 @@ app.use(express.text({ limit: '2mb', type: 'text/plain' }));
 app.use(express.static(path.join(__dirname, 'public'), {
     etag: true,
     immutable: false,
-    maxAge: isProduction ? '1h' : 0
+    maxAge: isProduction ? '7d' : 0,
+    setHeaders: (res) => {
+        if (isProduction) {
+            res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+        }
+    }
 }));
 // Health check — before session middleware to avoid creating sessions
 app.get('/health', (req, res) => {

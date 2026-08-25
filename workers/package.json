@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Cloudflare Edge Worker for VideoHost — R2 video proxy, security headers, static caching",
+  "type": "module",
   "main": "src/worker.js",
   "scripts": {
     "deploy": "wrangler deploy",
