@@ -5,32 +5,44 @@
 //  + Web Push Notification Handler for Messenger-style notifications
 // ============================================================
 
-const CACHE_NAME = 'videohost-v13.2';
+const CACHE_NAME = 'videohost-v13.3';
+const MEDIA_CACHE_NAME = 'videohost-media-v1';
+const MAX_MEDIA_CACHE_ITEMS = 120;
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
-    '/css/style.css?v=13.2',
-    '/css/minimal.css?v=13.2',
-    '/css/messages.css?v=13.2',
-    '/css/calling.css?v=13.2',
-    '/js/theme-init.js?v=13.2',
-    '/js/twemoji.min.js?v=13.2',
-    '/js/app.js?v=13.2',
-    '/js/messages.js?v=13.2',
-    '/js/watchTogether.js?v=13.2',
-    '/js/calling.js?v=13.2',
+    '/css/style.css?v=13.3',
+    '/css/minimal.css?v=13.3',
+    '/css/messages.css?v=13.3',
+    '/css/calling.css?v=13.3',
+    '/js/theme-init.js?v=13.3',
+    '/js/twemoji.min.js?v=13.3',
+    '/js/app.js?v=13.3',
+    '/js/messages.js?v=13.3',
+    '/js/watchTogether.js?v=13.3',
+    '/js/calling.js?v=13.3',
     '/css/icon-192.png',
     '/css/icon-512.png',
     '/manifest.json'
 ];
+
+// Helper: Trim cache to max allowed items (LRU eviction)
+async function trimCache(cacheName, maxItems) {
+    try {
+        const cache = await caches.open(cacheName);
+        const keys = await cache.keys();
+        if (keys.length > maxItems) {
+            const toDelete = keys.slice(0, keys.length - maxItems);
+            await Promise.all(toDelete.map((req) => cache.delete(req)));
+        }
+    } catch (e) {}
+}
 
 // Routes that must ALWAYS bypass cache and go straight to network
 function isNetworkOnly(url) {
     const pathname = new URL(url).pathname;
     return (
         pathname.startsWith('/stream/') ||
-        pathname.startsWith('/thumbnails/') ||
-        pathname.startsWith('/avatars/') ||
         pathname.startsWith('/voice/') ||
         pathname.startsWith('/import-progress/') ||
         pathname.startsWith('/watch-together/') ||
@@ -41,7 +53,6 @@ function isNetworkOnly(url) {
         pathname.startsWith('/upload') ||
         pathname.startsWith('/import-url') ||
         pathname.startsWith('/delete/') ||
-        pathname.startsWith('/thumbnail/') ||
         pathname.startsWith('/profile/') ||
         pathname.startsWith('/rename/') ||
         pathname.startsWith('/comment/') ||
@@ -60,20 +71,21 @@ self.addEventListener('install', (event) => {
     );
 });
 
-// -- ACTIVATE -- Clean up legacy caches
+// -- ACTIVATE -- Clean up legacy caches (preserve media cache)
 self.addEventListener('activate', (event) => {
+    const preservedCaches = new Set([CACHE_NAME, MEDIA_CACHE_NAME]);
     event.waitUntil(
         caches.keys().then((keys) =>
             Promise.all(
                 keys
-                    .filter((key) => key !== CACHE_NAME)
+                    .filter((key) => !preservedCaches.has(key))
                     .map((key) => caches.delete(key))
             )
         ).then(() => self.clients.claim())
     );
 });
 
-// -- FETCH -- Smart routing for Android mobile
+// -- FETCH -- Smart routing for Android mobile & desktop
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     if (request.method !== 'GET') return;
@@ -83,7 +95,34 @@ self.addEventListener('fetch', (event) => {
 
     const pathname = new URL(url).pathname;
 
-    // Cache-first with network revalidation for static assets
+    // 1. Stale-While-Revalidate + LRU Caching for Thumbnails and Avatars
+    if (pathname.startsWith('/thumbnails/') || pathname.startsWith('/avatars/') || pathname.startsWith('/thumbnail/')) {
+        event.respondWith(
+            caches.open(MEDIA_CACHE_NAME).then(async (cache) => {
+                const cached = await cache.match(request);
+                const networkFetch = fetch(request).then((response) => {
+                    if (response && response.status === 200) {
+                        const clone = response.clone();
+                        cache.put(request, clone).then(() => trimCache(MEDIA_CACHE_NAME, MAX_MEDIA_CACHE_ITEMS));
+                    }
+                    return response;
+                }).catch(() => null);
+
+                // If cached response exists, serve it immediately (0ms paint for smooth 60 FPS scrolling)
+                if (cached) {
+                    event.waitUntil(networkFetch);
+                    return cached;
+                }
+
+                // If not cached yet, await the network fetch
+                const netRes = await networkFetch;
+                return netRes || new Response('', { status: 404, headers: { 'Content-Type': 'text/plain' } });
+            })
+        );
+        return;
+    }
+
+    // 2. Cache-first with network revalidation for static assets (CSS, JS, Fonts, App Icons)
     if (pathname.startsWith('/css/') || pathname.startsWith('/js/') || pathname.endsWith('.png') || pathname.endsWith('.json')) {
         event.respondWith(
             caches.match(request).then((cached) => {
@@ -100,7 +139,7 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Network-first with cache fallback for page navigation
+    // 3. Network-first with cache fallback for page navigation
     if (request.mode === 'navigate') {
         event.respondWith(
             fetch(request).catch(() => {
