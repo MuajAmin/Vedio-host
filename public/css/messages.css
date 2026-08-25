@@ -1048,6 +1048,14 @@ img.emoji {
     box-shadow: none !important;
 }
 
+.wa-raw-emoji {
+    display: inline-block;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+    font-style: normal;
+    line-height: 1;
+    vertical-align: -0.1em;
+}
+
 .msg-text-content {
     word-break: break-word;
     overflow-wrap: break-word;

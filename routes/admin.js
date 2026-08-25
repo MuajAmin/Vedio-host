@@ -554,8 +554,11 @@ router.post('/admin/r2/sync-video/:id', isMuaj, (req, res) => {
         return res.status(404).json({ success: false, error: 'Video file missing from VPS disk.' });
     }
 
-    // Launch upload asynchronously in background
-    r2.uploadToR2(filePath, video.filename).catch(err => {
+    // Launch upload asynchronously in background with retry
+    try {
+        db.prepare("UPDATE videos SET cdn_status = 'r2_uploading' WHERE id = ?").run(video.id);
+    } catch {}
+    r2.uploadToR2WithRetry(filePath, video.filename).catch(err => {
         console.error('[admin] Single video R2 upload error:', video.filename, err.message);
     });
 

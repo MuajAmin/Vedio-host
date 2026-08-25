@@ -75,16 +75,17 @@
     function toAppleEmojiImg(rawEmoji) {
         if (!rawEmoji) return '';
         if (!window.twemoji || !window.twemoji.convert) {
-            return rawEmoji;
+            return escapeHtml(rawEmoji);
         }
         try {
             const code = window.twemoji.convert.toCodePoint(rawEmoji, '-');
             const codeNoFE0F = code.replace(/-fe0f/g, '');
             const appleUrl = `${WA_APPLE_EMOJI_BASE}${code}.png`;
             const fallbackUrl = `${WA_TWEMOJI_FALLBACK_BASE}${codeNoFE0F}.svg`;
-            return `<img class="wa-emoji" draggable="false" alt="${escapeHtml(rawEmoji)}" data-code="${code}" src="${appleUrl}" loading="lazy" onerror="this.onerror=null;this.src='${fallbackUrl}'" />`;
+            const safeEmoji = escapeHtml(rawEmoji);
+            return `<img class="wa-emoji" draggable="false" alt="${safeEmoji}" data-code="${code}" src="${appleUrl}" loading="lazy" onerror="this.onerror=null;if(this.src!=='${fallbackUrl}'){this.src='${fallbackUrl}';}else{this.outerHTML='<span class=\\'wa-raw-emoji\\'>${safeEmoji}</span>';}" />`;
         } catch (e) {
-            return rawEmoji;
+            return escapeHtml(rawEmoji);
         }
     }
 
@@ -241,7 +242,7 @@
         activeGlobalTargetInput = targetInput;
 
         // Positioning: Choose parent container or document body
-        const container = triggerBtn.closest('.msg-composer-form, .comment-form, .comment-input-group, .wt-chat-footer, .form-group, .form-input-box, .title-edit-form') || triggerBtn.parentElement || document.body;
+        const container = triggerBtn.closest('.msg-composer-wrap, .msg-footer, .msg-input-row, .msg-composer-form, .comment-form, .comment-input-group, .wt-chat-footer, .form-group, .form-input-box, .title-edit-form') || triggerBtn.parentElement || document.body;
         
         container.style.position = container.style.position && container.style.position !== 'static' ? container.style.position : 'relative';
         container.appendChild(picker);
@@ -357,6 +358,16 @@
             const targetEl = root.querySelector(targetSelector);
             if (targetEl) {
                 attachWhatsAppEmojiPicker(btn, targetEl);
+            }
+        });
+
+        // 6. Direct Message Composers & Full-Page Chat
+        const msgComposers = root.querySelectorAll ? root.querySelectorAll('.msg-composer-wrap, .msg-footer') : [];
+        msgComposers.forEach(composer => {
+            const textarea = composer.querySelector('.msg-textarea');
+            const emojiBtn = composer.querySelector('.msg-emoji-toggle-btn');
+            if (emojiBtn && textarea) {
+                attachWhatsAppEmojiPicker(emojiBtn, textarea);
             }
         });
 

@@ -277,6 +277,7 @@ function uploadToR2(filePath, filename) {
             const progressStream = new Transform({
                 transform(chunk, encoding, callback) {
                     bytesStreamed += chunk.length;
+                    progressEntry.loaded = bytesStreamed;
                     const now = Date.now();
                     if (progressEntry.loaded >= stat.size) {
                         progressEntry.percent = 99;

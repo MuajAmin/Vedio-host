@@ -215,17 +215,19 @@
     };
 
     function toAppleEmojiImg(rawEmoji) {
+        if (!rawEmoji) return '';
         if (!window.twemoji || !window.twemoji.convert) {
-            return rawEmoji;
+            return escapeHtml(rawEmoji);
         }
         try {
             const code = window.twemoji.convert.toCodePoint(rawEmoji, '-');
             const codeNoFE0F = code.replace(/-fe0f/g, '');
             const appleUrl = `${WA_APPLE_EMOJI_BASE}${code}.png`;
             const fallbackUrl = `${WA_TWEMOJI_FALLBACK_BASE}${codeNoFE0F}.svg`;
-            return `<img class="wa-emoji" draggable="false" alt="${escapeHtml(rawEmoji)}" data-code="${code}" src="${appleUrl}" loading="lazy" onerror="this.onerror=null;this.src='${fallbackUrl}'" />`;
+            const safeEmoji = escapeHtml(rawEmoji);
+            return `<img class="wa-emoji" draggable="false" alt="${safeEmoji}" data-code="${code}" src="${appleUrl}" loading="lazy" onerror="this.onerror=null;if(this.src!=='${fallbackUrl}'){this.src='${fallbackUrl}';}else{this.outerHTML='<span class=\\'wa-raw-emoji\\'>${safeEmoji}</span>';}" />`;
         } catch {
-            return rawEmoji;
+            return escapeHtml(rawEmoji);
         }
     }
 

@@ -85,32 +85,32 @@ app.use((req, res, next) => {
         ? `media-src 'self' blob: https://${cfWorkerHost} https://*.r2.dev`
         : "media-src 'self' blob: https://*.r2.dev";
     const imgSrc = cfWorkerHost
-        ? `img-src 'self' data: https://${cfWorkerHost} https://*.r2.dev`
-        : "img-src 'self' data: https://*.r2.dev";
+        ? `img-src 'self' data: blob: https://${cfWorkerHost} https://*.r2.dev https://cdn.jsdelivr.net https://unpkg.com`
+        : "img-src 'self' data: blob: https://*.r2.dev https://cdn.jsdelivr.net https://unpkg.com";
     res.setHeader(
         'Content-Security-Policy',
-        `default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; ${mediaSrc}; ${imgSrc}; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'`
+        `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com data:; ${mediaSrc}; ${imgSrc}; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'`
     );
 
     // 103 Early Hints Link header for HTML navigation requests
     if (req.method === 'GET' && req.accepts('html') && !req.path.startsWith('/api/') && !req.path.startsWith('/stream/')) {
         const earlyHints = [
-            '</css/style.css?v=13.5>; rel=preload; as=style',
-            '</css/minimal.css?v=13.5>; rel=preload; as=style',
-            '</js/theme-init.js?v=13.5>; rel=preload; as=script',
-            '</js/twemoji.min.js?v=13.5>; rel=preload; as=script',
-            '</js/whatsapp-emojis.js?v=13.5>; rel=preload; as=script',
-            '</js/app.js?v=13.5>; rel=preload; as=script',
+            '</css/style.css?v=13.6>; rel=preload; as=style',
+            '</css/minimal.css?v=13.6>; rel=preload; as=style',
+            '</js/theme-init.js?v=13.6>; rel=preload; as=script',
+            '</js/twemoji.min.js?v=13.6>; rel=preload; as=script',
+            '</js/whatsapp-emojis.js?v=13.6>; rel=preload; as=script',
+            '</js/app.js?v=13.6>; rel=preload; as=script',
             '<https://fonts.googleapis.com>; rel=preconnect',
             '<https://fonts.gstatic.com>; rel=preconnect; crossorigin',
             '<https://cdn.jsdelivr.net>; rel=preconnect'
         ];
         if (req.path.startsWith('/messages') || req.path.startsWith('/call')) {
             earlyHints.push(
-                '</css/messages.css?v=13.5>; rel=preload; as=style',
-                '</css/calling.css?v=13.5>; rel=preload; as=style',
-                '</js/messages.js?v=13.5>; rel=preload; as=script',
-                '</js/calling.js?v=13.5>; rel=preload; as=script'
+                '</css/messages.css?v=13.6>; rel=preload; as=style',
+                '</css/calling.css?v=13.6>; rel=preload; as=style',
+                '</js/messages.js?v=13.6>; rel=preload; as=script',
+                '</js/calling.js?v=13.6>; rel=preload; as=script'
             );
         }
         res.setHeader('Link', earlyHints.join(', '));

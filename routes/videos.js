@@ -406,6 +406,11 @@ router.post('/api/upload/finalize', isAuthenticated, async (req, res) => {
         // Mark as confirmed in memory caches so playback stream redirects instantly without HEAD check
         r2.markConfirmedOnR2(filename);
 
+        // Direct-to-R2 uploads bypass VPS disk — mark as R2-ready immediately
+        try {
+            db.prepare("UPDATE videos SET cdn_status = 'r2_ready' WHERE id = ?").run(id);
+        } catch {}
+
         return res.json({
             success: true,
             id,

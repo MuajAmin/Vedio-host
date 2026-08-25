@@ -5006,6 +5006,14 @@ kbd {
     display: inline-block;
 }
 
+.wa-raw-emoji {
+    display: inline-block;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+    font-style: normal;
+    line-height: 1;
+    vertical-align: -0.1em;
+}
+
 .emoji-chip:hover {
     background: rgba(255, 255, 255, 0.14);
     border-color: var(--border-accent, rgba(229, 184, 90, 0.3));

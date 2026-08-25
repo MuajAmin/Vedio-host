@@ -5,23 +5,23 @@
 //  + Web Push Notification Handler for Messenger-style notifications
 // ============================================================
 
-const CACHE_NAME = 'videohost-v13.5';
-const MEDIA_CACHE_NAME = 'videohost-media-v2';
-const MAX_MEDIA_CACHE_ITEMS = 120;
+const CACHE_NAME = 'videohost-v13.6';
+const MEDIA_CACHE_NAME = 'videohost-media-v3';
+const MAX_MEDIA_CACHE_ITEMS = 100;
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
-    '/css/style.css?v=13.5',
-    '/css/minimal.css?v=13.5',
-    '/css/messages.css?v=13.5',
-    '/css/calling.css?v=13.5',
-    '/js/theme-init.js?v=13.5',
-    '/js/twemoji.min.js?v=13.5',
-    '/js/whatsapp-emojis.js?v=13.5',
-    '/js/app.js?v=13.5',
-    '/js/messages.js?v=13.5',
-    '/js/watchTogether.js?v=13.5',
-    '/js/calling.js?v=13.5',
+    '/css/style.css?v=13.6',
+    '/css/minimal.css?v=13.6',
+    '/css/messages.css?v=13.6',
+    '/css/calling.css?v=13.6',
+    '/js/theme-init.js?v=13.6',
+    '/js/twemoji.min.js?v=13.6',
+    '/js/whatsapp-emojis.js?v=13.6',
+    '/js/app.js?v=13.6',
+    '/js/messages.js?v=13.6',
+    '/js/watchTogether.js?v=13.6',
+    '/js/calling.js?v=13.6',
     '/css/icon-192.png',
     '/css/icon-512.png',
     '/manifest.json'
@@ -94,27 +94,36 @@ self.addEventListener('fetch', (event) => {
     const url = request.url;
     if (isNetworkOnly(url)) return;
 
-    const pathname = new URL(url).pathname;
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(url);
+    } catch {
+        return;
+    }
 
-    // 1. Stale-While-Revalidate + LRU Caching for Thumbnails and Avatars
-    if (pathname.startsWith('/thumbnails/') || pathname.startsWith('/avatars/') || pathname.startsWith('/thumbnail/')) {
+    const pathname = parsedUrl.pathname;
+    const hostname = parsedUrl.hostname;
+    const isEmojiCdn = (hostname === 'cdn.jsdelivr.net' && pathname.includes('emoji')) || (hostname === 'unpkg.com' && pathname.includes('twemoji'));
+
+    // 1. Stale-While-Revalidate + LRU Caching for Thumbnails, Avatars, and Emojis
+    if (pathname.startsWith('/thumbnails/') || pathname.startsWith('/avatars/') || pathname.startsWith('/thumbnail/') || isEmojiCdn) {
         event.respondWith(
             caches.open(MEDIA_CACHE_NAME).then(async (cache) => {
                 const cached = await cache.match(request);
                 const fetchPromise = fetch(request).then((response) => {
-                    if (response && response.ok) {
+                    if (response && (response.ok || response.type === 'opaque')) {
                         cache.put(request, response.clone()).then(() => trimCache(MEDIA_CACHE_NAME, MAX_MEDIA_CACHE_ITEMS));
                     }
                     return response;
                 }).catch(() => null);
 
-                // If cached response exists, serve it immediately (0ms paint for smooth 60 FPS scrolling)
+                // If cached response exists, serve immediately (0ms paint for smooth 60 FPS scrolling)
                 if (cached) {
                     event.waitUntil(fetchPromise);
                     return cached;
                 }
 
-                // If not cached yet, await the network fetch or fallback to live request
+                // If not cached yet, await network fetch or fallback to live request
                 const netRes = await fetchPromise;
                 return netRes || fetch(request);
             })
