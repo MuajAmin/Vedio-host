@@ -100,22 +100,22 @@ const DELETE_BATCH_CONCURRENCY = 10;
 
 // ─── 103 Early Hints Resources ──────────────────────────────────────────────
 const GLOBAL_EARLY_HINT_LINKS = [
-  '</css/style.css?v=13.4>; rel=preload; as=style',
-  '</css/minimal.css?v=13.4>; rel=preload; as=style',
-  '</js/theme-init.js?v=13.4>; rel=preload; as=script',
-  '</js/twemoji.min.js?v=13.4>; rel=preload; as=script',
-  '</js/whatsapp-emojis.js?v=13.4>; rel=preload; as=script',
-  '</js/app.js?v=13.4>; rel=preload; as=script',
+  '</css/style.css?v=13.5>; rel=preload; as=style',
+  '</css/minimal.css?v=13.5>; rel=preload; as=style',
+  '</js/theme-init.js?v=13.5>; rel=preload; as=script',
+  '</js/twemoji.min.js?v=13.5>; rel=preload; as=script',
+  '</js/whatsapp-emojis.js?v=13.5>; rel=preload; as=script',
+  '</js/app.js?v=13.5>; rel=preload; as=script',
   '<https://fonts.googleapis.com>; rel=preconnect',
   '<https://fonts.gstatic.com>; rel=preconnect; crossorigin',
   '<https://cdn.jsdelivr.net>; rel=preconnect'
 ];
 
 const MESSAGES_EARLY_HINT_LINKS = [
-  '</css/messages.css?v=13.4>; rel=preload; as=style',
-  '</css/calling.css?v=13.4>; rel=preload; as=style',
-  '</js/messages.js?v=13.4>; rel=preload; as=script',
-  '</js/calling.js?v=13.4>; rel=preload; as=script'
+  '</css/messages.css?v=13.5>; rel=preload; as=style',
+  '</css/calling.css?v=13.5>; rel=preload; as=style',
+  '</js/messages.js?v=13.5>; rel=preload; as=script',
+  '</js/calling.js?v=13.5>; rel=preload; as=script'
 ];
 
 /**

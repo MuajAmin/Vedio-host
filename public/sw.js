@@ -5,23 +5,23 @@
 //  + Web Push Notification Handler for Messenger-style notifications
 // ============================================================
 
-const CACHE_NAME = 'videohost-v13.4';
-const MEDIA_CACHE_NAME = 'videohost-media-v1';
+const CACHE_NAME = 'videohost-v13.5';
+const MEDIA_CACHE_NAME = 'videohost-media-v2';
 const MAX_MEDIA_CACHE_ITEMS = 120;
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
-    '/css/style.css?v=13.4',
-    '/css/minimal.css?v=13.4',
-    '/css/messages.css?v=13.4',
-    '/css/calling.css?v=13.4',
-    '/js/theme-init.js?v=13.4',
-    '/js/twemoji.min.js?v=13.4',
-    '/js/whatsapp-emojis.js?v=13.4',
-    '/js/app.js?v=13.4',
-    '/js/messages.js?v=13.4',
-    '/js/watchTogether.js?v=13.4',
-    '/js/calling.js?v=13.4',
+    '/css/style.css?v=13.5',
+    '/css/minimal.css?v=13.5',
+    '/css/messages.css?v=13.5',
+    '/css/calling.css?v=13.5',
+    '/js/theme-init.js?v=13.5',
+    '/js/twemoji.min.js?v=13.5',
+    '/js/whatsapp-emojis.js?v=13.5',
+    '/js/app.js?v=13.5',
+    '/js/messages.js?v=13.5',
+    '/js/watchTogether.js?v=13.5',
+    '/js/calling.js?v=13.5',
     '/css/icon-192.png',
     '/css/icon-512.png',
     '/manifest.json'
@@ -101,23 +101,22 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             caches.open(MEDIA_CACHE_NAME).then(async (cache) => {
                 const cached = await cache.match(request);
-                const networkFetch = fetch(request).then((response) => {
-                    if (response && response.status === 200) {
-                        const clone = response.clone();
-                        cache.put(request, clone).then(() => trimCache(MEDIA_CACHE_NAME, MAX_MEDIA_CACHE_ITEMS));
+                const fetchPromise = fetch(request).then((response) => {
+                    if (response && response.ok) {
+                        cache.put(request, response.clone()).then(() => trimCache(MEDIA_CACHE_NAME, MAX_MEDIA_CACHE_ITEMS));
                     }
                     return response;
                 }).catch(() => null);
 
                 // If cached response exists, serve it immediately (0ms paint for smooth 60 FPS scrolling)
                 if (cached) {
-                    event.waitUntil(networkFetch);
+                    event.waitUntil(fetchPromise);
                     return cached;
                 }
 
-                // If not cached yet, await the network fetch
-                const netRes = await networkFetch;
-                return netRes || new Response('', { status: 404, headers: { 'Content-Type': 'text/plain' } });
+                // If not cached yet, await the network fetch or fallback to live request
+                const netRes = await fetchPromise;
+                return netRes || fetch(request);
             })
         );
         return;

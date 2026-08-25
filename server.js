@@ -95,22 +95,22 @@ app.use((req, res, next) => {
     // 103 Early Hints Link header for HTML navigation requests
     if (req.method === 'GET' && req.accepts('html') && !req.path.startsWith('/api/') && !req.path.startsWith('/stream/')) {
         const earlyHints = [
-            '</css/style.css?v=13.4>; rel=preload; as=style',
-            '</css/minimal.css?v=13.4>; rel=preload; as=style',
-            '</js/theme-init.js?v=13.4>; rel=preload; as=script',
-            '</js/twemoji.min.js?v=13.4>; rel=preload; as=script',
-            '</js/whatsapp-emojis.js?v=13.4>; rel=preload; as=script',
-            '</js/app.js?v=13.4>; rel=preload; as=script',
+            '</css/style.css?v=13.5>; rel=preload; as=style',
+            '</css/minimal.css?v=13.5>; rel=preload; as=style',
+            '</js/theme-init.js?v=13.5>; rel=preload; as=script',
+            '</js/twemoji.min.js?v=13.5>; rel=preload; as=script',
+            '</js/whatsapp-emojis.js?v=13.5>; rel=preload; as=script',
+            '</js/app.js?v=13.5>; rel=preload; as=script',
             '<https://fonts.googleapis.com>; rel=preconnect',
             '<https://fonts.gstatic.com>; rel=preconnect; crossorigin',
             '<https://cdn.jsdelivr.net>; rel=preconnect'
         ];
         if (req.path.startsWith('/messages') || req.path.startsWith('/call')) {
             earlyHints.push(
-                '</css/messages.css?v=13.4>; rel=preload; as=style',
-                '</css/calling.css?v=13.4>; rel=preload; as=style',
-                '</js/messages.js?v=13.4>; rel=preload; as=script',
-                '</js/calling.js?v=13.4>; rel=preload; as=script'
+                '</css/messages.css?v=13.5>; rel=preload; as=style',
+                '</css/calling.css?v=13.5>; rel=preload; as=style',
+                '</js/messages.js?v=13.5>; rel=preload; as=script',
+                '</js/calling.js?v=13.5>; rel=preload; as=script'
             );
         }
         res.setHeader('Link', earlyHints.join(', '));
@@ -264,8 +264,9 @@ app.get('/stream/:videoKey', fastMediaAuth, (req, res, next) => {
 });
 
 // Fast media serving routes (Thumbnails, Avatars, Voice) BEFORE full session middleware
-app.get('/thumbnails/:file', fastMediaAuth, serveMediaFile(thumbnailsDir, '/internal-thumbnails/', 'public, max-age=604800, stale-while-revalidate=86400'));
-app.get('/avatars/:file', fastMediaAuth, serveMediaFile(avatarsDir, '/internal-avatars/', 'public, max-age=604800, stale-while-revalidate=86400'));
+// Note: Thumbnails and Avatars are public hashed image assets (cached on Edge & Service Worker)
+app.get('/thumbnails/:file', serveMediaFile(thumbnailsDir, '/internal-thumbnails/', 'public, max-age=604800, stale-while-revalidate=86400'));
+app.get('/avatars/:file', serveMediaFile(avatarsDir, '/internal-avatars/', 'public, max-age=604800, stale-while-revalidate=86400'));
 app.get('/voice/:file', fastMediaAuth, serveMediaFile(voiceDir, '/internal-voice/', 'private, max-age=604800'));
 
 // Session
