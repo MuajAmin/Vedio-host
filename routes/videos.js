@@ -129,25 +129,28 @@ function invalidateVideoCache(videoKey) {
 
 const { generateVideoThumbnail, getVideoDuration } = require('../utils/thumbnail');
 
-// GET /dashboard — Video gallery
+// Precompiled SQL statement for instant dashboard gallery loading
+const stmtDashboardVideos = db.prepare(`
+    SELECT
+        v.id,
+        v.title,
+        v.size,
+        v.duration,
+        v.thumbnail,
+        v.uploaded_by,
+        v.uploaded_at,
+        wp.position_seconds,
+        wp.duration_seconds,
+        wp.updated_at AS progress_updated_at
+    FROM videos v
+    LEFT JOIN watch_progress wp
+        ON wp.video_id = v.id AND wp.user = ?
+    ORDER BY v.uploaded_at DESC
+`);
+
+// GET /dashboard — Video gallery (Ultra-fast precompiled query)
 router.get('/dashboard', isAuthenticated, (req, res) => {
-    const videos = db.prepare(
-        `SELECT
-            v.id,
-            v.title,
-            v.size,
-            v.duration,
-            v.thumbnail,
-            v.uploaded_by,
-            v.uploaded_at,
-            wp.position_seconds,
-            wp.duration_seconds,
-            wp.updated_at AS progress_updated_at
-        FROM videos v
-        LEFT JOIN watch_progress wp
-            ON wp.video_id = v.id AND wp.user = ?
-        ORDER BY v.uploaded_at DESC`
-    ).all(req.session.user);
+    const videos = stmtDashboardVideos.all(req.session.user);
 
     const continueVideos = videos
         .filter((video) => {

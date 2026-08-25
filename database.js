@@ -468,6 +468,147 @@ function getLocalDateString(d = new Date()) {
     return `${year}-${month}-${day}`;
 }
 
+// ============================================================
+//  Precompiled Statements for High-Speed DB Execution
+// ============================================================
+const stmtPresenceUpsert = db.prepare(`
+    INSERT INTO user_presence (
+        username, status, last_seen, current_page, current_video_id,
+        video_title, is_playing, current_time, duration, device_info, ip_address, session_id, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET
+        status = excluded.status,
+        last_seen = excluded.last_seen,
+        current_page = COALESCE(excluded.current_page, user_presence.current_page),
+        current_video_id = excluded.current_video_id,
+        video_title = COALESCE(excluded.video_title, user_presence.video_title),
+        is_playing = excluded.is_playing,
+        current_time = excluded.current_time,
+        duration = excluded.duration,
+        device_info = COALESCE(excluded.device_info, user_presence.device_info),
+        ip_address = COALESCE(excluded.ip_address, user_presence.ip_address),
+        session_id = COALESCE(excluded.session_id, user_presence.session_id),
+        updated_at = excluded.updated_at
+`);
+
+const stmtPresenceGet = db.prepare('SELECT * FROM user_presence WHERE username = ?');
+const stmtVideoMiniInfo = db.prepare('SELECT thumbnail, title FROM videos WHERE id = ?');
+const stmtVideoTitleOnly = db.prepare('SELECT title FROM videos WHERE id = ?');
+
+const stmtActivityRecentDebounce = db.prepare(`
+    SELECT id, action, video_id, created_at
+    FROM activity_logs
+    WHERE username = ? AND action = ?
+    ORDER BY created_at DESC LIMIT 1
+`);
+
+const stmtActivityUpdateDebounced = db.prepare(`
+    UPDATE activity_logs
+    SET position_seconds = ?, duration_seconds = ?, details = ?, created_at = ?
+    WHERE id = ?
+`);
+
+const stmtActivityInsert = db.prepare(`
+    INSERT INTO activity_logs (
+        username, action, video_id, video_title, position_seconds, duration_seconds, details, device_info, ip_address, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+
+const stmtWatchLedgerUpsert = db.prepare(`
+    INSERT INTO watch_time_ledger (user, video_id, seconds_watched, watch_date, updated_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user, video_id, watch_date) DO UPDATE SET
+        seconds_watched = seconds_watched + excluded.seconds_watched,
+        updated_at = CURRENT_TIMESTAMP
+`);
+
+const stmtWatchLedgerTotal = db.prepare(`
+    SELECT SUM(seconds_watched) AS total FROM watch_time_ledger WHERE user = ?
+`);
+
+const stmtWatchLedgerToday = db.prepare(`
+    SELECT SUM(seconds_watched) AS today FROM watch_time_ledger WHERE user = ? AND watch_date = ?
+`);
+
+const stmtWatchProgressTotalFallback = db.prepare(`
+    SELECT SUM(position_seconds) AS total FROM watch_progress WHERE user = ?
+`);
+
+const stmtMessageReactionsForMsg = db.prepare(`
+    SELECT reaction, user, created_at
+    FROM message_reactions
+    WHERE message_id = ?
+    ORDER BY created_at ASC
+`);
+
+const stmtMessageReactionGet = db.prepare(`
+    SELECT reaction FROM message_reactions
+    WHERE message_id = ? AND user = ?
+`);
+
+const stmtMessageReactionDelete = db.prepare(`
+    DELETE FROM message_reactions WHERE message_id = ? AND user = ?
+`);
+
+const stmtMessageReactionUpsert = db.prepare(`
+    INSERT INTO message_reactions (message_id, user, reaction, created_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(message_id, user) DO UPDATE SET reaction = excluded.reaction, created_at = excluded.created_at
+`);
+
+const stmtMessageSave = db.prepare(`
+    INSERT INTO messages (sender, recipient, text, video_id, voice_url, reply_to_id, is_read, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+`);
+
+const stmtMessageGetById = db.prepare(`
+    SELECT m.*,
+           v.title AS video_title,
+           v.thumbnail AS video_thumbnail,
+           v.duration AS video_duration,
+           v.size AS video_size,
+           v.uploaded_by AS video_uploaded_by,
+           p.avatar AS sender_avatar,
+           rm.sender AS reply_sender,
+           rm.text AS reply_text,
+           rm.video_id AS reply_video_id,
+           rm.voice_url AS reply_voice_url,
+           rv.title AS reply_video_title,
+           rv.thumbnail AS reply_video_thumbnail,
+           rp.avatar AS reply_sender_avatar
+    FROM messages m
+    LEFT JOIN videos v ON v.id = m.video_id
+    LEFT JOIN user_profiles p ON p.username = m.sender
+    LEFT JOIN messages rm ON rm.id = m.reply_to_id
+    LEFT JOIN videos rv ON rv.id = rm.video_id
+    LEFT JOIN user_profiles rp ON rp.username = rm.sender
+    WHERE m.id = ?
+`);
+
+const stmtMessagesMarkRead = db.prepare(`
+    UPDATE messages
+    SET is_read = 1, read_at = ?
+    WHERE sender = ? AND recipient = ? AND is_read = 0
+`);
+
+const stmtMessagesUnreadCount = db.prepare(`
+    SELECT COUNT(*) AS unread_count
+    FROM messages
+    WHERE recipient = ? AND is_read = 0
+`);
+
+const stmtMessageDelete = db.prepare('DELETE FROM messages WHERE id = ?');
+const stmtMessageGetForDelete = db.prepare('SELECT id, sender, voice_url FROM messages WHERE id = ?');
+
+const stmtMessageStats = db.prepare(`
+    SELECT COUNT(*) AS total,
+           SUM(CASE WHEN video_id IS NOT NULL THEN 1 ELSE 0 END) AS videos_count,
+           SUM(CASE WHEN voice_url IS NOT NULL THEN 1 ELSE 0 END) AS voice_count,
+           SUM(CASE WHEN text LIKE '__CALL_EVENT__:%' THEN 1 ELSE 0 END) AS calls_count
+    FROM messages
+    WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
+`);
+
 function updateUserPresence(username, data = {}) {
     if (!username) return;
     try {
@@ -487,7 +628,7 @@ function updateUserPresence(username, data = {}) {
 
         let videoTitle = data.videoTitle || null;
         if (data.videoId && !videoTitle) {
-            const v = db.prepare('SELECT title FROM videos WHERE id = ?').get(data.videoId);
+            const v = stmtVideoTitleOnly.get(data.videoId);
             if (v) videoTitle = v.title;
         }
 
@@ -499,25 +640,7 @@ function updateUserPresence(username, data = {}) {
         const sessionId = data.sessionId || null;
         const nowIso = new Date().toISOString();
 
-        db.prepare(`
-            INSERT INTO user_presence (
-                username, status, last_seen, current_page, current_video_id,
-                video_title, is_playing, current_time, duration, device_info, ip_address, session_id, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(username) DO UPDATE SET
-                status = excluded.status,
-                last_seen = excluded.last_seen,
-                current_page = COALESCE(excluded.current_page, user_presence.current_page),
-                current_video_id = excluded.current_video_id,
-                video_title = COALESCE(excluded.video_title, user_presence.video_title),
-                is_playing = excluded.is_playing,
-                current_time = excluded.current_time,
-                duration = excluded.duration,
-                device_info = COALESCE(excluded.device_info, user_presence.device_info),
-                ip_address = COALESCE(excluded.ip_address, user_presence.ip_address),
-                session_id = COALESCE(excluded.session_id, user_presence.session_id),
-                updated_at = excluded.updated_at
-        `).run(
+        stmtPresenceUpsert.run(
             username, status, nowIso, page, data.videoId || null, videoTitle,
             isPlaying, currentTime, duration, deviceInfo, ipAddress, sessionId, nowIso
         );
@@ -549,7 +672,7 @@ function normalizeIsoDate(str) {
 function getUserPresence(username) {
     if (!username) return null;
     try {
-        const row = db.prepare('SELECT * FROM user_presence WHERE username = ?').get(username);
+        const row = stmtPresenceGet.get(username);
         if (!row) {
             return {
                 username,
@@ -590,7 +713,7 @@ function getUserPresence(username) {
         // If watching, fetch thumbnail if available
         let thumbnail = null;
         if (row.current_video_id) {
-            const v = db.prepare('SELECT thumbnail, title FROM videos WHERE id = ?').get(row.current_video_id);
+            const v = stmtVideoMiniInfo.get(row.current_video_id);
             if (v) {
                 thumbnail = v.thumbnail;
                 if (!row.video_title) row.video_title = v.title;
@@ -628,21 +751,12 @@ function logActivity(username, action, data = {}) {
         const nowIso = new Date().toISOString();
 
         // Anti-spam debounce: check if identical action on same video happened in last 10s
-        const recent = db.prepare(`
-            SELECT id, action, video_id, created_at
-            FROM activity_logs
-            WHERE username = ? AND action = ?
-            ORDER BY created_at DESC LIMIT 1
-        `).get(username, action);
+        const recent = stmtActivityRecentDebounce.get(username, action);
 
         if (recent) {
             const diffSeconds = (Date.now() - parseSqliteDate(recent.created_at)) / 1000;
             if (diffSeconds < 10 && String(recent.video_id || '') === String(data.videoId || '')) {
-                db.prepare(`
-                    UPDATE activity_logs
-                    SET position_seconds = ?, duration_seconds = ?, details = ?, created_at = ?
-                    WHERE id = ?
-                `).run(
+                stmtActivityUpdateDebounced.run(
                     Number(data.position || data.position_seconds || 0),
                     Number(data.duration || data.duration_seconds || 0),
                     data.details || null,
@@ -655,15 +769,11 @@ function logActivity(username, action, data = {}) {
 
         let videoTitle = data.videoTitle || null;
         if (data.videoId && !videoTitle) {
-            const v = db.prepare('SELECT title FROM videos WHERE id = ?').get(data.videoId);
+            const v = stmtVideoTitleOnly.get(data.videoId);
             if (v) videoTitle = v.title;
         }
 
-        db.prepare(`
-            INSERT INTO activity_logs (
-                username, action, video_id, video_title, position_seconds, duration_seconds, details, device_info, ip_address, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
+        stmtActivityInsert.run(
             username,
             action,
             data.videoId || null,
@@ -706,13 +816,7 @@ function recordWatchPulse(user, videoId, position, duration, isPlaying, deltaSec
         const safeDelta = (isPlaying && deltaSeconds > 0) ? Math.min(deltaSeconds, 30) : 0;
         if (safeDelta > 0) {
             const today = getLocalDateString();
-            db.prepare(`
-                INSERT INTO watch_time_ledger (user, video_id, seconds_watched, watch_date, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(user, video_id, watch_date) DO UPDATE SET
-                    seconds_watched = seconds_watched + excluded.seconds_watched,
-                    updated_at = CURRENT_TIMESTAMP
-            `).run(user, videoId, safeDelta, today);
+            stmtWatchLedgerUpsert.run(user, videoId, safeDelta, today);
         }
     } catch (err) {
         console.error('[db] Error recording watch pulse:', err.message);
@@ -722,23 +826,16 @@ function recordWatchPulse(user, videoId, position, duration, isPlaying, deltaSec
 function getUserWatchStats(username) {
     if (!username) return { totalSeconds: 0, todaySeconds: 0 };
     try {
-        const totalRow = db.prepare(`
-            SELECT SUM(seconds_watched) AS total FROM watch_time_ledger WHERE user = ?
-        `).get(username);
-
+        const totalRow = stmtWatchLedgerTotal.get(username);
         const today = getLocalDateString();
-        const todayRow = db.prepare(`
-            SELECT SUM(seconds_watched) AS today FROM watch_time_ledger WHERE user = ? AND watch_date = ?
-        `).get(username, today);
+        const todayRow = stmtWatchLedgerToday.get(username, today);
 
         let totalSeconds = totalRow && totalRow.total ? Number(totalRow.total) : 0;
         const todaySeconds = todayRow && todayRow.today ? Number(todayRow.today) : 0;
 
         // If ledger is empty (new migration), fallback compute from watch_progress table
         if (totalSeconds === 0) {
-            const wpRow = db.prepare(`
-                SELECT SUM(position_seconds) AS total FROM watch_progress WHERE user = ?
-            `).get(username);
+            const wpRow = stmtWatchProgressTotalFallback.get(username);
             if (wpRow && wpRow.total) totalSeconds = Number(wpRow.total);
         }
 
@@ -769,12 +866,7 @@ function clearOldActivityLogs(username) {
 function getReactionsForMessage(messageId) {
     if (!messageId) return [];
     try {
-        const rows = db.prepare(`
-            SELECT reaction, user, created_at
-            FROM message_reactions
-            WHERE message_id = ?
-            ORDER BY created_at ASC
-        `).all(messageId);
+        const rows = stmtMessageReactionsForMsg.all(messageId);
         return rows;
     } catch {
         return [];
@@ -806,21 +898,14 @@ function getReactionsForMessages(messageIds) {
 function toggleMessageReaction(messageId, user, reaction) {
     if (!messageId || !user || !reaction) return null;
     try {
-        const existing = db.prepare(`
-            SELECT reaction FROM message_reactions
-            WHERE message_id = ? AND user = ?
-        `).get(messageId, user);
+        const existing = stmtMessageReactionGet.get(messageId, user);
 
         let action = 'added';
         if (existing && existing.reaction === reaction) {
-            db.prepare(`DELETE FROM message_reactions WHERE message_id = ? AND user = ?`).run(messageId, user);
+            stmtMessageReactionDelete.run(messageId, user);
             action = 'removed';
         } else {
-            db.prepare(`
-                INSERT INTO message_reactions (message_id, user, reaction, created_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(message_id, user) DO UPDATE SET reaction = excluded.reaction, created_at = excluded.created_at
-            `).run(messageId, user, reaction, new Date().toISOString());
+            stmtMessageReactionUpsert.run(messageId, user, reaction, new Date().toISOString());
             action = 'added';
         }
 
@@ -909,10 +994,7 @@ function saveMessage({ sender, recipient, text = null, videoId = null, voiceUrl 
         }
 
         const nowIso = new Date().toISOString();
-        const info = db.prepare(`
-            INSERT INTO messages (sender, recipient, text, video_id, voice_url, reply_to_id, is_read, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, 0, ?)
-        `).run(sender, recipient, text ? String(text).trim() : null, videoId || null, voiceUrl || null, validReplyToId, nowIso);
+        const info = stmtMessageSave.run(sender, recipient, text ? String(text).trim() : null, videoId || null, voiceUrl || null, validReplyToId, nowIso);
 
         return getMessageById(info.lastInsertRowid);
     } catch (err) {
@@ -924,29 +1006,7 @@ function saveMessage({ sender, recipient, text = null, videoId = null, voiceUrl 
 function getMessageById(id) {
     if (!id) return null;
     try {
-        const row = db.prepare(`
-            SELECT m.*,
-                   v.title AS video_title,
-                   v.thumbnail AS video_thumbnail,
-                   v.duration AS video_duration,
-                   v.size AS video_size,
-                   v.uploaded_by AS video_uploaded_by,
-                   p.avatar AS sender_avatar,
-                   rm.sender AS reply_sender,
-                   rm.text AS reply_text,
-                   rm.video_id AS reply_video_id,
-                   rm.voice_url AS reply_voice_url,
-                   rv.title AS reply_video_title,
-                   rv.thumbnail AS reply_video_thumbnail,
-                   rp.avatar AS reply_sender_avatar
-            FROM messages m
-            LEFT JOIN videos v ON v.id = m.video_id
-            LEFT JOIN user_profiles p ON p.username = m.sender
-            LEFT JOIN messages rm ON rm.id = m.reply_to_id
-            LEFT JOIN videos rv ON rv.id = rm.video_id
-            LEFT JOIN user_profiles rp ON rp.username = rm.sender
-            WHERE m.id = ?
-        `).get(id);
+        const row = stmtMessageGetById.get(id);
         return formatMessageRow(row);
     } catch (err) {
         console.error('[db] Error getting message by id:', err.message);
@@ -1014,11 +1074,7 @@ function markMessagesAsRead(sender, recipient) {
     if (!sender || !recipient) return 0;
     try {
         const nowIso = new Date().toISOString();
-        const result = db.prepare(`
-            UPDATE messages
-            SET is_read = 1, read_at = ?
-            WHERE sender = ? AND recipient = ? AND is_read = 0
-        `).run(nowIso, sender, recipient);
+        const result = stmtMessagesMarkRead.run(nowIso, sender, recipient);
         return result.changes || 0;
     } catch (err) {
         console.error('[db] Error marking messages as read:', err.message);
@@ -1029,11 +1085,7 @@ function markMessagesAsRead(sender, recipient) {
 function getUnreadMessageCount(recipient) {
     if (!recipient) return 0;
     try {
-        const row = db.prepare(`
-            SELECT COUNT(*) AS unread_count
-            FROM messages
-            WHERE recipient = ? AND is_read = 0
-        `).get(recipient);
+        const row = stmtMessagesUnreadCount.get(recipient);
         return row ? row.unread_count : 0;
     } catch {
         return 0;
@@ -1043,14 +1095,14 @@ function getUnreadMessageCount(recipient) {
 function deleteMessage(messageId, requestingUser) {
     if (!messageId || !requestingUser) return false;
     try {
-        const msg = db.prepare('SELECT id, sender, voice_url FROM messages WHERE id = ?').get(messageId);
+        const msg = stmtMessageGetForDelete.get(messageId);
         if (!msg) return false;
 
         if (msg.sender !== requestingUser && requestingUser !== 'muaj') {
             return false;
         }
 
-        db.prepare('DELETE FROM messages WHERE id = ?').run(messageId);
+        stmtMessageDelete.run(messageId);
         return true;
     } catch (err) {
         console.error('[db] Error deleting message:', err.message);
@@ -1060,14 +1112,7 @@ function deleteMessage(messageId, requestingUser) {
 
 function getMessageStats(user1, user2) {
     try {
-        const totalRow = db.prepare(`
-            SELECT COUNT(*) AS total,
-                   SUM(CASE WHEN video_id IS NOT NULL THEN 1 ELSE 0 END) AS videos_count,
-                   SUM(CASE WHEN voice_url IS NOT NULL THEN 1 ELSE 0 END) AS voice_count,
-                   SUM(CASE WHEN text LIKE '__CALL_EVENT__:%' THEN 1 ELSE 0 END) AS calls_count
-            FROM messages
-            WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
-        `).get(user1, user2, user2, user1);
+        const totalRow = stmtMessageStats.get(user1, user2, user2, user1);
 
         return {
             totalMessages: totalRow ? (totalRow.total || 0) : 0,

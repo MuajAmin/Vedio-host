@@ -42,6 +42,14 @@ const voiceUpload = multer({
 const { addSseClient, removeSseClient, broadcastToUser, broadcastToBoth } = require('../utils/realtime');
 const { getActiveRoomForUser } = require('./watchTogether');
 
+// Precompiled SQL statement for instant video attachment list in messages
+const stmtRecentAttachVideos = db.prepare(`
+    SELECT id, title, thumbnail, duration, uploaded_by, uploaded_at
+    FROM videos
+    ORDER BY uploaded_at DESC
+    LIMIT 30
+`);
+
 function getPartner(currentUser) {
     return currentUser === 'muaj' ? 'hajera' : 'muaj';
 }
@@ -78,12 +86,7 @@ router.get('/messages', isAuthenticated, (req, res) => {
     res.locals.unreadCount = currentUnread;
 
     // Get list of recent videos for quick "Attach Video" modal/drawer
-    const videos = db.prepare(`
-        SELECT id, title, thumbnail, duration, uploaded_by, uploaded_at
-        FROM videos
-        ORDER BY uploaded_at DESC
-        LIMIT 30
-    `).all();
+    const videos = stmtRecentAttachVideos.all();
 
     res.render('messages', {
         user,
