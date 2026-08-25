@@ -510,9 +510,39 @@ router.get('/api/r2-progress/:filename', isAuthenticated, (req, res) => {
     res.on('error', cleanup);
 });
 
-// GET /watch/:id — Video player page
+// Compiled prepared statements for high-speed watch page rendering
+const stmtWatchVideo = db.prepare('SELECT * FROM videos WHERE id = ?');
+const stmtWatchComments = db.prepare('SELECT * FROM comments WHERE video_id = ? ORDER BY created_at DESC');
+const stmtWatchProgress = db.prepare('SELECT position_seconds, duration_seconds, updated_at FROM watch_progress WHERE video_id = ? AND user = ?');
+const stmtWatchPrevVideo = db.prepare('SELECT id FROM videos WHERE uploaded_at > ? ORDER BY uploaded_at ASC LIMIT 1');
+const stmtWatchNextVideo = db.prepare('SELECT id FROM videos WHERE uploaded_at < ? ORDER BY uploaded_at DESC LIMIT 1');
+const stmtWatchSuggested = db.prepare(`
+    SELECT
+        v.id,
+        v.title,
+        v.size,
+        v.duration,
+        v.thumbnail,
+        v.uploaded_by,
+        v.uploaded_at,
+        wp.position_seconds,
+        wp.duration_seconds
+    FROM videos v
+    LEFT JOIN watch_progress wp
+        ON wp.video_id = v.id AND wp.user = ?
+    WHERE v.id != ?
+    ORDER BY v.uploaded_at DESC
+    LIMIT 30
+`);
+const stmtWatchMarkSeen = db.prepare(`
+    INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
+    VALUES (?, ?, 1, 0, CURRENT_TIMESTAMP)
+    ON CONFLICT(video_id, user) DO NOTHING
+`);
+
+// GET /watch/:id — Video player page (Ultra-fast cached execution)
 router.get('/watch/:id', isAuthenticated, async (req, res) => {
-    const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(req.params.id);
+    const video = stmtWatchVideo.get(req.params.id);
 
     if (!video) {
         return res.status(404).render('error', {
@@ -539,38 +569,15 @@ router.get('/watch/:id', isAuthenticated, async (req, res) => {
         }
     }
 
-    const comments = db.prepare(
-        'SELECT * FROM comments WHERE video_id = ? ORDER BY created_at DESC'
-    ).all(req.params.id);
-
-    const progress = db.prepare(
-        'SELECT position_seconds, duration_seconds, updated_at FROM watch_progress WHERE video_id = ? AND user = ?'
-    ).get(req.params.id, req.session.user) || null;
+    const comments = stmtWatchComments.all(req.params.id);
+    const progress = stmtWatchProgress.get(req.params.id, req.session.user) || null;
 
     // Prev / Next video navigation
-    const prevVideo = db.prepare('SELECT id FROM videos WHERE uploaded_at > ? ORDER BY uploaded_at ASC LIMIT 1').get(video.uploaded_at) || null;
-    const nextVideo = db.prepare('SELECT id FROM videos WHERE uploaded_at < ? ORDER BY uploaded_at DESC LIMIT 1').get(video.uploaded_at) || null;
+    const prevVideo = stmtWatchPrevVideo.get(video.uploaded_at) || null;
+    const nextVideo = stmtWatchNextVideo.get(video.uploaded_at) || null;
 
     // Suggested videos (all other videos ordered by newest, with watch progress)
-    const suggestedVideos = db.prepare(
-        `SELECT
-            v.id,
-            v.title,
-            v.size,
-            v.duration,
-            v.thumbnail,
-            v.uploaded_by,
-            v.uploaded_at,
-            wp.position_seconds,
-            wp.duration_seconds
-        FROM videos v
-        LEFT JOIN watch_progress wp
-            ON wp.video_id = v.id AND wp.user = ?
-        WHERE v.id != ?
-        ORDER BY v.uploaded_at DESC
-        LIMIT 30`
-    ).all(req.session.user, req.params.id);
-
+    const suggestedVideos = stmtWatchSuggested.all(req.session.user, req.params.id);
     const edgeTrackerUrl = getWorkerTrackerUrl(req.session.user);
 
     res.render('watch', {
@@ -587,16 +594,14 @@ router.get('/watch/:id', isAuthenticated, async (req, res) => {
         nextVideoId: nextVideo ? nextVideo.id : null
     });
 
-    // Mark video as seen AFTER response is sent (non-blocking)
-    try {
-        db.prepare(
-            `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
-             VALUES (?, ?, 1, 0, CURRENT_TIMESTAMP)
-             ON CONFLICT(video_id, user) DO NOTHING`
-        ).run(req.params.id, req.session.user);
-    } catch (e) {
-        // ignore
-    }
+    // Mark video as seen asynchronously without blocking response
+    queueMicrotask(() => {
+        try {
+            stmtWatchMarkSeen.run(req.params.id, req.session.user);
+        } catch (e) {
+            // ignore
+        }
+    });
 });
 
 // POST /rename/:id — Rename video title (any authenticated user)

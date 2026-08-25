@@ -53,10 +53,10 @@ Uncomment the routes section in `wrangler.toml`:
 ```toml
 [routes]
 pattern = "muaj.bro.bd/*"
-zone_name = "bro.bd"
+zone_name = "muaj.bro.bd"
 ```
 
-> **Note**: Replace `bro.bd` with your actual Cloudflare zone name if different.
+> **Note**: Replace `muaj.bro.bd` with your actual Cloudflare zone name if different.
 
 ### 6. Deploy
 

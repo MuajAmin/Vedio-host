@@ -586,7 +586,7 @@ async function handleVideoStream(request, env, ctx, videoKey, url) {
   headers.set('Content-Type', contentType);
   headers.set('Accept-Ranges', 'bytes');
   // Allow Cloudflare edge to cache video responses — signed URL ensures only authorized clients get them
-  headers.set('Cache-Control', 'public, max-age=86400, no-transform');
+  headers.set('Cache-Control', 'public, max-age=31536000, immutable, no-transform');
   headers.set('X-Content-Type-Options', 'nosniff');
 
   if (object.httpEtag) headers.set('ETag', object.httpEtag);

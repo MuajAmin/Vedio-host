@@ -112,7 +112,7 @@ const suggestions = Array.isArray(suggestedVideos) ? suggestedVideos : [];
 function renderSuggestionCard(v, index) {
     const watchUrl = '/watch/' + encodeURIComponent(v.id);
     const thumbImg = v.thumbnail
-        ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="suggestion-thumb-img" loading="lazy" />`
+        ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="suggestion-thumb-img" loading="lazy" decoding="async" />`
         : '';
     const isNew = isNewVideo(v);
     const vUploader = v.uploaded_by || 'muaj';
@@ -207,10 +207,15 @@ const commentsHtml = comments.length === 0
             </div>
         </div>`;
     }).join('');
+
+const extraHeadTags = [
+    video.thumbnail ? `<link rel="preload" as="image" href="/thumbnails/${h(video.thumbnail)}" fetchpriority="high">` : '',
+    workerOrigin ? `<link rel="preconnect" href="${h(workerOrigin)}" crossorigin><link rel="dns-prefetch" href="${h(workerOrigin)}">` : ''
+].filter(Boolean).join('');
 %>
 <%- include('layout', {
     pageTitle: video.title,
-    extraHead: workerOrigin ? `<link rel="preconnect" href="${h(workerOrigin)}" crossorigin><link rel="dns-prefetch" href="${h(workerOrigin)}">` : '',
+    extraHead: extraHeadTags,
     body: `
 <div class="app-container ${isHajera ? 'hajera-mode' : ''}">
     <div class="ambient-background">
