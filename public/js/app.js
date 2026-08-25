@@ -142,6 +142,43 @@ document.addEventListener('DOMContentLoaded', () => {
             window.dispatchEvent(new CustomEvent('page:cleanup'));
         }
 
+        const prefetchCache = new Map();
+
+        function prefetchRoute(rawUrl) {
+            if (!rawUrl || isNavigating) return;
+            try {
+                const destUrl = new URL(rawUrl, window.location.href);
+                if (destUrl.origin !== window.location.origin) return;
+                const path = destUrl.pathname;
+                if (
+                    path.startsWith('/stream/') ||
+                    path.startsWith('/thumbnails/') ||
+                    path.startsWith('/avatars/') ||
+                    path.startsWith('/voice/') ||
+                    path.startsWith('/download/') ||
+                    path.startsWith('/login') ||
+                    path.startsWith('/logout') ||
+                    path.startsWith('/api/')
+                ) return;
+
+                const key = destUrl.pathname + destUrl.search;
+                const now = Date.now();
+                if (prefetchCache.has(key)) {
+                    const cached = prefetchCache.get(key);
+                    if (now - cached.ts < 25000) return;
+                }
+
+                fetch(destUrl.href, {
+                    headers: { 'X-Requested-With': 'VideoHost-PJAX' }
+                }).then(async (res) => {
+                    if (res && res.ok) {
+                        const text = await res.text();
+                        prefetchCache.set(key, { html: text, ts: Date.now() });
+                    }
+                }).catch(() => {});
+            } catch (e) {}
+        }
+
         async function navigateTo(url, push = true) {
             if (isNavigating) return;
             isNavigating = true;
@@ -151,21 +188,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 cleanupCurrentPage();
                 advanceProgress();
 
-                const res = await fetch(url, {
-                    headers: { 'X-Requested-With': 'VideoHost-PJAX' }
-                });
+                let html = null;
+                const destKey = new URL(url, window.location.href).pathname + new URL(url, window.location.href).search;
+                const cachedPrefetch = prefetchCache.get(destKey);
 
-                if (res.redirected) {
-                    window.location.href = res.url;
-                    return;
+                if (cachedPrefetch && (Date.now() - cachedPrefetch.ts < 25000)) {
+                    html = cachedPrefetch.html;
+                    prefetchCache.delete(destKey);
+                } else {
+                    const res = await fetch(url, {
+                        headers: { 'X-Requested-With': 'VideoHost-PJAX' }
+                    });
+
+                    if (res.redirected) {
+                        window.location.href = res.url;
+                        return;
+                    }
+
+                    if (!res.ok) {
+                        window.location.href = url;
+                        return;
+                    }
+
+                    html = await res.text();
                 }
 
-                if (!res.ok) {
-                    window.location.href = url;
-                    return;
-                }
-
-                const html = await res.text();
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
 
@@ -238,6 +285,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 isNavigating = false;
             }
         }
+
+        // Hover & touch instant route prefetching
+        document.addEventListener('pointerenter', (e) => {
+            const link = e.target.closest('a');
+            if (link && link.href) prefetchRoute(link.href);
+        }, { passive: true, capture: true });
+
+        document.addEventListener('touchstart', (e) => {
+            const link = e.target.closest('a');
+            if (link && link.href) prefetchRoute(link.href);
+        }, { passive: true });
 
         document.addEventListener('click', (e) => {
             const link = e.target.closest('a');

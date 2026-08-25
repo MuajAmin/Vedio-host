@@ -609,6 +609,32 @@ const stmtMessageStats = db.prepare(`
     WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
 `);
 
+const stmtInitialConversation = db.prepare(`
+    SELECT m.*,
+           v.title AS video_title,
+           v.thumbnail AS video_thumbnail,
+           v.duration AS video_duration,
+           v.size AS video_size,
+           v.uploaded_by AS video_uploaded_by,
+           p.avatar AS sender_avatar,
+           rm.sender AS reply_sender,
+           rm.text AS reply_text,
+           rm.video_id AS reply_video_id,
+           rm.voice_url AS reply_voice_url,
+           rv.title AS reply_video_title,
+           rv.thumbnail AS reply_video_thumbnail,
+           rp.avatar AS reply_sender_avatar
+    FROM messages m
+    LEFT JOIN videos v ON v.id = m.video_id
+    LEFT JOIN user_profiles p ON p.username = m.sender
+    LEFT JOIN messages rm ON rm.id = m.reply_to_id
+    LEFT JOIN videos rv ON rv.id = rm.video_id
+    LEFT JOIN user_profiles rp ON rp.username = rm.sender
+    WHERE ((m.sender = ? AND m.recipient = ?) OR (m.sender = ? AND m.recipient = ?))
+    ORDER BY m.created_at DESC, m.id DESC
+    LIMIT ?
+`);
+
 function updateUserPresence(username, data = {}) {
     if (!username) return;
     try {
@@ -1017,6 +1043,13 @@ function getMessageById(id) {
 function getConversationMessages(user1, user2, limit = 80, beforeId = null, afterId = null) {
     if (!user1 || !user2) return [];
     try {
+        if (!beforeId && !afterId) {
+            const rows = stmtInitialConversation.all(user1, user2, user2, user1, Math.min(limit, 200));
+            const msgIds = rows.map(r => r.id);
+            const reactionsMap = getReactionsForMessages(msgIds);
+            return rows.map(r => formatMessageRow(r, reactionsMap[r.id] || [])).reverse();
+        }
+
         let query = `
             SELECT m.*,
                    v.title AS video_title,
