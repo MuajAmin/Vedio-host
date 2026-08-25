@@ -159,7 +159,7 @@ const liveVideoPlayingHtml = (presence.isWatching && presence.currentVideoId)
                 <span class="live-pct">${presence.duration > 0 ? Math.round((presence.currentTime / presence.duration) * 100) : 0}%</span>
             </div>
             <div class="live-progress-bar">
-                <div class="live-progress-fill" style="width: ${presence.duration > 0 ? Math.min(100, Math.round((presence.currentTime / presence.duration) * 100)) : 0}%;"></div>
+                <div class="live-progress-fill" ${`style="width:${presence.duration > 0 ? Math.min(100, Math.round((presence.currentTime / presence.duration) * 100)) : 0}%"`}></div>
             </div>
         </div>
         <a href="/watch/${encodeURIComponent(presence.currentVideoId)}" class="btn btn-primary btn-sm btn-join-watch" title="Watch together or view">
@@ -401,7 +401,7 @@ if (sys) {
                     </div>
                 </div>
                 <div class="metric-bar-track">
-                    <div class="metric-bar-fill fill-cpu" id="vpsCpuBar" style="width: ${h(cpuPct)}%;"></div>
+                    <div class="metric-bar-fill fill-cpu" id="vpsCpuBar" ${`style="width:${h(cpuPct)}%"`}></div>
                 </div>
                 <div class="metric-bottom-info">
                     <span>Load Avg (1m, 5m, 15m)</span>
@@ -432,7 +432,7 @@ if (sys) {
                     </div>
                 </div>
                 <div class="metric-bar-track">
-                    <div class="metric-bar-fill fill-ram" id="vpsRamBar" style="width: ${h(ramPct)}%;"></div>
+                    <div class="metric-bar-fill fill-ram" id="vpsRamBar" ${`style="width:${h(ramPct)}%"`}></div>
                 </div>
                 <div class="metric-bottom-info">
                     <span>Used: <strong id="vpsRamUsed">${h(sys.ram.usedFormatted)}</strong></span>
@@ -461,7 +461,7 @@ if (sys) {
                     </div>
                 </div>
                 <div class="metric-bar-track">
-                    <div class="metric-bar-fill fill-disk" id="vpsDiskBar" style="width: ${h(diskPct)}%;"></div>
+                    <div class="metric-bar-fill fill-disk" id="vpsDiskBar" ${`style="width:${h(diskPct)}%"`}></div>
                 </div>
                 <div class="metric-bottom-info">
                     <span>Used: <strong id="vpsDiskUsed">${h(sys.disk.usedFormatted)}</strong></span>
@@ -490,7 +490,7 @@ if (sys) {
                     </div>
                 </div>
                 <div class="metric-bar-track">
-                    <div class="metric-bar-fill fill-network" id="vpsNetBar" style="width: ${h(sys.network ? Math.max(2, sys.network.usagePercent) : 2)}%;"></div>
+                    <div class="metric-bar-fill fill-network" id="vpsNetBar" ${`style="width:${h(sys.network ? Math.max(2, sys.network.usagePercent) : 2)}%"`}></div>
                 </div>
                 <div class="metric-bottom-info">
                     <span>📤 Sent: <strong id="vpsNetTx">${h(sys.network ? sys.network.txFormatted : '0 GB')}</strong></span>
@@ -652,7 +652,7 @@ const r2HubHtml = `
                 <span class="r2-tile-sub">Videos in Cloudflare R2</span>
             </div>
             <div class="progress-bar">
-                <div class="r2-progress-fill" style="width: ${h(r2Stats.r2Percent)}%;"></div>
+                <div class="r2-progress-fill" ${`style="width:${h(r2Stats.r2Percent)}%"`}></div>
             </div>
             <div class="r2-tile-footer">
                 <span>CDN Size: <strong>${h(formatBytes(r2Stats.r2TotalBytes))}</strong></span>
@@ -818,7 +818,7 @@ const hajeraCardsHtml = hajeraActivityList.length === 0
                     <span class="hajera-card-time-info">${h(timeSpentText)}</span>
                 </div>
                 <div class="hajera-card-progress-track">
-                    <div class="hajera-card-progress-fill ${isCompleted ? 'fill-completed' : (isInProgress ? 'fill-watching' : '')}" style="width: ${percent}%;"></div>
+                    <div class="hajera-card-progress-fill ${isCompleted ? 'fill-completed' : (isInProgress ? 'fill-watching' : '')}" ${`style="width:${percent}%"`}></div>
                 </div>
             </div>
         </a>`;
@@ -871,7 +871,7 @@ const hajeraRows = hajeraActivityList.length === 0
             <td class="cell-progress">
                 <div class="activity-progress-wrap">
                     <div class="activity-progress-bar">
-                        <div class="activity-progress-fill ${isCompleted ? 'is-complete' : ''} ${!isWatched ? 'is-unwatched-fill' : ''}" style="width: ${percent}%;"></div>
+                        <div class="activity-progress-fill ${isCompleted ? 'is-complete' : ''} ${!isWatched ? 'is-unwatched-fill' : ''}" ${`style="width:${percent}%"`}></div>
                     </div>
                     <span class="activity-progress-text">${isWatched ? `${percent}%` : '-'}</span>
                 </div>
@@ -900,7 +900,7 @@ const jobRows = activeJobs.length === 0
                 ${job.queuePosition ? `<span class="job-queue-tag">#${h(job.queuePosition)} in queue</span>` : ''}
             </div>
             <div class="admin-job-progress">
-                <div class="admin-mini-bar"><span style="width:${h(job.progress || 0)}%"></span></div>
+                <div class="admin-mini-bar"><span ${`style="width:${h(job.progress || 0)}%"`}></span></div>
                 <em>${h(job.progress || 0)}%</em>
             </div>
         </div>
@@ -1006,7 +1006,7 @@ const videoRows = recentVideos.length === 0
                         <circle cx="12" cy="11.5" r="1" fill="currentColor"/>
                         <circle cx="15.5" cy="11.5" r="1" fill="currentColor"/>
                     </svg>
-                    <span class="nav-msg-badge" style="${unreadStyle}">${unreadDisplay}</span>
+                    <span class="nav-msg-badge" ${currentUnread > 0 ? 'style="display:flex;"' : 'style="display:none;"'}>${unreadDisplay}</span>
                 </div>
                 <span class="nav-btn-text">Chat</span>
             </a>
@@ -1186,7 +1186,7 @@ const videoRows = recentVideos.length === 0
                             <strong>${h(overallPercent)}%</strong>
                         </div>
                         <div class="hero-progress-track">
-                            <div class="hero-progress-fill" style="width: ${h(overallPercent)}%;"></div>
+                            <div class="hero-progress-fill" ${`style="width:${h(overallPercent)}%"`}></div>
                         </div>
                     </div>
                     <div class="hero-mini-stats hero-stats-6">
@@ -1595,7 +1595,7 @@ const videoRows = recentVideos.length === 0
                 <svg class="nav-icon-filled" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
                     <path d="M21 12c0 4.42-4.03 8-9 8-1.5 0-2.91-.36-4.15-1.01L3 21l2.01-4.84A7.9 7.9 0 0 1 3 12c0-4.42 4.03-8 9-8s9 3.58 9 8z"/>
                 </svg>
-                <span class="nav-msg-badge bottom-nav-badge" style="${unreadStyle}">${unreadDisplay}</span>
+                <span class="nav-msg-badge bottom-nav-badge" ${currentUnread > 0 ? 'style="display:flex;"' : 'style="display:none;"'}>${unreadDisplay}</span>
             </div>
             <span class="bottom-nav-label">Chat</span>
         </a>

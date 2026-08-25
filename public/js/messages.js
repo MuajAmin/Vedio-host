@@ -2514,10 +2514,14 @@
 
         // WhatsApp Emoji Picker Toggle
         if (emojiToggleBtn && textarea) {
-            emojiToggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleWhatsAppEmojiPicker(formOrWrap, textarea);
-            });
+            if (typeof window.attachWhatsAppEmojiPicker === 'function') {
+                window.attachWhatsAppEmojiPicker(emojiToggleBtn, textarea);
+            } else {
+                emojiToggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleWhatsAppEmojiPicker(formOrWrap, textarea);
+                });
+            }
         }
 
         if (textarea) {

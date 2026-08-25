@@ -184,11 +184,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newPage = doc.body.getAttribute('data-page') || '';
                 document.body.setAttribute('data-page', newPage);
 
-                // Update theme if changed
+                // Update theme & UI mode if changed
                 const newTheme = doc.documentElement.getAttribute('data-theme');
                 if (newTheme) {
                     document.documentElement.setAttribute('data-theme', newTheme);
+                    const themeMetaColors = {
+                        cinematic: '#060609',
+                        cyberpunk: '#05050d',
+                        emerald: '#030806',
+                        sunset: '#0c040a'
+                    };
+                    const metaTheme = document.querySelector('meta[name="theme-color"]');
+                    if (metaTheme && themeMetaColors[newTheme]) {
+                        metaTheme.setAttribute('content', themeMetaColors[newTheme]);
+                    }
                 }
+                const newUiMode = doc.documentElement.getAttribute('data-ui-mode');
+                if (newUiMode) {
+                    document.documentElement.setAttribute('data-ui-mode', newUiMode);
+                }
+                if (typeof syncActiveThemeOption === 'function') syncActiveThemeOption();
+                if (typeof syncActiveUiModeOption === 'function') syncActiveUiModeOption();
 
                 // Update active bottom bar item
                 const targetPath = new URL(url, window.location.origin).pathname;
@@ -2682,6 +2698,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const timeStr = 'Just now';
 
                     const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    const formattedText = typeof window.parseWhatsAppEmoji === 'function' ? window.parseWhatsAppEmoji(escaped) : escaped;
 
                     const avatarHtml = data.comment && data.comment.avatar
                         ? `<img src="/avatars/${encodeURIComponent(data.comment.avatar)}" alt="${displayName}" class="avatar-img comment-avatar-img" loading="lazy" />`
@@ -2693,7 +2710,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const tempCommentId = 'new_' + Date.now();
 
-                    const commentHtml = `<div class="comment-item" id="comment-${tempCommentId}" style="opacity:0;transform:translateY(-8px);transition:all 0.3s ease"><div class="comment-avatar">${avatarHtml}</div><div class="comment-body"><div class="comment-header"><span class="comment-author">${displayName}</span>${authorBadgeHtml}<span class="comment-time">${timeStr}</span></div><div class="comment-text-box"><p class="comment-text">${escaped}</p></div><div class="comment-actions-bar"><button type="button" class="comment-action-btn comment-like-btn" data-comment-id="${tempCommentId}" title="Like"><svg class="icon-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span class="like-counter"></span></button><button type="button" class="comment-action-btn comment-reply-btn" data-author="${displayName}" title="Reply to ${displayName}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span>Reply</span></button></div></div></div>`;
+                    const commentHtml = `<div class="comment-item" id="comment-${tempCommentId}" style="opacity:0;transform:translateY(-8px);transition:all 0.3s ease"><div class="comment-avatar">${avatarHtml}</div><div class="comment-body"><div class="comment-header"><span class="comment-author">${displayName}</span>${authorBadgeHtml}<span class="comment-time">${timeStr}</span></div><div class="comment-text-box"><p class="comment-text">${formattedText}</p></div><div class="comment-actions-bar"><button type="button" class="comment-action-btn comment-like-btn" data-comment-id="${tempCommentId}" title="Like"><svg class="icon-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span class="like-counter"></span></button><button type="button" class="comment-action-btn comment-reply-btn" data-author="${displayName}" title="Reply to ${displayName}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span>Reply</span></button></div></div></div>`;
 
                     if (commentsList) {
                         commentsList.insertAdjacentHTML('afterbegin', commentHtml);
@@ -2704,6 +2721,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 newComment.style.transform = 'translateY(0)';
                             });
                             initCommentActions(newComment);
+                            if (typeof window.applyWhatsAppEmojis === 'function') {
+                                window.applyWhatsAppEmojis(newComment);
+                            }
                         }
                     }
 
@@ -2860,6 +2880,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (mode === 'standard' || mode === 'minimal') {
                     document.documentElement.setAttribute('data-ui-mode', mode);
                     storage.setItem('videohosk_uimode', mode);
+                    document.cookie = 'videohosk_uimode=' + encodeURIComponent(mode) + '; path=/; max-age=31536000; SameSite=Lax';
                     const user = (document.body && document.body.getAttribute('data-user')) ||
                                  document.documentElement.getAttribute('data-user');
                     if (user) {
@@ -2890,6 +2911,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (theme) {
                     document.documentElement.setAttribute('data-theme', theme);
                     storage.setItem('videohosk_theme', theme);
+                    document.cookie = 'videohosk_theme=' + encodeURIComponent(theme) + '; path=/; max-age=31536000; SameSite=Lax';
                     const user = (document.body && document.body.getAttribute('data-user')) ||
                                  document.documentElement.getAttribute('data-user');
                     if (user) {
@@ -4767,6 +4789,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof syncActiveUiModeOption === 'function') syncActiveUiModeOption();
     if (typeof syncActiveThemeOption === 'function') syncActiveThemeOption();
     initLazyThumbs();
+    if (typeof window.autoBindEmojiPickers === 'function') window.autoBindEmojiPickers(document);
+    if (typeof window.applyWhatsAppEmojis === 'function') window.applyWhatsAppEmojis(document);
 
 });
 

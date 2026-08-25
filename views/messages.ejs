@@ -484,7 +484,7 @@ const videoOptionsHtml = videoList.map(v => `
             </div>
 
             <!-- Live Watching Card -->
-            <div class="msg-sidebar-watching-card" id="msgSidebarWatchingBanner" style="${isWatching && presence.videoTitle ? 'display:flex;' : 'display:none;'}">
+            <div class="msg-sidebar-watching-card" id="msgSidebarWatchingBanner" ${isWatching && presence.videoTitle ? 'style="display:flex;"' : 'style="display:none;"'}>
                 <div class="msg-sidebar-watching-header">
                     <span class="msg-status-dot dot-watching" style="position:static; width:9px; height:9px;"></span>
                     <span>Currently Watching</span>

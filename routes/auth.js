@@ -107,6 +107,14 @@ router.post('/login', (req, res) => {
                 ipAddress
             });
 
+            const userSettings = db.getUserSettings(user);
+            if (userSettings && userSettings.theme) {
+                res.cookie('videohosk_theme', userSettings.theme, { maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax', path: '/' });
+            }
+            if (userSettings && userSettings.ui_mode) {
+                res.cookie('videohosk_uimode', userSettings.ui_mode, { maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax', path: '/' });
+            }
+
             return res.redirect('/dashboard');
         });
     }

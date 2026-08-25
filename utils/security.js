@@ -1,7 +1,10 @@
 const crypto = require('crypto');
 const ejs = require('ejs');
+const cookie = require('cookie');
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const VALID_THEMES = new Set(['cinematic', 'cyberpunk', 'emerald', 'sunset']);
+const VALID_MODES = new Set(['standard', 'minimal']);
 
 // --- Avatar in-memory cache -------------------------------------------
 // getAllUserAvatars() was being called on every HTTP request (including
@@ -98,7 +101,26 @@ function attachLocals(req, res, next) {
     const user = req.session ? req.session.user : null;
     const avatars = getCachedAvatars();
     let unreadCount = 0;
-    let userSettings = { ui_mode: 'standard', theme: (user === 'hajera') ? 'sunset' : 'cinematic' };
+
+    // Check request cookies as seamless fallback
+    let cookieTheme = null;
+    let cookieUiMode = null;
+    try {
+        if (req.headers.cookie) {
+            const parsedCookies = cookie.parse(req.headers.cookie);
+            if (parsedCookies.videohosk_theme && VALID_THEMES.has(parsedCookies.videohosk_theme)) {
+                cookieTheme = parsedCookies.videohosk_theme;
+            }
+            if (parsedCookies.videohosk_uimode && VALID_MODES.has(parsedCookies.videohosk_uimode)) {
+                cookieUiMode = parsedCookies.videohosk_uimode;
+            }
+        }
+    } catch {}
+
+    const defaultTheme = (user === 'hajera') ? 'sunset' : (cookieTheme || 'cinematic');
+    const defaultMode = cookieUiMode || 'standard';
+
+    let userSettings = { ui_mode: defaultMode, theme: defaultTheme };
     if (user) {
         try {
             const now = Date.now();
@@ -129,8 +151,8 @@ function attachLocals(req, res, next) {
     }
 
     res.locals.user = user;
-    res.locals.uiMode = userSettings.ui_mode || 'standard';
-    res.locals.userTheme = userSettings.theme || ((user === 'hajera') ? 'sunset' : 'cinematic');
+    res.locals.uiMode = userSettings.ui_mode || defaultMode;
+    res.locals.userTheme = userSettings.theme || defaultTheme;
     res.locals.unreadCount = unreadCount;
     res.locals.csrfToken = req.session ? getCsrfToken(req) : '';
     res.locals.escapeHtml = escapeHtml;

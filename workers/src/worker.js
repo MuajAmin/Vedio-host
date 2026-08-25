@@ -98,6 +98,40 @@ const MAX_ADMIN_BODY_SIZE = 100 * 1024;
 /** Batch delete parallelism limit. */
 const DELETE_BATCH_CONCURRENCY = 10;
 
+// ─── 103 Early Hints Resources ──────────────────────────────────────────────
+const GLOBAL_EARLY_HINT_LINKS = [
+  '</css/style.css?v=13.4>; rel=preload; as=style',
+  '</css/minimal.css?v=13.4>; rel=preload; as=style',
+  '</js/theme-init.js?v=13.4>; rel=preload; as=script',
+  '</js/twemoji.min.js?v=13.4>; rel=preload; as=script',
+  '</js/whatsapp-emojis.js?v=13.4>; rel=preload; as=script',
+  '</js/app.js?v=13.4>; rel=preload; as=script',
+  '<https://fonts.googleapis.com>; rel=preconnect',
+  '<https://fonts.gstatic.com>; rel=preconnect; crossorigin',
+  '<https://cdn.jsdelivr.net>; rel=preconnect'
+];
+
+const MESSAGES_EARLY_HINT_LINKS = [
+  '</css/messages.css?v=13.4>; rel=preload; as=style',
+  '</css/calling.css?v=13.4>; rel=preload; as=style',
+  '</js/messages.js?v=13.4>; rel=preload; as=script',
+  '</js/calling.js?v=13.4>; rel=preload; as=script'
+];
+
+/**
+ * Returns Link header value containing Early Hints preload/preconnect directives
+ * for the requested HTML page.
+ * @param {string} pathname
+ * @returns {string}
+ */
+function getEarlyHintLinkHeader(pathname) {
+  const links = [...GLOBAL_EARLY_HINT_LINKS];
+  if (pathname.startsWith('/messages') || pathname.startsWith('/call')) {
+    links.push(...MESSAGES_EARLY_HINT_LINKS);
+  }
+  return links.join(', ');
+}
+
 // =============================================================================
 //  Simple Router
 // =============================================================================
@@ -974,6 +1008,14 @@ async function handleOriginWithFailover(request, env, ctx, url) {
     // Apply security headers to live response
     const newHeaders = new Headers(originResponse.headers);
     applyEdgeSecurityHeaders(newHeaders);
+
+    // Apply 103 Early Hints Link header to HTML page navigation responses
+    const contentType = (newHeaders.get('Content-Type') || '').toLowerCase();
+    if (request.method === 'GET' && (contentType.includes('text/html') || !contentType)) {
+      const earlyHints = getEarlyHintLinkHeader(url.pathname);
+      const existingLink = newHeaders.get('Link');
+      newHeaders.set('Link', existingLink ? `${existingLink}, ${earlyHints}` : earlyHints);
+    }
 
     // Safely construct Response without throwing TypeError on null-body statuses (304, 204, etc.)
     const isNullBody = NULL_BODY_STATUSES.has(originResponse.status) || request.method === 'HEAD';

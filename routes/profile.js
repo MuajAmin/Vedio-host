@@ -117,6 +117,7 @@ router.post('/api/settings/ui-mode', isAuthenticated, (req, res) => {
 
     db.setUserSetting(user, 'ui_mode', mode);
     invalidateSettingsCache(user);
+    res.cookie('videohosk_uimode', mode, { maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax', path: '/' });
 
     return res.json({ success: true, ui_mode: mode });
 });
@@ -133,6 +134,7 @@ router.post('/api/settings/theme', isAuthenticated, (req, res) => {
 
     db.setUserSetting(user, 'theme', theme);
     invalidateSettingsCache(user);
+    res.cookie('videohosk_theme', theme, { maxAge: 365 * 24 * 60 * 60 * 1000, sameSite: 'lax', path: '/' });
 
     return res.json({ success: true, theme });
 });

@@ -835,7 +835,7 @@
 
         const particle = document.createElement('div');
         particle.className = 'wt-floating-emoji';
-        particle.textContent = emoji;
+        particle.innerHTML = typeof window.parseWhatsAppEmoji === 'function' ? window.parseWhatsAppEmoji(escapeHtml(emoji)) : escapeHtml(emoji);
 
         const randomX = Math.floor(Math.random() * 80) + 10;
         const randomScale = (0.9 + Math.random() * 0.5).toFixed(2);

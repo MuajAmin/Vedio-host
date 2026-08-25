@@ -2487,6 +2487,33 @@ input, textarea, select {
     color: var(--accent-gold);
 }
 
+.form-input-action-btn {
+    position: absolute;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: var(--text-muted, #9a94a6);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 3;
+}
+
+.form-input-action-btn:hover {
+    background: rgba(229, 184, 90, 0.15);
+    color: var(--accent-gold, #e5b85a);
+    transform: scale(1.08);
+}
+
+.form-input-with-action {
+    padding-right: 44px !important;
+}
+
 .form-grid-duo {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -4556,6 +4583,28 @@ kbd {
     border-color: var(--accent-gold-bright);
 }
 
+.title-emoji-toggle-btn {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted, #9a94a6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.title-emoji-toggle-btn:hover {
+    background: rgba(229, 184, 90, 0.16);
+    border-color: rgba(229, 184, 90, 0.35);
+    color: var(--accent-gold, #e5b85a);
+    transform: scale(1.06);
+}
+
 .title-save-btn,
 .title-cancel-btn {
     flex-shrink: 0;
@@ -4900,24 +4949,66 @@ kbd {
 .comment-emoji-bar {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     flex-wrap: wrap;
+}
+
+.comment-emoji-picker-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 9px;
+    color: var(--text-secondary, #9a94a6);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    margin-right: 2px;
+}
+
+.comment-emoji-picker-toggle:hover {
+    background: rgba(229, 184, 90, 0.16);
+    border-color: rgba(229, 184, 90, 0.35);
+    color: var(--accent-gold, #e5b85a);
+    transform: translateY(-1.5px) scale(1.08);
 }
 
 .emoji-chip {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid transparent;
     border-radius: 8px;
-    padding: 4px 6px;
+    padding: 3px 6px;
     font-size: 1rem;
     line-height: 1;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.emoji-chip .wa-emoji,
+.wt-emoji-btn .wa-emoji,
+.call-quick-emoji-btn .wa-emoji {
+    width: 20px;
+    height: 20px;
+    pointer-events: none;
+}
+
+.comment-text .wa-emoji,
+.wt-msg-text .wa-emoji {
+    width: 1.22em;
+    height: 1.22em;
+    vertical-align: -0.18em;
+    margin: 0 1.5px;
+    display: inline-block;
+}
+
 .emoji-chip:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: var(--border-accent);
+    background: rgba(255, 255, 255, 0.14);
+    border-color: var(--border-accent, rgba(229, 184, 90, 0.3));
     transform: scale(1.2) translateY(-2px);
 }
 
@@ -12002,6 +12093,28 @@ h3,
 .wt-input-wrap:focus-within {
     border-color: #ec4899;
     box-shadow: 0 0 16px rgba(236, 72, 153, 0.25);
+}
+
+.wt-chat-emoji-btn {
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted, #9a94a6);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    flex-shrink: 0;
+    margin-left: -4px;
+}
+
+.wt-chat-emoji-btn:hover {
+    color: var(--accent-gold, #e5b85a);
+    background: rgba(229, 184, 90, 0.15);
+    transform: scale(1.1);
 }
 
 .wt-chat-input {
