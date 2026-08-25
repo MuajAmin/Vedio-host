@@ -102,11 +102,28 @@ html[data-ui-mode="minimal"][data-theme="sunset"] {
 /* --------------------------------------------------------------------------
    2. Performance: Strip Expensive Filters & Heavy Animations
    -------------------------------------------------------------------------- */
-html[data-ui-mode="minimal"] * {
+html[data-ui-mode="minimal"],
+html[data-ui-mode="minimal"] body {
+    -webkit-tap-highlight-color: transparent !important;
+    text-shadow: none !important;
+}
+
+html[data-ui-mode="minimal"] .navbar,
+html[data-ui-mode="minimal"] .mobile-bottom-bar,
+html[data-ui-mode="minimal"] .btn,
+html[data-ui-mode="minimal"] .card,
+html[data-ui-mode="minimal"] .video-card,
+html[data-ui-mode="minimal"] .vp-cinema,
+html[data-ui-mode="minimal"] .vp-controls,
+html[data-ui-mode="minimal"] .suggestions-panel,
+html[data-ui-mode="minimal"] .comments-section,
+html[data-ui-mode="minimal"] .comment-item,
+html[data-ui-mode="minimal"] .msg-bubble,
+html[data-ui-mode="minimal"] .theme-modal,
+html[data-ui-mode="minimal"] .profile-modal-card {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
     text-shadow: none !important;
-    -webkit-tap-highlight-color: transparent !important;
 }
 
 /* Kill GPU-heavy ambient backgrounds, particles, pulse loops */
@@ -1061,6 +1078,32 @@ html[data-ui-mode="minimal"] .thumbnail-manager {
     padding: 14px 16px !important;
     margin-bottom: 14px !important;
     box-shadow: none !important;
+    display: grid !important;
+    grid-template-columns: 180px minmax(0, 1fr) !important;
+    gap: 16px !important;
+    align-items: stretch !important;
+}
+
+html[data-ui-mode="minimal"] .thumbnail-preview-box {
+    position: relative !important;
+    width: 100% !important;
+    min-height: 90px !important;
+    aspect-ratio: 16 / 9 !important;
+    border-radius: var(--min-radius-sm) !important;
+    overflow: hidden !important;
+    background: var(--min-bg-input) !important;
+    border: 1px solid var(--min-border-strong) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+html[data-ui-mode="minimal"] .thumbnail-preview-box .thumb-img {
+    position: static !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
 }
 
 html[data-ui-mode="minimal"] .thumbnail-input {
@@ -1112,7 +1155,8 @@ html[data-ui-mode="minimal"] .suggestion-card {
     border-radius: var(--min-radius-sm) !important;
     box-shadow: none !important;
     margin-bottom: 8px !important;
-    overflow: hidden;
+    overflow: hidden !important;
+    position: relative !important;
     will-change: transform;
     transition: background 0.15s ease, transform 0.1s ease;
 }
@@ -1123,12 +1167,65 @@ html[data-ui-mode="minimal"] .suggestion-card:active {
 }
 
 html[data-ui-mode="minimal"] .suggestion-thumb-wrap {
-    flex: 0 0 100px !important;
-    width: 100px !important;
+    flex: 0 0 110px !important;
+    width: 110px !important;
+    min-width: 110px !important;
     aspect-ratio: 16 / 9 !important;
     border-radius: var(--min-radius-xs) !important;
-    overflow: hidden;
+    overflow: hidden !important;
     background: #000 !important;
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+html[data-ui-mode="minimal"] .suggestion-thumb-img {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    z-index: 1 !important;
+}
+
+html[data-ui-mode="minimal"] .suggestion-thumb-placeholder {
+    position: absolute !important;
+    inset: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: var(--min-text-muted) !important;
+    opacity: 0.6 !important;
+    z-index: 0 !important;
+}
+
+html[data-ui-mode="minimal"] .suggestion-thumb-placeholder.has-thumb {
+    opacity: 0 !important;
+}
+
+html[data-ui-mode="minimal"] .suggestion-thumb-img.thumb-error + .suggestion-thumb-placeholder {
+    opacity: 0.7 !important;
+}
+
+html[data-ui-mode="minimal"] .suggestion-thumb-img.thumb-error {
+    display: none !important;
+}
+
+html[data-ui-mode="minimal"] .suggestion-duration {
+    position: absolute !important;
+    bottom: 4px !important;
+    right: 4px !important;
+    background: rgba(0, 0, 0, 0.88) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: var(--min-radius-xs) !important;
+    padding: 1px 4px !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    z-index: 2 !important;
+    line-height: 1.2 !important;
 }
 
 html[data-ui-mode="minimal"] .suggestion-details {
@@ -2676,6 +2773,15 @@ html[data-ui-mode="minimal"] .theme-modal {
 @media (max-width: 768px) {
     html[data-ui-mode="minimal"] .watch-page {
         padding: 0 0 calc(var(--min-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 24px) 0 !important;
+    }
+
+    html[data-ui-mode="minimal"] .watch-layout-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    html[data-ui-mode="minimal"] .suggestions-list {
+        max-height: none !important;
     }
 
     html[data-ui-mode="minimal"] .vp-cinema {

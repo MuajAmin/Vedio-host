@@ -296,8 +296,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Thumbnail error fallback — replaces inline onerror blocked by CSP
             document.addEventListener('error', (e) => {
-                if (e.target.matches && e.target.matches('.thumb-img')) {
+                if (e.target && e.target.matches && e.target.matches('.thumb-img, .suggestion-thumb-img, .msg-attach-thumb, .r2-card-thumb-img, .hajera-card-thumb-img, .admin-table-thumb-img, .admin-video-card-thumb-img')) {
                     e.target.classList.add('thumb-error');
+                    const parent = e.target.parentElement;
+                    if (parent) {
+                        const placeholder = parent.querySelector('.thumb-placeholder, .suggestion-thumb-placeholder');
+                        if (placeholder) {
+                            placeholder.classList.remove('has-thumb');
+                            placeholder.style.opacity = '0.7';
+                        }
+                    }
                 }
             }, true); // capture phase — img error events don't bubble
 
@@ -1527,6 +1535,20 @@ document.addEventListener('DOMContentLoaded', () => {
         vid.addEventListener('error', () => {
             clearRecoveryTimer();
             clearSlowStartTimer();
+
+            // If direct Worker stream failed, automatically try falling back to local origin VPS stream
+            const fallbackUrl = vid.getAttribute('data-fallback-url');
+            if (fallbackUrl && sourceEl) {
+                const currentSrc = sourceEl.getAttribute('src') || '';
+                if (currentSrc && currentSrc.startsWith('http') && currentSrc !== fallbackUrl) {
+                    console.warn('[VideoPlayer] Worker stream failed, switching to origin fallback:', fallbackUrl);
+                    sourceEl.setAttribute('src', fallbackUrl);
+                    vid.src = fallbackUrl;
+                    retryStream(true);
+                    return;
+                }
+            }
+
             setPlayerStatus(
                 'error',
                 'Video could not play',
@@ -1655,6 +1677,33 @@ document.addEventListener('DOMContentLoaded', () => {
             }, { passive: false });
         }
 
+        const cancelDrag = () => {
+            if (isDragging) {
+                isDragging = false;
+                if (progressWrap) progressWrap.classList.remove('vp-dragging');
+            }
+        };
+
+        const finishDrag = (clientX) => {
+            if (isDragging) {
+                isDragging = false;
+                if (progressWrap) progressWrap.classList.remove('vp-dragging');
+                if (vid.duration) {
+                    if (clientX !== undefined && progressWrap) {
+                        const rect = progressWrap.getBoundingClientRect();
+                        let x = clientX - rect.left;
+                        x = Math.max(0, Math.min(x, rect.width));
+                        vid.currentTime = (x / rect.width) * vid.duration;
+                    } else if (progressPlayed) {
+                        const pct = parseFloat(progressPlayed.style.width) / 100;
+                        if (Number.isFinite(pct)) {
+                            vid.currentTime = pct * vid.duration;
+                        }
+                    }
+                }
+            }
+        };
+
         document.addEventListener('mousemove', (e) => {
             if (isDragging && progressWrap && vid.duration) {
                 const rect = progressWrap.getBoundingClientRect();
@@ -1666,28 +1715,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, playerSignal);
 
-        document.addEventListener('mouseup', () => {
-            if (isDragging) {
-                isDragging = false;
-                if (progressWrap) progressWrap.classList.remove('vp-dragging');
-                // Seek to final position
-                if (progressPlayed && vid.duration) {
-                    const pct = parseFloat(progressPlayed.style.width) / 100;
-                    vid.currentTime = pct * vid.duration;
-                }
-            }
+        document.addEventListener('mouseup', (e) => finishDrag(e.clientX), playerSignal);
+
+        document.addEventListener('touchend', (e) => {
+            const touch = e.changedTouches && e.changedTouches[0];
+            finishDrag(touch ? touch.clientX : undefined);
         }, playerSignal);
 
-        document.addEventListener('touchend', () => {
-            if (isDragging) {
-                isDragging = false;
-                if (progressWrap) progressWrap.classList.remove('vp-dragging');
-                if (progressPlayed && vid.duration) {
-                    const pct = parseFloat(progressPlayed.style.width) / 100;
-                    vid.currentTime = pct * vid.duration;
-                }
-            }
-        }, playerSignal);
+        document.addEventListener('touchcancel', cancelDrag, playerSignal);
+        document.addEventListener('pointercancel', cancelDrag, playerSignal);
+        window.addEventListener('blur', cancelDrag, playerSignal);
 
         // --- Volume ---
         function updateVolIcons() {
@@ -4691,16 +4728,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     .catch(() => {});
             }, 4000);
         }
+
+        // --- Lazy-load suggestion thumbnails via IntersectionObserver ---
+        initLazyThumbs();
     } // End initPageModules
 
-    // Initialize SPA navigation engine & current page modules on startup
-    initSpaNavigation();
-    initPageModules();
-    if (typeof syncActiveUiModeOption === 'function') syncActiveUiModeOption();
-    if (typeof syncActiveThemeOption === 'function') syncActiveThemeOption();
-
-    // --- Lazy-load suggestion thumbnails via IntersectionObserver ---
-    (function initLazyThumbs() {
+    function initLazyThumbs() {
         const lazyImages = document.querySelectorAll('img.lazy-thumb[data-src]');
         if (!lazyImages.length) return;
 
@@ -4726,7 +4759,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 img.classList.remove('lazy-thumb');
             });
         }
-    })();
+    }
+
+    // Initialize SPA navigation engine & current page modules on startup
+    initSpaNavigation();
+    initPageModules();
+    if (typeof syncActiveUiModeOption === 'function') syncActiveUiModeOption();
+    if (typeof syncActiveThemeOption === 'function') syncActiveThemeOption();
+    initLazyThumbs();
 
 });
 

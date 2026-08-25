@@ -779,7 +779,7 @@
     // Periodic host alignment every 2.5s while playing
     if (!hostSyncInterval) {
         hostSyncInterval = setInterval(() => {
-            queryDOM();
+            if (!video) video = document.getElementById('vpVideo');
             if (isHost && syncActive && video && !video.paused) {
                 sendSync('update');
             }

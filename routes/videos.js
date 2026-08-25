@@ -516,11 +516,20 @@ router.get('/watch/:id', isAuthenticated, async (req, res) => {
     }
 
     let isOnR2 = false;
+    let directStreamUrl = null;
     if (r2.isR2Enabled() && video.filename) {
-        try {
-            isOnR2 = await r2.existsOnR2(video.filename);
-        } catch {
-            isOnR2 = false;
+        const isDbReady = video.cdn_status === 'r2_ready' || video.cdn_status === 'r2_only' || r2.isConfirmedOnR2(video.filename);
+        if (isDbReady) {
+            isOnR2 = true;
+        } else {
+            try {
+                isOnR2 = await r2.existsOnR2(video.filename);
+            } catch {
+                isOnR2 = false;
+            }
+        }
+        if (isOnR2) {
+            directStreamUrl = getWorkerStreamUrl(video.filename) || r2.getPublicUrl(video.filename) || null;
         }
     }
 
@@ -560,6 +569,7 @@ router.get('/watch/:id', isAuthenticated, async (req, res) => {
         user: req.session.user,
         video,
         isOnR2,
+        directStreamUrl,
         comments,
         progress,
         suggestedVideos,

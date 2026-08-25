@@ -5,20 +5,20 @@
 //  + Web Push Notification Handler for Messenger-style notifications
 // ============================================================
 
-const CACHE_NAME = 'videohost-v13.1';
+const CACHE_NAME = 'videohost-v13.2';
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
-    '/css/style.css?v=13.0',
-    '/css/minimal.css?v=13.0',
-    '/css/messages.css?v=13.0',
-    '/css/calling.css?v=13.0',
-    '/js/theme-init.js?v=13.0',
-    '/js/twemoji.min.js?v=13.0',
-    '/js/app.js?v=13.0',
-    '/js/messages.js?v=13.0',
-    '/js/watchTogether.js?v=13.0',
-    '/js/calling.js?v=13.0',
+    '/css/style.css?v=13.2',
+    '/css/minimal.css?v=13.2',
+    '/css/messages.css?v=13.2',
+    '/css/calling.css?v=13.2',
+    '/js/theme-init.js?v=13.2',
+    '/js/twemoji.min.js?v=13.2',
+    '/js/app.js?v=13.2',
+    '/js/messages.js?v=13.2',
+    '/js/watchTogether.js?v=13.2',
+    '/js/calling.js?v=13.2',
     '/css/icon-192.png',
     '/css/icon-512.png',
     '/manifest.json'

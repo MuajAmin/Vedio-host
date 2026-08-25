@@ -31,12 +31,16 @@ const r2 = require('./utils/r2');
 // Ensure uploads directories exist
 const uploadsDir = path.join(__dirname, 'uploads', 'videos');
 const thumbnailsDir = path.join(__dirname, 'uploads', 'thumbnails');
+const avatarsDir = path.join(__dirname, 'uploads', 'avatars');
 const voiceDir = path.join(__dirname, 'uploads', 'voice');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 if (!fs.existsSync(thumbnailsDir)) {
     fs.mkdirSync(thumbnailsDir, { recursive: true });
+}
+if (!fs.existsSync(avatarsDir)) {
+    fs.mkdirSync(avatarsDir, { recursive: true });
 }
 if (!fs.existsSync(voiceDir)) {
     fs.mkdirSync(voiceDir, { recursive: true });
@@ -107,11 +111,11 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', uptime: Math.floor(process.uptime()) });
 });
 
-// --- Lightweight session validation for /stream/ routes ---
-// Video streaming sends many 206 range requests per playback session.
-// Each range request through full express-session middleware triggers:
+// --- Lightweight session validation for high-frequency media routes ---
+// Video streaming, thumbnails, avatars, and voice notes send many concurrent requests per page load.
+// Each request through full express-session middleware triggers:
 //   store.get() → JSON.parse() → store.touch() → JSON.stringify() → DB write
-// This fast-path validates the session cookie directly via a single DB read,
+// This fast-path validates the session cookie directly via an in-memory cached single DB read,
 // skipping session deserialization, touch, and write-back.
 const cookie = require('cookie');
 const signature = require('cookie-signature');
@@ -122,7 +126,11 @@ const sessionSecret = process.env.SESSION_SECRET || (() => {
 })();
 const streamSessionStmt = db.prepare('SELECT sess, expires_at FROM sessions WHERE sid = ?');
 
-function fastStreamAuth(req, res, next) {
+// In-memory cache for media auth bursts (10s TTL) to prevent 30-50 simultaneous DB queries on page load
+const mediaAuthCache = new Map();
+const MEDIA_AUTH_CACHE_TTL_MS = 10000;
+
+function fastMediaAuth(req, res, next) {
     try {
         const cookies = cookie.parse(req.headers.cookie || '');
         const raw = cookies['videohost.sid'];
@@ -135,14 +143,31 @@ function fastStreamAuth(req, res, next) {
 
         if (!sid || sid === false) return res.status(401).end('Unauthorized');
 
+        const now = Date.now();
+        const cached = mediaAuthCache.get(sid);
+        if (cached && cached.expiresAt > now) {
+            req.session = { user: cached.user };
+            return next();
+        }
+
         const row = streamSessionStmt.get(sid);
-        if (!row || row.expires_at <= Date.now()) {
+        if (!row || row.expires_at <= now) {
+            mediaAuthCache.delete(sid);
             return res.status(401).end('Unauthorized');
         }
 
         const sess = JSON.parse(row.sess);
         if (!sess || !sess.user) {
+            mediaAuthCache.delete(sid);
             return res.status(401).end('Unauthorized');
+        }
+
+        // Cache valid session in memory for 10 seconds to handle bursts
+        mediaAuthCache.set(sid, { user: sess.user, expiresAt: Math.min(row.expires_at, now + MEDIA_AUTH_CACHE_TTL_MS) });
+        if (mediaAuthCache.size > 200) {
+            for (const [k, v] of mediaAuthCache.entries()) {
+                if (v.expiresAt <= now) mediaAuthCache.delete(k);
+            }
         }
 
         // Attach minimal session info for downstream handlers
@@ -153,16 +178,70 @@ function fastStreamAuth(req, res, next) {
     }
 }
 
+// Media MIME types
+const mediaMimeTypes = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.mp3': 'audio/mpeg',
+    '.ogg': 'audio/ogg',
+    '.wav': 'audio/wav',
+    '.webm': 'audio/webm',
+    '.m4a': 'audio/mp4'
+};
+
+function serveMediaFile(dir, internalPrefix, cacheControlHeader) {
+    return (req, res) => {
+        const filename = path.basename(req.params.file);
+        const filePath = path.join(dir, filename);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).end();
+        }
+
+        const ext = path.extname(filename).toLowerCase();
+        const contentType = mediaMimeTypes[ext] || 'application/octet-stream';
+
+        if (isProduction) {
+            // Production: Nginx serves directly via X-Accel-Redirect (zero-copy kernel sendfile)
+            res.setHeader('X-Accel-Redirect', `${internalPrefix}${filename}`);
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', cacheControlHeader);
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            return res.end();
+        }
+
+        // Development fallback: Node.js streams file directly
+        res.sendFile(filePath, {
+            headers: {
+                'Cache-Control': isProduction ? cacheControlHeader : 'no-cache',
+                'X-Content-Type-Options': 'nosniff'
+            }
+        }, (err) => {
+            if (err && !res.headersSent) res.status(404).end();
+        });
+    };
+}
+
 // Register stream routes BEFORE the full session middleware
 const videoRoutes = require('./routes/videos');
-app.head('/stream/:videoKey', fastStreamAuth, (req, res, next) => {
+app.head('/stream/:videoKey', fastMediaAuth, (req, res, next) => {
     req.params = { videoKey: req.params.videoKey };
     videoRoutes.handle(req, res, next);
 });
-app.get('/stream/:videoKey', fastStreamAuth, (req, res, next) => {
+app.get('/stream/:videoKey', fastMediaAuth, (req, res, next) => {
     req.params = { videoKey: req.params.videoKey };
     videoRoutes.handle(req, res, next);
 });
+
+// Fast media serving routes (Thumbnails, Avatars, Voice) BEFORE full session middleware
+app.get('/thumbnails/:file', fastMediaAuth, serveMediaFile(thumbnailsDir, '/internal-thumbnails/', 'public, max-age=604800, stale-while-revalidate=86400'));
+app.get('/avatars/:file', fastMediaAuth, serveMediaFile(avatarsDir, '/internal-avatars/', 'public, max-age=604800, stale-while-revalidate=86400'));
+app.get('/voice/:file', fastMediaAuth, serveMediaFile(voiceDir, '/internal-voice/', 'private, max-age=604800'));
 
 // Session
 app.use(session({
@@ -222,51 +301,6 @@ setInterval(() => {
     }
     _lastLagCheck = now;
 }, 2000).unref();
-
-// Ensure avatars directory exists
-const avatarsDir = path.join(__dirname, 'uploads', 'avatars');
-if (!fs.existsSync(avatarsDir)) {
-    fs.mkdirSync(avatarsDir, { recursive: true });
-}
-
-// Serve thumbnails behind authentication (prevents unauthenticated access to private thumbnails)
-app.get('/thumbnails/:file', isAuthenticated, (req, res) => {
-    const filename = path.basename(req.params.file); // prevent path traversal
-    const filePath = path.join(__dirname, 'uploads', 'thumbnails', filename);
-    res.sendFile(filePath, {
-        headers: {
-            'Cache-Control': isProduction ? 'private, max-age=604800' : 'no-cache'
-        }
-    }, (err) => {
-        if (err && !res.headersSent) res.status(404).end();
-    });
-});
-
-// Serve user profile avatars behind authentication
-app.get('/avatars/:file', isAuthenticated, (req, res) => {
-    const filename = path.basename(req.params.file); // prevent path traversal
-    const filePath = path.join(__dirname, 'uploads', 'avatars', filename);
-    res.sendFile(filePath, {
-        headers: {
-            'Cache-Control': isProduction ? 'private, max-age=604800' : 'no-cache'
-        }
-    }, (err) => {
-        if (err && !res.headersSent) res.status(404).end();
-    });
-});
-
-// Serve voice audio notes behind authentication
-app.get('/voice/:file', isAuthenticated, (req, res) => {
-    const filename = path.basename(req.params.file); // prevent path traversal
-    const filePath = path.join(__dirname, 'uploads', 'voice', filename);
-    res.sendFile(filePath, {
-        headers: {
-            'Cache-Control': isProduction ? 'private, max-age=604800' : 'no-cache'
-        }
-    }, (err) => {
-        if (err && !res.headersSent) res.status(404).end();
-    });
-});
 
 app.use((req, res, next) => {
     // File upload routes — CSRF validated inline after multer parses multipart body

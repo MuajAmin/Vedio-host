@@ -92,7 +92,14 @@ function formatDurationOrSize(v) {
 }
 
 const videoId = encodeURIComponent(video.id);
-const streamUrl = '/stream/' + videoId;
+const fallbackStreamUrl = '/stream/' + videoId;
+const streamUrl = (typeof directStreamUrl !== 'undefined' && directStreamUrl) ? directStreamUrl : fallbackStreamUrl;
+let workerOrigin = '';
+try {
+    if (streamUrl && streamUrl.startsWith('http')) {
+        workerOrigin = (new URL(streamUrl)).origin;
+    }
+} catch (e) {}
 const sourceType = mimeTypeFor(video.filename || video.original_name);
 const posterAttr = video.thumbnail ? `poster="/thumbnails/${h(video.thumbnail)}"` : '';
 const savedProgress = progress || {};
@@ -104,11 +111,8 @@ const suggestions = Array.isArray(suggestedVideos) ? suggestedVideos : [];
 
 function renderSuggestionCard(v, index) {
     const watchUrl = '/watch/' + encodeURIComponent(v.id);
-    // First 4 suggestions load immediately, rest use deferred lazy loading
     const thumbImg = v.thumbnail
-        ? (index < 4
-            ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="suggestion-thumb-img" loading="lazy" />`
-            : `<img data-src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="suggestion-thumb-img lazy-thumb" />`)
+        ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="suggestion-thumb-img" loading="lazy" />`
         : '';
     const isNew = isNewVideo(v);
     const vUploader = v.uploaded_by || 'muaj';
@@ -204,7 +208,10 @@ const commentsHtml = comments.length === 0
         </div>`;
     }).join('');
 %>
-<%- include('layout', { pageTitle: video.title, body: `
+<%- include('layout', {
+    pageTitle: video.title,
+    extraHead: workerOrigin ? `<link rel="preconnect" href="${h(workerOrigin)}" crossorigin><link rel="dns-prefetch" href="${h(workerOrigin)}">` : '',
+    body: `
 <div class="app-container ${isHajera ? 'hajera-mode' : ''}">
     <div class="ambient-background">
         <div class="ambient-orb orb-1"></div>
@@ -379,7 +386,7 @@ const commentsHtml = comments.length === 0
                     </div>
 
                     <!-- The Video Element -->
-                    <video id="vpVideo" ${posterAttr} preload="auto" playsinline muted data-video-id="${h(video.id)}" data-stream-url="${h(streamUrl)}" data-source-type="${h(sourceType)}" data-saved-position="${h(savedPosition)}" data-progress-url="/watch-progress/${videoId}" data-csrf-token="${h(csrfToken)}">
+                    <video id="vpVideo" ${posterAttr} preload="auto" playsinline muted data-video-id="${h(video.id)}" data-stream-url="${h(streamUrl)}" data-fallback-url="${h(fallbackStreamUrl)}" data-source-type="${h(sourceType)}" data-saved-position="${h(savedPosition)}" data-progress-url="/watch-progress/${videoId}" data-csrf-token="${h(csrfToken)}">
                         <source src="${h(streamUrl)}" type="${h(sourceType)}">
                     </video>
 
