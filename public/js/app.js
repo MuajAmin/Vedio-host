@@ -2226,13 +2226,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             let lastEdgeTelemetry = 0;
+            let currentEdgeInterval = 1400 + Math.floor(Math.random() * 500); // 1.4s ~ 1.9s adaptive jitter
             let lastPositionSave = 0;
             vid.addEventListener('timeupdate', () => {
                 const now = Date.now();
-                if (vid.currentTime > 1 && !vid.ended) {
-                    // Edge Telemetry: throttled to 3.5s for live real-time presence
-                    if (now - lastEdgeTelemetry > 3500) {
+                if (vid.currentTime > 0.5 && !vid.ended) {
+                    // Edge Telemetry: adaptive jitter 1.4s ~ 1.9s to prevent simultaneous request bursts
+                    if (now - lastEdgeTelemetry >= currentEdgeInterval) {
                         lastEdgeTelemetry = now;
+                        currentEdgeInterval = 1400 + Math.floor(Math.random() * 500);
                         sendEdgeWatchTelemetry({ playing: true });
                     }
                     // SQLite persistent progress save fallback (if Edge Worker is not configured)
@@ -4011,13 +4013,103 @@ document.addEventListener('DOMContentLoaded', () => {
             return days + 'd ago';
         }
 
+        // ─── Real-Time 1-Second Ticker & Jittered Poller Engine ───────────
+        let _liveTickerInterval = null;
+        let _hajeraPollTimeout = null;
+        let _currentLiveState = {
+            videoId: null,
+            videoTitle: '',
+            position: 0,
+            duration: 0,
+            playing: false,
+            ended: false,
+            device: '',
+            thumbnail: '',
+            lastServerSync: 0
+        };
+
+        function startLiveSecondTicker() {
+            if (_liveTickerInterval) return;
+            _liveTickerInterval = setInterval(() => {
+                if (!_currentLiveState.playing || _currentLiveState.ended || !_currentLiveState.videoId) return;
+                if (_currentLiveState.duration > 0 && _currentLiveState.position < _currentLiveState.duration) {
+                    _currentLiveState.position += 1;
+                    renderLiveCardProgressOnly();
+                }
+            }, 1000);
+        }
+
+        function stopLiveSecondTicker() {
+            if (_liveTickerInterval) {
+                clearInterval(_liveTickerInterval);
+                _liveTickerInterval = null;
+            }
+        }
+
+        function renderLiveCardProgressOnly() {
+            const timeEl = document.getElementById('liveCardTime');
+            const pctEl = document.getElementById('liveCardPct');
+            const fillEl = document.getElementById('liveCardProgressFill');
+            if (!timeEl || !pctEl || !fillEl) return;
+
+            const pos = _currentLiveState.position;
+            const dur = _currentLiveState.duration;
+            const pct = dur > 0 ? Math.min(100, Math.round((pos / dur) * 100)) : 0;
+
+            timeEl.textContent = formatSecondsHelper(pos) + ' / ' + formatSecondsHelper(dur);
+            pctEl.textContent = pct + '%';
+            fillEl.style.width = pct + '%';
+        }
+
+        function scheduleNextHajeraPoll(isWatching) {
+            if (_hajeraPollTimeout) clearTimeout(_hajeraPollTimeout);
+            if (window.location.pathname !== '/admin') return;
+            // Jitter: 1.4s ~ 1.9s if watching, 4.5s ~ 6.0s if idle/offline (prevents thundering herd)
+            const base = isWatching ? 1400 : 4500;
+            const jitter = isWatching ? Math.floor(Math.random() * 500) : Math.floor(Math.random() * 1500);
+            _hajeraPollTimeout = setTimeout(pollHajeraLiveStatus, base + jitter);
+        }
+
         function pollHajeraLiveStatus() {
             if (window.location.pathname !== '/admin') return;
             fetch('/admin/hajera/live-status')
                 .then(res => res.json())
                 .then(data => {
-                    if (!data || !data.presence) return;
+                    if (!data || !data.presence) {
+                        scheduleNextHajeraPoll(false);
+                        return;
+                    }
                     const p = data.presence;
+                    const isWatching = !!(p.isWatching && p.currentVideoId);
+
+                    // Update live state for the 1-second ticker
+                    if (isWatching) {
+                        const serverPos = Number.isFinite(p.currentTime) ? p.currentTime : 0;
+                        const serverDur = Number.isFinite(p.duration) ? p.duration : 0;
+                        const isPlaying = p.status === 'watching' || p.playing !== false;
+
+                        // Only resync position if server drifted by >= 2 seconds or video changed
+                        if (_currentLiveState.videoId !== p.currentVideoId || Math.abs(serverPos - _currentLiveState.position) >= 2) {
+                            _currentLiveState.position = serverPos;
+                        }
+                        _currentLiveState.videoId = p.currentVideoId;
+                        _currentLiveState.videoTitle = p.videoTitle || 'Video';
+                        _currentLiveState.duration = serverDur;
+                        _currentLiveState.playing = isPlaying;
+                        _currentLiveState.device = p.deviceInfo || 'Device';
+                        _currentLiveState.thumbnail = p.thumbnail || '';
+                        _currentLiveState.lastServerSync = Date.now();
+
+                        if (isPlaying) {
+                            startLiveSecondTicker();
+                        } else {
+                            stopLiveSecondTicker();
+                        }
+                    } else {
+                        stopLiveSecondTicker();
+                        _currentLiveState.videoId = null;
+                        _currentLiveState.playing = false;
+                    }
 
                     // Update Online Dot
                     const dot = document.getElementById('hajeraHeroOnlineDot');
@@ -4064,48 +4156,74 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Update Live Playing Card
                     const liveCard = document.getElementById('hajeraLiveCard');
                     if (liveCard) {
-                        if (p.isWatching && p.currentVideoId) {
-                            const curTime = formatSecondsHelper(p.currentTime);
-                            const durTime = formatSecondsHelper(p.duration);
-                            const pct = p.duration > 0 ? Math.min(100, Math.round((p.currentTime / p.duration) * 100)) : 0;
-                            const thumbHtml = p.thumbnail
-                                ? `<img src="/thumbnails/${p.thumbnail}" alt="" />`
-                                : '<div class="thumb-fallback">🎬</div>';
-
+                        if (isWatching) {
                             liveCard.style.display = 'flex';
-                            liveCard.innerHTML = `
-                                <div class="live-card-eq">
-                                    <span class="eq-bar bar-1"></span>
-                                    <span class="eq-bar bar-2"></span>
-                                    <span class="eq-bar bar-3"></span>
-                                    <span class="eq-bar bar-4"></span>
-                                </div>
-                                <div class="live-card-thumb">${thumbHtml}</div>
-                                <div class="live-card-info">
-                                    <div class="live-card-tag">
-                                        <span class="live-tag-pulse">▶️ PLAYING NOW</span>
-                                        <span class="live-tag-device">${p.deviceInfo || 'Device'}</span>
+                            const titleEl = document.getElementById('liveCardTitle');
+                            const timeEl = document.getElementById('liveCardTime');
+                            const pctEl = document.getElementById('liveCardPct');
+                            const fillEl = document.getElementById('liveCardProgressFill');
+                            const tagTextEl = document.getElementById('liveCardTagText');
+                            const devEl = document.getElementById('liveCardDevice');
+                            const joinBtn = document.getElementById('liveCardJoinBtn');
+                            const eqWrap = document.getElementById('liveCardEq');
+
+                            if (titleEl && timeEl && pctEl && fillEl) {
+                                titleEl.textContent = p.videoTitle || 'Video';
+                                titleEl.href = `/watch/${encodeURIComponent(p.currentVideoId)}`;
+                                if (joinBtn) joinBtn.href = `/watch/${encodeURIComponent(p.currentVideoId)}`;
+                                if (devEl) devEl.textContent = p.deviceInfo || 'Device';
+                                if (tagTextEl) {
+                                    tagTextEl.textContent = p.playing === false ? '⏸️ PAUSED' : '▶️ PLAYING NOW';
+                                }
+                                if (eqWrap) {
+                                    eqWrap.style.opacity = p.playing === false ? '0.3' : '1';
+                                }
+                                renderLiveCardProgressOnly();
+                            } else {
+                                const curTime = formatSecondsHelper(p.currentTime);
+                                const durTime = formatSecondsHelper(p.duration);
+                                const pct = p.duration > 0 ? Math.min(100, Math.round((p.currentTime / p.duration) * 100)) : 0;
+                                const thumbHtml = p.thumbnail
+                                    ? `<img src="/thumbnails/${p.thumbnail}" alt="" id="liveCardThumbImg" />`
+                                    : '<div class="thumb-fallback" id="liveCardThumbFallback">🎬</div>';
+
+                                liveCard.innerHTML = `
+                                    <div class="live-card-eq" id="liveCardEq" style="opacity: ${p.playing === false ? '0.3' : '1'};">
+                                        <span class="eq-bar bar-1"></span>
+                                        <span class="eq-bar bar-2"></span>
+                                        <span class="eq-bar bar-3"></span>
+                                        <span class="eq-bar bar-4"></span>
                                     </div>
-                                    <a href="/watch/${encodeURIComponent(p.currentVideoId)}" class="live-card-title">${p.videoTitle || 'Video'}</a>
-                                    <div class="live-card-meta">
-                                        <span class="live-time">${curTime} / ${durTime}</span>
-                                        <span class="live-pct">${pct}%</span>
+                                    <div class="live-card-thumb" id="liveCardThumb">${thumbHtml}</div>
+                                    <div class="live-card-info">
+                                        <div class="live-card-tag">
+                                            <span class="live-tag-pulse" id="liveCardTagText">${p.playing === false ? '⏸️ PAUSED' : '▶️ PLAYING NOW'}</span>
+                                            <span class="live-tag-device" id="liveCardDevice">${p.deviceInfo || 'Device'}</span>
+                                        </div>
+                                        <a href="/watch/${encodeURIComponent(p.currentVideoId)}" class="live-card-title" id="liveCardTitle">${p.videoTitle || 'Video'}</a>
+                                        <div class="live-card-meta">
+                                            <span class="live-time" id="liveCardTime">${curTime} / ${durTime}</span>
+                                            <span class="live-pct" id="liveCardPct">${pct}%</span>
+                                        </div>
+                                        <div class="live-progress-bar">
+                                            <div class="live-progress-fill" id="liveCardProgressFill" style="width: ${pct}%;"></div>
+                                        </div>
                                     </div>
-                                    <div class="live-progress-bar">
-                                        <div class="live-progress-fill" style="width: ${pct}%;"></div>
-                                    </div>
-                                </div>
-                                <a href="/watch/${encodeURIComponent(p.currentVideoId)}" class="btn btn-primary btn-sm btn-join-watch" title="Watch together or view">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                        <polygon points="5 3 19 12 5 21 5 3"/>
-                                    </svg>
-                                    <span>Watch</span>
-                                </a>
-                            `;
+                                    <a href="/watch/${encodeURIComponent(p.currentVideoId)}" class="btn btn-primary btn-sm btn-join-watch" id="liveCardJoinBtn" title="Watch together or view">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                            <polygon points="5 3 19 12 5 21 5 3"/>
+                                        </svg>
+                                        <span>Watch</span>
+                                    </a>
+                                `;
+                            }
                         } else {
                             liveCard.style.display = 'none';
                         }
                     }
+
+                    // Schedule next adaptive jittered poll (1.4s ~ 1.9s if watching)
+                    scheduleNextHajeraPoll(isWatching);
 
                     // Update Watch Time Stats
                     if (data.watchStats) {
@@ -4308,9 +4426,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 .catch(() => {});
         }
 
-        // Start live polling every 4 seconds
+        // Start initial adaptive jitter poll
         if (window.hajeraLiveInterval) clearInterval(window.hajeraLiveInterval);
-        window.hajeraLiveInterval = setInterval(pollHajeraLiveStatus, 8000);
+        scheduleNextHajeraPoll(true);
         } // End of Hajera 'if' block
 
         // ========================================

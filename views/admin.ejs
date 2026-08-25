@@ -139,30 +139,30 @@ if (presence.isWatching) {
 
 const liveVideoPlayingHtml = (presence.isWatching && presence.currentVideoId)
     ? `<div class="hajera-live-card" id="hajeraLiveCard">
-        <div class="live-card-eq">
+        <div class="live-card-eq" id="liveCardEq">
             <span class="eq-bar bar-1"></span>
             <span class="eq-bar bar-2"></span>
             <span class="eq-bar bar-3"></span>
             <span class="eq-bar bar-4"></span>
         </div>
-        <div class="live-card-thumb">
-            ${presence.thumbnail ? `<img src="/thumbnails/${h(presence.thumbnail)}" alt="" />` : '<div class="thumb-fallback">🎬</div>'}
+        <div class="live-card-thumb" id="liveCardThumb">
+            ${presence.thumbnail ? `<img src="/thumbnails/${h(presence.thumbnail)}" alt="" id="liveCardThumbImg" />` : '<div class="thumb-fallback" id="liveCardThumbFallback">🎬</div>'}
         </div>
         <div class="live-card-info">
             <div class="live-card-tag">
-                <span class="live-tag-pulse">▶️ PLAYING NOW</span>
-                <span class="live-tag-device">${h(presence.deviceInfo || 'Device')}</span>
+                <span class="live-tag-pulse" id="liveCardTagText">▶️ PLAYING NOW</span>
+                <span class="live-tag-device" id="liveCardDevice">${h(presence.deviceInfo || 'Device')}</span>
             </div>
-            <a href="/watch/${encodeURIComponent(presence.currentVideoId)}" class="live-card-title">${h(presence.videoTitle || 'Video')}</a>
+            <a href="/watch/${encodeURIComponent(presence.currentVideoId)}" class="live-card-title" id="liveCardTitle">${h(presence.videoTitle || 'Video')}</a>
             <div class="live-card-meta">
-                <span class="live-time">${formatSeconds(presence.currentTime)} / ${formatSeconds(presence.duration)}</span>
-                <span class="live-pct">${presence.duration > 0 ? Math.round((presence.currentTime / presence.duration) * 100) : 0}%</span>
+                <span class="live-time" id="liveCardTime">${formatSeconds(presence.currentTime)} / ${formatSeconds(presence.duration)}</span>
+                <span class="live-pct" id="liveCardPct">${presence.duration > 0 ? Math.round((presence.currentTime / presence.duration) * 100) : 0}%</span>
             </div>
             <div class="live-progress-bar">
-                <div class="live-progress-fill" ${`style="width:${presence.duration > 0 ? Math.min(100, Math.round((presence.currentTime / presence.duration) * 100)) : 0}%"`}></div>
+                <div class="live-progress-fill" id="liveCardProgressFill" ${`style="width:${presence.duration > 0 ? Math.min(100, Math.round((presence.currentTime / presence.duration) * 100)) : 0}%"`}></div>
             </div>
         </div>
-        <a href="/watch/${encodeURIComponent(presence.currentVideoId)}" class="btn btn-primary btn-sm btn-join-watch" title="Watch together or view">
+        <a href="/watch/${encodeURIComponent(presence.currentVideoId)}" class="btn btn-primary btn-sm btn-join-watch" id="liveCardJoinBtn" title="Watch together or view">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                 <polygon points="5 3 19 12 5 21 5 3"/>
             </svg>

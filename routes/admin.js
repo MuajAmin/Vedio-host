@@ -890,10 +890,10 @@ router.post('/admin/hajera/unblock', isMuaj, async (req, res) => {
 });
 
 // GET /admin/hajera/live-status — Live polling endpoint for Admin Dashboard
-// Cached for 2s to prevent 13+ DB queries per poll cycle
+// Cached for 1s to support real-time 1.4s~1.9s jittered admin polling with low SQLite overhead
 let _liveStatusCache = null;
 let _liveStatusCacheAt = 0;
-const LIVE_STATUS_CACHE_TTL = 2000;
+const LIVE_STATUS_CACHE_TTL = 1000;
 
 router.get('/admin/hajera/live-status', isMuaj, (req, res) => {
     const now = Date.now();
