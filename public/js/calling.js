@@ -37,8 +37,8 @@
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
             { urls: 'stun:stun4.l.google.com:19302' },
-            { urls: 'stun:global.stun.twilio.com:3478' },
-            { urls: 'stun:stun.cloudflare.com:3478' }
+            { urls: 'stun:stun.cloudflare.com:3478' },
+            { urls: 'stun:global.stun.twilio.com:3478' }
         ],
         iceCandidatePoolSize: 10,
         bundlePolicy: 'max-bundle',
@@ -228,9 +228,9 @@
         }
     }
 
-    // Connect MediaStream to Web Audio AnalyserNode for Real-Time Soundwaves
+    // Connect MediaStream to Web Audio AnalyserNode for Real-Time Soundwaves (Audio Calls Only)
     function setupAudioVisualizer(stream) {
-        if (!stream) return;
+        if (!stream || CallState.callType === 'video') return;
         try {
             const ctx = getAudioContext();
             if (analyserSource) {
@@ -256,13 +256,18 @@
             visualizerAnimationId = null;
         }
 
+        // Never run CPU-heavy visualizer loops in video calls
+        if (CallState.callType === 'video') return;
+
         const bars = document.querySelectorAll('.active-call-soundwaves .soundwave-bar');
         if (!bars || bars.length === 0) return;
 
+        const wavesContainer = document.getElementById('activeSoundwaves');
+        const avatarRing = document.querySelector('.active-call-avatar-glow-ring.ring-inner');
         const dataArray = new Uint8Array(audioAnalyser ? audioAnalyser.frequencyBinCount : 32);
 
         function draw() {
-            if (CallState.state !== 'connected' && CallState.state !== 'connecting') {
+            if (CallState.callType === 'video' || (CallState.state !== 'connected' && CallState.state !== 'connecting')) {
                 return;
             }
 
@@ -281,8 +286,6 @@
                 });
 
                 const avg = sum / bars.length;
-                const wavesContainer = document.getElementById('activeSoundwaves');
-                const avatarRing = document.querySelector('.active-call-avatar-glow-ring.ring-inner');
 
                 if (avg > 15) {
                     if (wavesContainer) wavesContainer.classList.add('is-speaking');
@@ -612,6 +615,7 @@
     }
 
     // ------------------------------------------------------------
+    // ------------------------------------------------------------
     //  8. WEBRTC CORE IMPLEMENTATION
     // ------------------------------------------------------------
     async function acquireLocalMedia(isVideo = false) {
@@ -624,13 +628,13 @@
                     autoGainControl: true,
                     sampleRate: 48000,
                     sampleSize: 16,
-                    channelCount: { ideal: 2, max: 2 },
-                    latency: { ideal: 0.01 }
+                    channelCount: 1, // Mono voice cuts packet bandwidth in half with crystal clarity
+                    latency: { ideal: 0.02 }
                 },
                 video: isVideo ? {
                     facingMode: 'user',
-                    width: isCellular ? { ideal: 854, max: 1280 } : { ideal: 1280, max: 1920 },
-                    height: isCellular ? { ideal: 480, max: 720 } : { ideal: 720, max: 1080 },
+                    width: isCellular ? { ideal: 640, max: 854 } : { ideal: 960, max: 1280 },
+                    height: isCellular ? { ideal: 360, max: 480 } : { ideal: 540, max: 720 },
                     frameRate: { ideal: isCellular ? 24 : 30, max: 30 }
                 } : false
             };
@@ -648,7 +652,7 @@
 
             callLog('MEDIA_ACQUIRED', { audio: true, video: isVideo });
 
-            // Connect local stream to sound visualizer if audio call
+            // Connect local stream to sound visualizer ONLY if pure audio call
             if (!isVideo) {
                 setupAudioVisualizer(stream);
             }
@@ -667,6 +671,63 @@
                     : 'Unable to access camera or microphone. Please check your device.'
             );
             throw err;
+        }
+    }
+
+    function applySenderBitrateLimits(pc) {
+        if (!pc) return;
+        try {
+            const isCellular = !!(navigator.connection && (navigator.connection.type === 'cellular' || navigator.connection.effectiveType === '3g' || navigator.connection.effectiveType === '4g'));
+            const senders = pc.getSenders();
+            senders.forEach(sender => {
+                if (!sender.track) return;
+                if (sender.track.kind === 'video') {
+                    const params = sender.getParameters();
+                    if (!params.encodings || params.encodings.length === 0) {
+                        params.encodings = [{}];
+                    }
+                    // Cap max video bitrate: 450kbps cellular / 900kbps wifi to eliminate bufferbloat lag
+                    params.encodings[0].maxBitrate = isCellular ? 450000 : 900000;
+                    params.encodings[0].maxFramerate = isCellular ? 24 : 30;
+                    // Maintain smooth framerate over resolution if network degrades
+                    params.degradationPreference = 'maintain-framerate';
+                    sender.setParameters(params).catch(() => {});
+                } else if (sender.track.kind === 'audio') {
+                    const params = sender.getParameters();
+                    if (!params.encodings || params.encodings.length === 0) {
+                        params.encodings = [{}];
+                    }
+                    params.encodings[0].maxBitrate = 32000; // 32kbps crisp voice
+                    sender.setParameters(params).catch(() => {});
+                }
+            });
+        } catch (e) {
+            callLog('SENDER_PARAMS_ERR', { error: e.message });
+        }
+    }
+
+    function setOptimalCodecPreferences(pc) {
+        if (!pc || typeof RTCRtpReceiver === 'undefined' || !RTCRtpReceiver.getCapabilities) return;
+        try {
+            const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
+            const videoCapabilities = RTCRtpReceiver.getCapabilities('video');
+            if (videoCapabilities && videoCapabilities.codecs) {
+                // Prefer hardware-accelerated H264 and VP8 for low-power and low-latency mobile calls
+                const h264Codecs = videoCapabilities.codecs.filter(c => c.mimeType.toLowerCase() === 'video/h264');
+                const vp8Codecs = videoCapabilities.codecs.filter(c => c.mimeType.toLowerCase() === 'video/vp8');
+                const otherCodecs = videoCapabilities.codecs.filter(c => c.mimeType.toLowerCase() !== 'video/h264' && c.mimeType.toLowerCase() !== 'video/vp8');
+                const sortedCodecs = [...h264Codecs, ...vp8Codecs, ...otherCodecs];
+
+                transceivers.forEach(transceiver => {
+                    if (transceiver.receiver && transceiver.receiver.track && transceiver.receiver.track.kind === 'video' && transceiver.setCodecPreferences) {
+                        try {
+                            transceiver.setCodecPreferences(sortedCodecs);
+                        } catch (e) {}
+                    }
+                });
+            }
+        } catch (e) {
+            callLog('CODEC_PREF_ERROR', { error: e.message });
         }
     }
 
@@ -690,17 +751,11 @@
             });
         }
 
-        // Handle remote stream tracks with zero artificial jitter buffer delay (<50ms audio/video)
-        pc.ontrack = (event) => {
-            if (event.receiver) {
-                if ('playoutDelayHint' in event.receiver) {
-                    event.receiver.playoutDelayHint = 0;
-                }
-                if ('jitterBufferTarget' in event.receiver) {
-                    event.receiver.jitterBufferTarget = 0;
-                }
-            }
+        // Apply hardware codec preferences
+        setOptimalCodecPreferences(pc);
 
+        // Handle remote stream tracks with native adaptive WebRTC jitter buffer
+        pc.ontrack = (event) => {
             // Reset remoteStream for fresh tracks to prevent accumulation
             if (!CallState.remoteStream) {
                 CallState.remoteStream = new MediaStream();
@@ -723,8 +778,8 @@
                 DOM.remoteAudio.play().catch(() => {});
             }
 
-            // Hook up remote audio to visualizer
-            if (event.track.kind === 'audio') {
+            // Hook up remote audio to visualizer ONLY in audio calls
+            if (event.track.kind === 'audio' && CallState.callType === 'audio') {
                 setupAudioVisualizer(CallState.remoteStream);
             }
 
@@ -759,6 +814,7 @@
 
             if (state === 'connected') {
                 clearReconnectTimers();
+                applySenderBitrateLimits(pc);
                 if (transitionState('connected')) {
                     updateConnectionStatusUI('Connected', true);
                     playCallConnectedChime();
@@ -1345,12 +1401,14 @@
         CallState.facingMode = nextFacing;
 
         try {
+            const isCellular = !!(navigator.connection && (navigator.connection.type === 'cellular' || navigator.connection.effectiveType === '3g' || navigator.connection.effectiveType === '4g'));
             const oldTrack = CallState.localStream.getVideoTracks()[0];
             const newStream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: nextFacing,
-                    width: { ideal: 1280, max: 1920 },
-                    height: { ideal: 720, max: 1080 }
+                    width: isCellular ? { ideal: 640, max: 854 } : { ideal: 960, max: 1280 },
+                    height: isCellular ? { ideal: 360, max: 480 } : { ideal: 540, max: 720 },
+                    frameRate: { ideal: isCellular ? 24 : 30, max: 30 }
                 }
             }).catch(() => {
                 return navigator.mediaDevices.getUserMedia({ video: true });
@@ -1358,11 +1416,13 @@
 
             const newTrack = newStream.getVideoTracks()[0];
             if (newTrack) {
+                if ('contentHint' in newTrack) newTrack.contentHint = 'motion';
                 if (CallState.peerConnection) {
                     const senders = CallState.peerConnection.getSenders();
                     const videoSender = senders.find(s => s.track && s.track.kind === 'video');
                     if (videoSender) {
-                        videoSender.replaceTrack(newTrack);
+                        await videoSender.replaceTrack(newTrack);
+                        applySenderBitrateLimits(CallState.peerConnection);
                     }
                 }
                 if (oldTrack) {
@@ -1412,16 +1472,21 @@
     function optimizeSdp(sdp) {
         if (!sdp) return sdp;
         let modified = sdp;
-        // 1. Opus voice ultra-low latency packetization (ptime=10ms, maxaveragebitrate=64000, cbr=1)
+        // 1. Opus voice optimization: standard 20ms packets (ptime=20), mono, in-band FEC, DTX enabled for zero stutter
         if (modified.includes('opus/48000')) {
             modified = modified.replace(
-                /(a=fmtp:\d+ .*?minptime=\d+;useinbandfec=1[^\r\n]*)/g,
-                '$1;ptime=10;minptime=10;maxaveragebitrate=64000;cbr=1;usedtx=1'
+                /(a=fmtp:\d+ [^\r\n]*)/g,
+                (match) => {
+                    if (match.includes('opus/48000') || match.includes('minptime=') || match.includes('useinbandfec=')) {
+                        return match.replace(/ptime=\d+;?/g, '').replace(/minptime=\d+;?/g, '') + ';minptime=10;ptime=20;maxaveragebitrate=32000;stereo=0;sprop-stereo=0;useinbandfec=1;usedtx=1;cbr=0';
+                    }
+                    return match;
+                }
             );
-            if (!modified.includes('ptime=10')) {
+            if (!modified.includes('ptime=20')) {
                 modified = modified.replace(
                     /(a=rtpmap:(\d+) opus\/48000\/2[^\r\n]*)/g,
-                    '$1\r\na=fmtp:$2 ptime=10;minptime=10;maxaveragebitrate=64000;stereo=0;sprop-stereo=0;useinbandfec=1;usedtx=1;cbr=1'
+                    '$1\r\na=fmtp:$2 minptime=10;ptime=20;maxaveragebitrate=32000;stereo=0;sprop-stereo=0;useinbandfec=1;usedtx=1;cbr=0'
                 );
             }
         }
@@ -1459,6 +1524,7 @@
                 sdp: optimizeSdp(rawOffer.sdp)
             };
             await pc.setLocalDescription(offer);
+            applySenderBitrateLimits(pc);
 
             callLog('WEBRTC_OFFER_SENT', { sdpOptimized: true });
             sendSignalingMessage('offer', offer);
@@ -1506,12 +1572,15 @@
                     sdp: optimizeSdp(rawAnswer.sdp)
                 };
                 await pc.setLocalDescription(answer);
+                applySenderBitrateLimits(pc);
+
                 callLog('WEBRTC_ANSWER_SENT', { sdpOptimized: true });
                 sendSignalingMessage('answer', answer);
 
             } else if (signal.type === 'answer') {
                 callLog('WEBRTC_ANSWER_RECEIVED');
                 await pc.setRemoteDescription(new RTCSessionDescription(signal.data));
+                applySenderBitrateLimits(pc);
 
                 // Process any queued ICE candidates
                 while (CallState.iceCandidatesQueue.length > 0) {
