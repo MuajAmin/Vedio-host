@@ -1397,6 +1397,98 @@ async function handleR2DeleteBatch(request, env, ctx, _capturedKey, url) {
 }
 
 // =============================================================================
+//  Edge WebRTC Call Signaling WebSocket Handler
+// =============================================================================
+
+// NOTE: connectedCallUsers lives in module-level memory and does NOT survive
+// isolate eviction (cold starts, scaling). Cloudflare can evict isolates at any
+// time, silently breaking active WebSocket connections. The client-side call UI
+// must handle reconnection gracefully. For durable WebSocket state, use Durable
+// Objects (which this project already has infrastructure for via Watch Together).
+const connectedCallUsers = new Map(); // username -> Set<WebSocket>
+
+async function handleCallSignalingWebSocket(request, env, ctx, _capturedKey, url) {
+  const user = url.searchParams.get('user');
+  if (!user || (user !== 'muaj' && user !== 'hajera')) {
+    return new Response('Invalid user', { status: 400 });
+  }
+
+  // Mandatory signed token validation — consistent with all other handlers
+  const callSecret = env.WORKER_HMAC_SECRET || env.SESSION_SECRET;
+  if (!callSecret) {
+    return new Response('Server misconfigured', { status: 500 });
+  }
+  const isValid = await validateSignedUrl(`call:${user}`, url.searchParams, callSecret);
+  if (!isValid) {
+    return new Response('Unauthorized token', { status: 401 });
+  }
+
+  const pair = new WebSocketPair();
+  const [client, server] = Object.values(pair);
+
+  server.accept();
+
+  if (!connectedCallUsers.has(user)) {
+    connectedCallUsers.set(user, new Set());
+  }
+  connectedCallUsers.get(user).add(server);
+
+  const partner = user === 'muaj' ? 'hajera' : 'muaj';
+
+  // ─── Idle timeout — close stale connections after 5 minutes of silence ─
+  let lastActivity = Date.now();
+  const idleTimer = setInterval(() => {
+    if (Date.now() - lastActivity > CALL_WS_IDLE_TIMEOUT_MS) {
+      try { server.close(1000, 'Idle timeout'); } catch {}
+      clearInterval(idleTimer);
+    }
+  }, 30000);
+
+  server.addEventListener('message', async (event) => {
+    lastActivity = Date.now();
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'ping') {
+        server.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+        return;
+      }
+
+      // Forward signal directly to partner
+      const partnerSockets = connectedCallUsers.get(partner);
+      if (partnerSockets && partnerSockets.size > 0) {
+        const payload = JSON.stringify({ ...data, sender: user, ts: Date.now() });
+        for (const sock of partnerSockets) {
+          try {
+            sock.send(payload);
+          } catch (e) {
+            partnerSockets.delete(sock);
+          }
+        }
+      }
+    } catch (err) {
+      // ignore parsing error
+    }
+  });
+
+  const cleanup = () => {
+    clearInterval(idleTimer);
+    const sockets = connectedCallUsers.get(user);
+    if (sockets) {
+      sockets.delete(server);
+      if (sockets.size === 0) connectedCallUsers.delete(user);
+    }
+  };
+
+  server.addEventListener('close', cleanup);
+  server.addEventListener('error', cleanup);
+
+  return new Response(null, {
+    status: 101,
+    webSocket: client,
+  });
+}
+
+// =============================================================================
 //  CORS — Restricted to allowed origins
 // =============================================================================
 
