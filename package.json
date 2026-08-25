@@ -24,5 +24,8 @@
     "multer": "^2.2.0",
     "uuid": "^14.0.1",
     "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "wrangler": "^4.125.0"
   }
 }

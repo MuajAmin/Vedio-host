@@ -1,0 +1,17 @@
+name = "videohost-edge"
+main = "workers/src/worker.js"
+compatibility_date = "2024-09-23"
+workers_dev = true
+
+# ─── R2 Bucket Binding ──────────────────────────────────────────────
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "videohost"
+
+# ─── Variables ──────────────────────────────────────────────────────
+[vars]
+ORIGIN_URL = "https://origin.muaj.bro.bd"
+
+# ─── Secrets (set via Cloudflare Dashboard or CLI) ─────────────────
+# WORKER_HMAC_SECRET — auth secret for Worker signed URLs
+# SESSION_SECRET — session secret fallback
