@@ -1,9 +1,4 @@
-let Database;
-if (typeof Bun !== 'undefined') {
-    Database = require('bun:sqlite').Database;
-} else {
-    Database = require('better-sqlite3');
-}
+const { Database } = require('bun:sqlite');
 const path = require('path');
 
 const fs = require('fs');

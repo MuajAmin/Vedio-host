@@ -15,35 +15,34 @@ before they reach the VPS. It provides:
 
 1. **Cloudflare Account** with the domain `muaj.bro.bd` already configured
 2. **Cloudflare R2 Bucket** named `videohost` (already exists)
-3. **Node.js 18+** and **npm** installed locally
+3. **Bun Runtime** installed locally
 
 ## Quick Start
 
-### 1. Install Wrangler CLI
+### 1. Install Dependencies
 
 ```bash
-npm install -g wrangler
+bun install
 ```
 
 ### 2. Authenticate with Cloudflare
 
 ```bash
-wrangler login
+bunx wrangler login
 ```
 
 This opens a browser window to authorize the CLI.
 
-### 3. Install Worker Dependencies
+### 3. Deploy Cloudflare Worker
 
 ```bash
-cd workers
-npm install
+bunx wrangler deploy
 ```
 
 ### 4. Set the Session Secret
 
 ```bash
-wrangler secret put SESSION_SECRET
+bunx wrangler secret put SESSION_SECRET
 # Enter the same SESSION_SECRET value from your VPS .env file
 ```
 
