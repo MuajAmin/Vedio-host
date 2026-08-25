@@ -22,7 +22,7 @@ let s3Client = null;
 const r2Agent = new https.Agent({
     keepAlive: true,
     keepAliveMsecs: 30000,
-    maxSockets: 8,
+    maxSockets: 4,           // Matches queueSize=2 per upload + headroom for HEAD requests
 });
 
 if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY) {
@@ -313,7 +313,7 @@ function uploadToR2(filePath, filename) {
                 }
             });
 
-            const fileStream = fs.createReadStream(filePath);
+            const fileStream = fs.createReadStream(filePath, { highWaterMark: 256 * 1024 }); // 256KB read buffer — prevents pipe over-buffering on 1GB VPS
             const uploadBody = fileStream.pipe(progressStream);
 
             const parallelUpload = new Upload({
@@ -325,8 +325,8 @@ function uploadToR2(filePath, filename) {
                     ContentType: contentType,
                     CacheControl: 'public, max-age=2592000, immutable', // 30 days — videos are UUID-named & never change
                 },
-                partSize: 16 * 1024 * 1024, // 16MB chunks — optimal for high-latency long-haul uploads
-                queueSize: 3,               // 3 concurrent parts — fills the bandwidth-delay product on APAC links
+                partSize: 10 * 1024 * 1024, // 10MB chunks — balanced: 30MB peak RAM (vs old 48MB) without killing throughput on high-latency links
+                queueSize: 3,               // 3 concurrent parts — keeps bandwidth-delay product filled for APAC→CF uploads
                 leavePartsOnError: false,
             });
 
@@ -617,8 +617,8 @@ async function backfillMissingR2Uploads() {
 
         console.log(`[R2-Sync] 🔄 Backfilling ${needsUpload.length} missing video(s) to Cloudflare R2...`);
 
-        // Run 2 concurrent uploads to speed up backfill
-        const CONCURRENCY = 2;
+        // Run 1 upload at a time — previous ×2 concurrency caused 96MB RAM spikes on 1GB VPS
+        const CONCURRENCY = 1;
         let synced = 0;
         for (let i = 0; i < needsUpload.length; i += CONCURRENCY) {
             const batch = needsUpload.slice(i, i + CONCURRENCY);
