@@ -7,7 +7,7 @@
 
 const CACHE_NAME = 'videohost-v13.8';
 const MEDIA_CACHE_NAME = 'videohost-media-v3';
-const MAX_MEDIA_CACHE_ITEMS = 100;
+const MAX_MEDIA_CACHE_ITEMS = 300;
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
@@ -72,17 +72,24 @@ self.addEventListener('install', (event) => {
     );
 });
 
-// -- ACTIVATE -- Clean up legacy caches (preserve media cache)
+// -- ACTIVATE -- Clean up legacy caches (preserve media cache) + enable Navigation Preload
 self.addEventListener('activate', (event) => {
     const preservedCaches = new Set([CACHE_NAME, MEDIA_CACHE_NAME]);
     event.waitUntil(
-        caches.keys().then((keys) =>
-            Promise.all(
+        (async () => {
+            if (self.registration && self.registration.navigationPreload) {
+                try {
+                    await self.registration.navigationPreload.enable();
+                } catch (e) {}
+            }
+            const keys = await caches.keys();
+            await Promise.all(
                 keys
                     .filter((key) => !preservedCaches.has(key))
                     .map((key) => caches.delete(key))
-            )
-        ).then(() => self.clients.claim())
+            );
+            await self.clients.claim();
+        })()
     );
 });
 
@@ -104,9 +111,10 @@ self.addEventListener('fetch', (event) => {
     const pathname = parsedUrl.pathname;
     const hostname = parsedUrl.hostname;
     const isEmojiCdn = (hostname === 'cdn.jsdelivr.net' && pathname.includes('emoji')) || (hostname === 'unpkg.com' && pathname.includes('twemoji'));
+    const isMediaAsset = pathname.startsWith('/thumbnails/') || pathname.startsWith('/avatars/') || pathname.startsWith('/thumbnail/') || pathname.startsWith('/img-opt/') || pathname.startsWith('/thumbnail-opt/') || isEmojiCdn;
 
-    // 1. Stale-While-Revalidate + LRU Caching for Thumbnails, Avatars, and Emojis
-    if (pathname.startsWith('/thumbnails/') || pathname.startsWith('/avatars/') || pathname.startsWith('/thumbnail/') || isEmojiCdn) {
+    // 1. Stale-While-Revalidate (0ms Local Asset Cache) for Thumbnails, Avatars, and Emojis
+    if (isMediaAsset) {
         event.respondWith(
             caches.open(MEDIA_CACHE_NAME).then(async (cache) => {
                 const cached = await cache.match(request);
@@ -148,15 +156,21 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 3. Network-first with cache fallback for page navigation
+    // 3. Navigation Preload + Network-first with cache fallback for page navigation
     if (request.mode === 'navigate') {
         event.respondWith(
-            fetch(request).catch(() => {
-                return caches.match(request).then((cached) => {
+            (async () => {
+                try {
+                    const preloadResponse = await event.preloadResponse;
+                    if (preloadResponse) return preloadResponse;
+                    return await fetch(request);
+                } catch {
+                    const cached = await caches.match(request);
                     if (cached) return cached;
-                    return caches.match('/dashboard');
-                });
-            })
+                    const dashboardCache = await caches.match('/dashboard');
+                    return dashboardCache || new Response('Offline', { status: 503 });
+                }
+            })()
         );
     }
 });
