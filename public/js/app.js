@@ -139,6 +139,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(window.r2LiveInterval);
                 window.r2LiveInterval = null;
             }
+            if (window.__HEART_INTERVAL__) {
+                clearInterval(window.__HEART_INTERVAL__);
+                window.__HEART_INTERVAL__ = null;
+            }
+            if (window.__QUOTE_INTERVAL__) {
+                clearInterval(window.__QUOTE_INTERVAL__);
+                window.__QUOTE_INTERVAL__ = null;
+            }
+            if (window.__hajeraPollTimeout) {
+                clearTimeout(window.__hajeraPollTimeout);
+                window.__hajeraPollTimeout = null;
+            }
+            if (window.__liveTickerInterval) {
+                clearInterval(window.__liveTickerInterval);
+                window.__liveTickerInterval = null;
+            }
             window.dispatchEvent(new CustomEvent('page:cleanup'));
         }
 
@@ -4096,12 +4112,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderLiveCardProgressOnly();
                 }
             }, 1000);
+            window.__liveTickerInterval = _liveTickerInterval;
         }
 
         function stopLiveSecondTicker() {
-            if (_liveTickerInterval) {
-                clearInterval(_liveTickerInterval);
+            if (_liveTickerInterval || window.__liveTickerInterval) {
+                clearInterval(_liveTickerInterval || window.__liveTickerInterval);
                 _liveTickerInterval = null;
+                window.__liveTickerInterval = null;
             }
         }
 
@@ -4121,16 +4139,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function scheduleNextHajeraPoll(isWatching) {
-            if (_hajeraPollTimeout) clearTimeout(_hajeraPollTimeout);
+            if (_hajeraPollTimeout || window.__hajeraPollTimeout) {
+                clearTimeout(_hajeraPollTimeout || window.__hajeraPollTimeout);
+            }
             if (window.location.pathname !== '/admin') return;
             if (document.hidden) {
                 _hajeraPollTimeout = setTimeout(() => scheduleNextHajeraPoll(isWatching), 15000);
+                window.__hajeraPollTimeout = _hajeraPollTimeout;
                 return;
             }
             // Jitter: 1.4s ~ 1.9s if watching, 4.5s ~ 6.0s if idle/offline (prevents thundering herd)
             const base = isWatching ? 1400 : 4500;
             const jitter = isWatching ? Math.floor(Math.random() * 500) : Math.floor(Math.random() * 1500);
             _hajeraPollTimeout = setTimeout(pollHajeraLiveStatus, base + jitter);
+            window.__hajeraPollTimeout = _hajeraPollTimeout;
         }
 
         function pollHajeraLiveStatus() {
