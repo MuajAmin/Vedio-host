@@ -83,7 +83,7 @@
             const appleUrl = `${WA_APPLE_EMOJI_BASE}${code}.png`;
             const fallbackUrl = `${WA_TWEMOJI_FALLBACK_BASE}${codeNoFE0F}.svg`;
             const safeEmoji = escapeHtml(rawEmoji);
-            return `<img class="wa-emoji" draggable="false" alt="${safeEmoji}" data-code="${code}" src="${appleUrl}" loading="lazy" onerror="this.onerror=null;if(this.src!=='${fallbackUrl}'){this.src='${fallbackUrl}';}else{this.outerHTML='<span class=\\'wa-raw-emoji\\'>${safeEmoji}</span>';}" />`;
+            return `<img class="wa-emoji" draggable="false" alt="${safeEmoji}" data-code="${code}" src="${appleUrl}" loading="lazy" decoding="async" onerror="this.onerror=null;if(this.src!=='${fallbackUrl}'){this.src='${fallbackUrl}';}else{this.outerHTML='<span class=\\'wa-raw-emoji\\'>${safeEmoji}</span>';}" />`;
         } catch (e) {
             return escapeHtml(rawEmoji);
         }
@@ -292,7 +292,8 @@
         const chipSelectors = '.emoji-chip, .wt-emoji-btn, .call-quick-emoji-btn, .msg-react-emoji-btn, .msg-mobile-react-btn, .msg-quick-emoji-btn, .msg-reaction-badge span:first-child, .msg-empty-starter-chip';
         const chips = container.querySelectorAll ? container.querySelectorAll(chipSelectors) : [];
         chips.forEach(chip => {
-            if (!chip.querySelector('.wa-emoji')) {
+            if (!chip.querySelector('.wa-emoji') && !chip.dataset.waParsed) {
+                chip.dataset.waParsed = 'true';
                 const text = chip.getAttribute('data-emoji') || chip.getAttribute('data-reaction') || chip.getAttribute('data-call-emoji') || chip.innerText || chip.textContent;
                 if (text && text.trim()) {
                     chip.innerHTML = parseWhatsAppEmoji(text.trim());
