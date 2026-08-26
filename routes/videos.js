@@ -621,7 +621,7 @@ router.post('/rename/:id', isAuthenticated, (req, res) => {
 });
 
 // POST /delete/:id — Delete video (any authenticated user)
-router.post('/delete/:id', isAuthenticated, async (req, res) => {
+router.post('/delete/:id', isAuthenticated, requireCsrf, async (req, res) => {
     const videoId = String(req.params.id || '').trim();
     if (!videoId) {
         return res.status(400).json({ error: 'Invalid video ID.' });
