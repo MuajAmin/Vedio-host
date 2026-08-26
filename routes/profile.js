@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { isAuthenticated } = require('../middleware/auth');
-const { requireCsrf, validateCsrf, invalidateAvatarCache, invalidateSettingsCache } = require('../utils/security');
+const { requireCsrf, validateCsrf, handleCsrfError, invalidateAvatarCache, invalidateSettingsCache } = require('../utils/security');
 const db = require('../database');
 
 const avatarsDir = path.join(__dirname, '..', 'uploads', 'avatars');
@@ -44,7 +44,7 @@ router.post('/profile/avatar', isAuthenticated, (req, res) => {
 
         if (!validateCsrf(req)) {
             if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
-            return;
+            return handleCsrfError(req, res);
         }
 
         if (!req.file) {
@@ -78,7 +78,7 @@ router.post('/profile/avatar', isAuthenticated, (req, res) => {
 
 // POST /profile/avatar/remove - Remove custom photo & revert to default letter avatar
 router.post('/profile/avatar/remove', isAuthenticated, (req, res) => {
-    if (!validateCsrf(req)) return;
+    if (!validateCsrf(req)) return handleCsrfError(req, res);
 
     const returnUrl = req.get('Referrer') || '/dashboard';
     const isJson = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));
