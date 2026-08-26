@@ -174,7 +174,7 @@ const commentsHtml = comments.length === 0
             : `<span class="comment-author-badge badge-viewer">💖 Hajera</span>`;
 
         const commentDeleteForm = canDelete
-            ? `<form action="/comment/delete/${encodeURIComponent(c.id)}" method="POST" class="comment-delete-form" data-confirm="Delete this comment?"><input type="hidden" name="_csrf" value="${h(csrfToken)}"><button type="submit" class="comment-action-btn comment-delete-btn" title="Delete comment"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></form>`
+            ? `<form action="/comment/delete/${encodeURIComponent(c.id)}" method="POST" class="comment-delete-form" data-confirm="Delete this comment?"><input type="hidden" name="_csrf" value="${h(csrfToken)}"><button type="submit" class="comment-action-btn comment-delete-btn" title="Delete comment" aria-label="Delete comment"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></form>`
             : '';
 
         return `<div class="comment-item" id="comment-${encodeURIComponent(c.id)}" data-comment-id="${h(c.id)}">
@@ -549,7 +549,7 @@ const extraHeadTags = [
                 <div class="video-info-section">
                     <div class="video-title-wrap" id="videoTitleWrap" data-rename-url="/rename/${videoId}" data-csrf="${h(csrfToken)}">
                         <h1 class="video-title" id="videoTitleText">${h(video.title)}</h1>
-                        <button type="button" class="title-edit-btn" id="titleEditBtn" title="Rename video">
+                        <button type="button" class="title-edit-btn" id="titleEditBtn" title="Rename video" aria-label="Rename video">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -565,10 +565,10 @@ const extraHeadTags = [
                                 </svg>
                             </button>
                             <input type="text" class="title-edit-input" id="titleEditInput" maxlength="180" value="${h(video.title)}">
-                            <button type="button" class="title-save-btn" id="titleSaveBtn" title="Save">
+                            <button type="button" class="title-save-btn" id="titleSaveBtn" title="Save" aria-label="Save title">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>
                             </button>
-                            <button type="button" class="title-cancel-btn" id="titleCancelBtn" title="Cancel">
+                            <button type="button" class="title-cancel-btn" id="titleCancelBtn" title="Cancel" aria-label="Cancel title edit">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>
                         </div>
@@ -814,7 +814,7 @@ const extraHeadTags = [
             <div class="theme-modal">
                 <div class="theme-modal-header">
                     <h3>📥 Confirm Download</h3>
-                    <button type="button" class="theme-close-btn" id="downloadCloseBtn">&times;</button>
+                    <button type="button" class="theme-close-btn" id="downloadCloseBtn" aria-label="Close download modal">&times;</button>
                 </div>
                 <div style="margin-bottom: 24px; text-align: center;">
                     <div style="font-size: 3rem; margin-bottom: 12px;">🎥</div>
@@ -841,7 +841,7 @@ const extraHeadTags = [
             <div class="theme-modal">
                 <div class="theme-modal-header">
                     <h3>🗑️ Delete Video</h3>
-                    <button type="button" class="theme-close-btn" id="deleteVideoCloseBtn">&times;</button>
+                    <button type="button" class="theme-close-btn" id="deleteVideoCloseBtn" aria-label="Close delete modal">&times;</button>
                 </div>
                 <div style="margin-bottom: 24px; text-align: center;">
                     <div style="font-size: 3rem; margin-bottom: 12px;">⚠️</div>
