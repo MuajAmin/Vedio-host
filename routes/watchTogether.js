@@ -4,6 +4,7 @@ const { isAuthenticated } = require('../middleware/auth');
 const db = require('../database');
 const { broadcastToUser, broadcastToBoth } = require('../utils/realtime');
 const wt = require('../utils/wtAuth');
+const { getCachedAvatars } = require('../utils/security');
 
 const router = express.Router();
 const USE_DO = wt.isDurableObjectsEnabled();
@@ -70,9 +71,11 @@ function getRoomByHost(username) {
     return null;
 }
 
+// Fast in-memory cache lookup for user avatars to eliminate redundant SQLite queries
+// on high-frequency Watch Together actions (join, chat, status polls, SSE stream setup).
 function getUserAvatars() {
     try {
-        return (typeof db.getAllUserAvatars === 'function') ? db.getAllUserAvatars() : {};
+        return getCachedAvatars();
     } catch {
         return {};
     }
