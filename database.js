@@ -1492,6 +1492,15 @@ function pruneActivityLogs(maxKeep = 1500) {
 setInterval(() => pruneActivityLogs(1500), 30 * 60 * 1000).unref();
 pruneActivityLogs(1500);
 
+// Periodic WAL checkpoint to keep SQLite WAL file small on 1GB VPS (every 1 hour)
+setInterval(() => {
+    try {
+        db.pragma('wal_checkpoint(PASSIVE)');
+    } catch (err) {
+        console.error('[db] WAL checkpoint error:', err.message);
+    }
+}, 60 * 60 * 1000).unref();
+
 db.savePushSubscription = savePushSubscription;
 db.getPushSubscriptions = getPushSubscriptions;
 db.deletePushSubscription = deletePushSubscription;
