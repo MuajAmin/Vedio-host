@@ -118,6 +118,22 @@ document.addEventListener('DOMContentLoaded', () => {
             // Close any open modals and reset backdrop/scroll locks
             closeAllOpenModals();
 
+            // Cancel any pending typewriter timeouts
+            if (window.__TYPEWRITER_TIMEOUT__) {
+                clearTimeout(window.__TYPEWRITER_TIMEOUT__);
+                window.__TYPEWRITER_TIMEOUT__ = null;
+            }
+
+            // Cancel any pending autoplay timers
+            if (window.__AUTOPLAY_TIMER__) {
+                clearTimeout(window.__AUTOPLAY_TIMER__);
+                window.__AUTOPLAY_TIMER__ = null;
+            }
+            if (window.__AUTOPLAY_INTERVAL__) {
+                clearInterval(window.__AUTOPLAY_INTERVAL__);
+                window.__AUTOPLAY_INTERVAL__ = null;
+            }
+
             // Clean video player memory
             const vid = document.getElementById('vpVideo');
             if (vid) {
@@ -2586,13 +2602,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function cancelAutoplay() {
-        if (autoplayTimer) {
-            clearTimeout(autoplayTimer);
+        if (autoplayTimer || window.__AUTOPLAY_TIMER__) {
+            clearTimeout(autoplayTimer || window.__AUTOPLAY_TIMER__);
             autoplayTimer = null;
+            window.__AUTOPLAY_TIMER__ = null;
         }
-        if (autoplayInterval) {
-            clearInterval(autoplayInterval);
+        if (autoplayInterval || window.__AUTOPLAY_INTERVAL__) {
+            clearInterval(autoplayInterval || window.__AUTOPLAY_INTERVAL__);
             autoplayInterval = null;
+            window.__AUTOPLAY_INTERVAL__ = null;
         }
         if (autoplayToast) {
             autoplayToast.style.display = 'none';
@@ -2629,13 +2647,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (remainingSeconds <= 0) {
                 clearInterval(autoplayInterval);
                 autoplayInterval = null;
+                window.__AUTOPLAY_INTERVAL__ = null;
             }
         }, 1000);
+        window.__AUTOPLAY_INTERVAL__ = autoplayInterval;
 
         autoplayTimer = setTimeout(() => {
             cancelAutoplay();
             if (targetUrl) window.location.href = targetUrl;
         }, 5000);
+        window.__AUTOPLAY_TIMER__ = autoplayTimer;
 
         if (autoplayPlayNowBtn) {
             autoplayPlayNowBtn.onclick = () => {
@@ -3639,6 +3660,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // ---- 2. Typewriter Effect ----
         const typewriterTarget = document.getElementById('typewriterTarget');
         if (typewriterTarget) {
+            if (window.__TYPEWRITER_TIMEOUT__) {
+                clearTimeout(window.__TYPEWRITER_TIMEOUT__);
+                window.__TYPEWRITER_TIMEOUT__ = null;
+            }
+
             const typewriterMessages = [
                 'তুমি আমার সবকিছু 💖',
                 'তুমিই আমার পুরো পৃথিবী 🌹',
@@ -3659,9 +3685,9 @@ document.addEventListener('DOMContentLoaded', () => {
             let currentMsgIndex = 0;
             let charIndex = 0;
             let isDeleting = false;
-            let typingTimeout = null;
 
             function typeNextChar() {
+                if (!document.getElementById('typewriterTarget')) return;
                 const msg = typewriterMessages[currentMsgIndex];
                 typewriterTarget.classList.remove('typing-done');
 
@@ -3671,13 +3697,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (charIndex >= msg.length) {
                         typewriterTarget.classList.add('typing-done');
-                        typingTimeout = setTimeout(() => {
+                        window.__TYPEWRITER_TIMEOUT__ = setTimeout(() => {
                             isDeleting = true;
                             typeNextChar();
                         }, 4000);
                         return;
                     }
-                    typingTimeout = setTimeout(typeNextChar, 60 + Math.random() * 40);
+                    window.__TYPEWRITER_TIMEOUT__ = setTimeout(typeNextChar, 60 + Math.random() * 40);
                 } else {
                     charIndex--;
                     typewriterTarget.textContent = msg.substring(0, charIndex);
@@ -3685,14 +3711,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (charIndex <= 0) {
                         isDeleting = false;
                         currentMsgIndex = (currentMsgIndex + 1) % typewriterMessages.length;
-                        typingTimeout = setTimeout(typeNextChar, 500);
+                        window.__TYPEWRITER_TIMEOUT__ = setTimeout(typeNextChar, 500);
                         return;
                     }
-                    typingTimeout = setTimeout(typeNextChar, 30);
+                    window.__TYPEWRITER_TIMEOUT__ = setTimeout(typeNextChar, 30);
                 }
             }
 
-            setTimeout(typeNextChar, 800);
+            window.__TYPEWRITER_TIMEOUT__ = setTimeout(typeNextChar, 800);
         }
 
         // ---- 3. Rotating Love Quotes ----
