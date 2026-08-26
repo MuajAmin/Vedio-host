@@ -3882,8 +3882,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Send initial ping immediately
         sendPresencePing();
 
-        // Periodic 10s heartbeat
+        // Periodic 10s heartbeat - pause when tab is hidden to save requests
         setInterval(() => {
+            if (document.hidden) return;
             if (Date.now() - lastPing >= 9000) {
                 sendPresencePing();
             }
@@ -4122,6 +4123,10 @@ document.addEventListener('DOMContentLoaded', () => {
         function scheduleNextHajeraPoll(isWatching) {
             if (_hajeraPollTimeout) clearTimeout(_hajeraPollTimeout);
             if (window.location.pathname !== '/admin') return;
+            if (document.hidden) {
+                _hajeraPollTimeout = setTimeout(() => scheduleNextHajeraPoll(isWatching), 15000);
+                return;
+            }
             // Jitter: 1.4s ~ 1.9s if watching, 4.5s ~ 6.0s if idle/offline (prevents thundering herd)
             const base = isWatching ? 1400 : 4500;
             const jitter = isWatching ? Math.floor(Math.random() * 500) : Math.floor(Math.random() * 1500);
@@ -4493,7 +4498,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // VPS Telemetry & Real-Time Resource Polling
         // ========================================
         function pollVpsMetrics() {
-            if (window.location.pathname !== '/admin') return;
+            if (window.location.pathname !== '/admin' || document.hidden) return;
             const vpsCard = document.getElementById('vpsMonitorCard');
             if (!vpsCard) return;
 
@@ -5000,7 +5005,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.getElementById('r2StorageHub')) {
             if (window.r2LiveInterval) clearInterval(window.r2LiveInterval);
             window.r2LiveInterval = setInterval(() => {
-                if (window.location.pathname !== '/admin') return;
+                if (window.location.pathname !== '/admin' || document.hidden) return;
                 fetch('/admin/r2/live-status')
                     .then(r => r.json())
                     .then(data => {
