@@ -170,7 +170,7 @@ function validateCsrf(req) {
     const expected = req.session && req.session.csrfToken;
     const submitted = (req.body && req.body._csrf)
         || (req.query && req.query._csrf)
-        || req.get('x-csrf-token');
+        || (typeof req.get === 'function' ? req.get('x-csrf-token') : null);
 
     if (!expected || !submitted) {
         return false;
@@ -179,11 +179,7 @@ function validateCsrf(req) {
     return timingSafeCompare(submitted, expected);
 }
 
-function requireCsrf(req, res, next) {
-    if (validateCsrf(req)) {
-        return next();
-    }
-
+function handleCsrfError(req, res) {
     const isJsonReq = Boolean(
         req.xhr ||
         (req.headers['content-type'] && req.headers['content-type'].includes('application/json')) ||
@@ -202,10 +198,18 @@ function requireCsrf(req, res, next) {
     });
 }
 
+function requireCsrf(req, res, next) {
+    if (validateCsrf(req)) {
+        return next();
+    }
+    return handleCsrfError(req, res);
+}
+
 module.exports = {
     attachLocals,
     escapeHtml,
     getCsrfToken,
+    handleCsrfError,
     invalidateAvatarCache,
     invalidateUnreadCache,
     invalidateSettingsCache,

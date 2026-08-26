@@ -6,7 +6,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { spawn } = require('child_process');
 const { isAuthenticated, isMuaj } = require('../middleware/auth');
-const { requireCsrf, validateCsrf } = require('../utils/security');
+const { requireCsrf, validateCsrf, handleCsrfError } = require('../utils/security');
 const db = require('../database');
 const { parseUserAgent, getClientIp } = require('../utils/device');
 const r2 = require('../utils/r2');
@@ -211,10 +211,7 @@ router.post('/upload', isAuthenticated, (req, res) => {
             if (req.file) {
                 fs.promises.unlink(path.join(uploadsDir, req.file.filename)).catch(() => {});
             }
-            if (isXHR) {
-                return res.status(403).json({ success: false, error: 'Invalid CSRF token.' });
-            }
-            return;
+            return handleCsrfError(req, res);
         }
 
         if (!req.file) {
@@ -981,7 +978,7 @@ router.post('/thumbnail/:id', isMuaj, (req, res) => {
             if (req.file) {
                 fs.promises.unlink(path.join(thumbnailsDir, req.file.filename)).catch(() => {});
             }
-            return;
+            return handleCsrfError(req, res);
         }
 
         if (!req.file) {
@@ -1002,7 +999,7 @@ router.post('/thumbnail/:id', isMuaj, (req, res) => {
 
 // POST /thumbnail/:id/regenerate - Rebuild thumbnail from source URL or video file (Admin / Muaj only)
 router.post('/thumbnail/:id/regenerate', isMuaj, async (req, res) => {
-    if (!validateCsrf(req)) return;
+    if (!validateCsrf(req)) return handleCsrfError(req, res);
 
     const video = db.prepare('SELECT id, filename, thumbnail, source_url FROM videos WHERE id = ?').get(req.params.id);
     const watchUrl = `/watch/${encodeURIComponent(req.params.id)}`;
