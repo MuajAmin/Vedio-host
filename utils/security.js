@@ -205,6 +205,7 @@ function requireCsrf(req, res, next) {
 module.exports = {
     attachLocals,
     escapeHtml,
+    getCachedAvatars,
     getCsrfToken,
     invalidateAvatarCache,
     invalidateUnreadCache,
