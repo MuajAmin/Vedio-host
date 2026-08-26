@@ -279,13 +279,37 @@ function deleteUserAvatar(username) {
     db.prepare('DELETE FROM user_profiles WHERE username = ?').run(username);
 }
 
+// --- In-memory cache for blocked users set ---
+// isUserBlocked is called on EVERY authenticated HTTP request via middleware.
+// Caching the blocked usernames in an in-memory Set converts uncompiled SQLite DB calls
+// to instant O(1) in-memory checks (~0ms overhead).
+let blockedUsersCache = null;
+
+function resetBlockedUsersCache() {
+    blockedUsersCache = null;
+}
+
+function getBlockedUsersSet() {
+    if (!blockedUsersCache) {
+        const rows = db.prepare('SELECT username FROM blocked_users').all();
+        blockedUsersCache = new Set(rows.map(r => r.username));
+    }
+    return blockedUsersCache;
+}
+
 function isUserBlocked(username) {
     if (!username) return false;
     try {
-        const row = db.prepare('SELECT username FROM blocked_users WHERE username = ?').get(username);
-        return !!row;
+        const cache = getBlockedUsersSet();
+        return cache.has(username);
     } catch {
-        return false;
+        // Safe fallback if cache population throws (e.g. transient DB lock)
+        try {
+            const row = db.prepare('SELECT username FROM blocked_users WHERE username = ?').get(username);
+            return !!row;
+        } catch {
+            return false;
+        }
     }
 }
 
@@ -297,6 +321,9 @@ function blockUser(username, reason = 'Blocked by admin') {
             VALUES (?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(username) DO UPDATE SET reason = excluded.reason, blocked_at = CURRENT_TIMESTAMP
         `).run(username, reason);
+        if (blockedUsersCache) {
+            blockedUsersCache.add(username);
+        }
         destroyUserSessions(username);
     } catch (err) {
         console.error('[db] Error blocking user:', err.message);
@@ -307,6 +334,9 @@ function unblockUser(username) {
     if (!username) return;
     try {
         db.prepare('DELETE FROM blocked_users WHERE username = ?').run(username);
+        if (blockedUsersCache) {
+            blockedUsersCache.delete(username);
+        }
     } catch (err) {
         console.error('[db] Error unblocking user:', err.message);
     }
@@ -1318,6 +1348,7 @@ db.setUserSetting = setUserSetting;
 db.isUserBlocked = isUserBlocked;
 db.blockUser = blockUser;
 db.unblockUser = unblockUser;
+db.resetBlockedUsersCache = resetBlockedUsersCache;
 db.getBlockedUsers = getBlockedUsers;
 db.destroyUserSessions = destroyUserSessions;
 db.destroyOtherUserSessions = destroyOtherUserSessions;
