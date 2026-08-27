@@ -467,7 +467,17 @@ async function deleteFromR2(filename) {
     });
 
     try {
-        await s3Client.send(command);
+        let timer;
+        const deletePromise = s3Client.send(command);
+        const timeoutPromise = new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('R2 delete operation timed out after 10s')), 10000);
+        });
+
+        try {
+            await Promise.race([deletePromise, timeoutPromise]);
+        } finally {
+            clearTimeout(timer);
+        }
         console.log(`[R2] ✓ Delete done: ${filename}`);
         return true;
     } catch (delErr) {
