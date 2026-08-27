@@ -679,24 +679,38 @@ router.post('/delete/:id', isAuthenticated, requireCsrf, async (req, res) => {
             }
 
             // 2. Delete video file from disk
-            const filePath = getSafeVideoPath(video.filename);
-            if (filePath && fs.existsSync(filePath)) {
-                await fs.promises.unlink(filePath).catch(() => {});
-                console.log(`[delete] Local file removed: ${video.filename}`);
+            try {
+                const filePath = getSafeVideoPath(video.filename);
+                if (filePath && fs.existsSync(filePath)) {
+                    await fs.promises.unlink(filePath);
+                    console.log(`[delete] Local file removed: ${video.filename}`);
+                }
+            } catch (fileErr) {
+                console.error(`[delete] Local video file deletion failed for ${video.filename}:`, fileErr.message);
             }
 
             // 3. Delete thumbnail file if exists
-            if (video.thumbnail) {
-                const thumbPath = getSafeThumbnailPath(video.thumbnail);
-                if (thumbPath && fs.existsSync(thumbPath)) {
-                    await fs.promises.unlink(thumbPath).catch(() => {});
+            try {
+                if (video.thumbnail) {
+                    const thumbPath = getSafeThumbnailPath(video.thumbnail);
+                    if (thumbPath && fs.existsSync(thumbPath)) {
+                        await fs.promises.unlink(thumbPath);
+                        console.log(`[delete] Local thumbnail removed: ${video.thumbnail}`);
+                    }
                 }
+            } catch (thumbErr) {
+                console.error(`[delete] Local thumbnail deletion failed for ${video.thumbnail}:`, thumbErr.message);
             }
 
             // 4. Delete from database last (foreign keys handle comments & watch_progress)
-            db.prepare('DELETE FROM videos WHERE id = ?').run(video.id);
-            console.log(`[delete] DB record removed: ${video.id} (${video.title})`);
-            console.log(`[delete] Complete: ${video.id}`);
+            try {
+                db.prepare('DELETE FROM videos WHERE id = ?').run(video.id);
+                console.log(`[delete] DB record removed: ${video.id} (${video.title})`);
+                console.log(`[delete] Complete: ${video.id}`);
+            } catch (dbErr) {
+                console.error(`[delete] DB deletion failed for ${video.id}:`, dbErr.message);
+                throw dbErr;
+            }
         }
 
         const isAjax = req.xhr || 

@@ -86,4 +86,116 @@ describe('Video Deletion & CSRF Token Validation', () => {
         video = db.prepare('SELECT * FROM videos WHERE id = ?').get(testVideoId);
         expect(video == null).toBe(true);
     });
+
+    test('Full video deletion removes local video file, thumbnail, and DB record', async () => {
+        const fullDeleteId = 'test-full-delete-id';
+        const videoFilename = 'test-full-delete-video.mp4';
+        const thumbFilename = 'test-full-delete-thumb.jpg';
+        const videoFilePath = path.join(uploadsDir, videoFilename);
+        const thumbnailsDir = path.join(__dirname, '..', 'uploads', 'thumbnails');
+        const thumbFilePath = path.join(thumbnailsDir, thumbFilename);
+
+        if (!fs.existsSync(thumbnailsDir)) {
+            fs.mkdirSync(thumbnailsDir, { recursive: true });
+        }
+
+        // Create dummy video file and thumbnail on disk
+        fs.writeFileSync(videoFilePath, 'dummy video data');
+        fs.writeFileSync(thumbFilePath, 'dummy thumbnail data');
+
+        // Insert video record with thumbnail
+        db.prepare('DELETE FROM videos WHERE id = ? OR filename = ?').run(fullDeleteId, videoFilename);
+        db.prepare(`
+            INSERT INTO videos (id, title, filename, original_name, size, thumbnail, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(fullDeleteId, 'Full Delete Video', videoFilename, 'test.mp4', 1000, thumbFilename, 'muaj');
+
+        // Import videos router to test route handler
+        const express = require('express');
+        const videosRouter = require('../routes/videos');
+        const app = express();
+        app.use(express.urlencoded({ extended: true }));
+        app.use(express.json());
+        // Mock session middleware
+        app.use((req, res, next) => {
+            req.session = { user: 'muaj', csrfToken: 'test-csrf-token' };
+            next();
+        });
+        app.use('/', videosRouter);
+
+        // Start ephemeral HTTP server
+        const server = app.listen(0);
+        const port = server.address().port;
+
+        // Send request to delete endpoint
+        const res = await fetch(`http://localhost:${port}/delete/${fullDeleteId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'x-csrf-token': 'test-csrf-token',
+                'Accept': 'application/json'
+            }
+        });
+
+        server.close();
+
+        expect(res.status).toBe(200);
+        const data = await res.json();
+        expect(data.success).toBe(true);
+
+        // Verify DB record is deleted
+        const dbVideo = db.prepare('SELECT * FROM videos WHERE id = ?').get(fullDeleteId);
+        expect(dbVideo == null).toBe(true);
+
+        // Verify local video file is unlinked
+        expect(fs.existsSync(videoFilePath)).toBe(false);
+
+        // Verify local thumbnail file is unlinked
+        expect(fs.existsSync(thumbFilePath)).toBe(false);
+    });
+
+    test('Video deletion succeeds even if local files are already missing', async () => {
+        const missingFileId = 'test-missing-file-id';
+        const missingFilename = 'nonexistent-video.mp4';
+
+        db.prepare('DELETE FROM videos WHERE id = ? OR filename = ?').run(missingFileId, missingFilename);
+        db.prepare(`
+            INSERT INTO videos (id, title, filename, original_name, size, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(missingFileId, 'Missing File Video', missingFilename, 'test.mp4', 1000, 'muaj');
+
+        const express = require('express');
+        const videosRouter = require('../routes/videos');
+        const app = express();
+        app.use(express.urlencoded({ extended: true }));
+        app.use(express.json());
+        app.use((req, res, next) => {
+            req.session = { user: 'muaj', csrfToken: 'test-csrf-token' };
+            next();
+        });
+        app.use('/', videosRouter);
+
+        // Start ephemeral HTTP server
+        const server = app.listen(0);
+        const port = server.address().port;
+
+        const res = await fetch(`http://localhost:${port}/delete/${missingFileId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'x-csrf-token': 'test-csrf-token',
+                'Accept': 'application/json'
+            }
+        });
+
+        server.close();
+
+        expect(res.status).toBe(200);
+        const data = await res.json();
+        expect(data.success).toBe(true);
+
+        // Verify DB record is deleted despite missing local file
+        const dbVideo = db.prepare('SELECT * FROM videos WHERE id = ?').get(missingFileId);
+        expect(dbVideo == null).toBe(true);
+    });
 });
