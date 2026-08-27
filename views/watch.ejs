@@ -250,7 +250,7 @@ const extraHeadTags = [
                 </svg>
                 <span class="nav-btn-text">Back</span>
             </a>
-            <button type="button" class="btn btn-ghost btn-icon nav-theme-toggle" id="themeSwitcherNavBtn" title="Change Theme & Appearance">
+            <button type="button" class="btn btn-ghost btn-icon nav-theme-toggle" id="themeSwitcherNavBtn" aria-label="Change Theme & Appearance" title="Change Theme & Appearance">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                     <circle cx="12" cy="12" r="10"/>
                     <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
@@ -980,7 +980,7 @@ const extraHeadTags = [
                     </svg>
                     <span id="wtChatStopBtnText">${isAdmin ? 'Stop' : 'Leave'}</span>
                 </button>
-                <button type="button" class="wt-chat-close-btn" id="wtChatClose" title="Close chat">&times;</button>
+                <button type="button" class="wt-chat-close-btn" id="wtChatClose" aria-label="Close live chat" title="Close chat">&times;</button>
             </div>
         </div>
 
@@ -1016,7 +1016,7 @@ const extraHeadTags = [
                     </svg>
                 </button>
                 <input type="text" id="wtChatInput" class="wt-chat-input" placeholder="Type a message..." maxlength="500" autocomplete="off">
-                <button type="button" id="wtChatSendBtn" class="wt-chat-send-btn" title="Send message">
+                <button type="button" id="wtChatSendBtn" class="wt-chat-send-btn" aria-label="Send message" title="Send message">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
                         <line x1="22" y1="2" x2="11" y2="13"/>
                         <polygon points="22 2 15 22 11 13 2 9 22 2"/>
