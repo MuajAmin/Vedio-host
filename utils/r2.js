@@ -14,6 +14,20 @@ const R2_BUCKET = process.env.R2_BUCKET || 'videohost';
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || '';
 const CF_WORKER_URL = process.env.CF_WORKER_URL || '';
 
+// R2 requires multipart parts to be at least 5 MiB.  Keep the settings
+// configurable so they can be benchmarked from the actual VPS/R2 path rather
+// than guessed from a developer machine.  16 MiB x 3 is a good low-latency
+// default: it has enough in-flight data for a WAN path without making a 1 GB
+// VPS retain an excessive number of part buffers.
+function readBoundedInt(name, fallback, min, max) {
+    const value = Number.parseInt(process.env[name], 10);
+    return Number.isInteger(value) && value >= min && value <= max ? value : fallback;
+}
+
+const R2_MULTIPART_PART_SIZE_MB = readBoundedInt('R2_MULTIPART_PART_SIZE_MB', 16, 5, 512);
+const R2_MULTIPART_QUEUE_SIZE = readBoundedInt('R2_MULTIPART_QUEUE_SIZE', 3, 1, 4);
+const R2_MAX_SOCKETS = readBoundedInt('R2_MAX_SOCKETS', 8, 4, 16);
+
 let r2Enabled = false;
 let s3Client = null;
 
@@ -22,7 +36,8 @@ let s3Client = null;
 const r2Agent = new https.Agent({
     keepAlive: true,
     keepAliveMsecs: 30000,
-    maxSockets: 4,           // Matches queueSize=2 per upload + headroom for HEAD requests
+    maxSockets: R2_MAX_SOCKETS,
+    maxFreeSockets: Math.min(R2_MAX_SOCKETS, 4),
 });
 
 if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY) {
@@ -41,7 +56,7 @@ if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY) {
         maxAttempts: 5,
     });
     r2Enabled = true;
-    console.log('[R2] Cloudflare R2 CDN configured successfully.');
+    console.log(`[R2] Cloudflare R2 CDN configured successfully (multipart: ${R2_MULTIPART_PART_SIZE_MB} MiB x ${R2_MULTIPART_QUEUE_SIZE}, sockets: ${R2_MAX_SOCKETS}).`);
 } else {
     console.warn('[R2] R2 credentials not configured — videos will stream from VPS only.');
 }
@@ -325,8 +340,8 @@ function uploadToR2(filePath, filename) {
                     ContentType: contentType,
                     CacheControl: 'public, max-age=2592000, immutable', // 30 days — videos are UUID-named & never change
                 },
-                partSize: 10 * 1024 * 1024, // 10MB chunks — balanced: 30MB peak RAM (vs old 48MB) without killing throughput on high-latency links
-                queueSize: 3,               // 3 concurrent parts — keeps bandwidth-delay product filled for APAC→CF uploads
+                partSize: R2_MULTIPART_PART_SIZE_MB * 1024 * 1024,
+                queueSize: R2_MULTIPART_QUEUE_SIZE,
                 leavePartsOnError: false,
             });
 
