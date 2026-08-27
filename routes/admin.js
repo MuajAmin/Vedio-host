@@ -287,7 +287,7 @@ async function getDiskFilesWithCache() {
 
 async function collectAdminStats(currentSid = null) {
     const videos = db.prepare(
-        'SELECT id, title, filename, thumbnail, size, duration, uploaded_by, uploaded_at, import_quality FROM videos ORDER BY uploaded_at DESC'
+        'SELECT id, title, filename, thumbnail, size, duration, uploaded_by, uploaded_at, import_quality, cdn_status FROM videos ORDER BY uploaded_at DESC'
     ).all();
     const commentsCount = db.prepare('SELECT COUNT(*) AS count FROM comments').get().count;
     const progressCount = db.prepare('SELECT COUNT(*) AS count FROM watch_progress').get().count;
@@ -386,7 +386,10 @@ async function collectAdminStats(currentSid = null) {
     await Promise.all(videos.map(async (v) => {
         v.onDisk = vpsDiskFileSet.has(v.filename);
         try {
-            v.onR2 = r2.isConfirmedOnR2(v.filename) || await r2.existsOnR2(v.filename);
+            // Check DB cdn_status or in-memory confirmed set first before sending network HEAD request to R2
+            const isDbConfirmed = v.cdn_status === 'r2_ready' || v.cdn_status === 'r2_only';
+            v.onR2 = isDbConfirmed || r2.isConfirmedOnR2(v.filename) || await r2.existsOnR2(v.filename);
+            if (v.onR2) r2.markConfirmedOnR2(v.filename);
         } catch {
             v.onR2 = false;
         }
