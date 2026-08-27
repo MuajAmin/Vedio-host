@@ -879,7 +879,7 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
 });
 
 // POST /api/internal-presence-sync — Authenticated relay from Cloudflare Edge Worker
-router.post('/api/internal-presence-sync', (req, res) => {
+function handleInternalPresenceSync(req, res) {
     const secret = process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET;
     const { exp, sig } = req.query;
     if (!secret || !exp || !sig) {
@@ -966,7 +966,7 @@ router.post('/api/internal-presence-sync', (req, res) => {
         console.error('[InternalSync] Error updating presence/progress:', err.message);
         res.status(500).json({ error: err.message });
     }
-});
+}
 
 // POST /thumbnail/:id - Upload a custom thumbnail for a video (Admin / Muaj only)
 router.post('/thumbnail/:id', isMuaj, (req, res) => {
@@ -1463,3 +1463,4 @@ router.get('/download/:id', isAuthenticated, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.handleInternalPresenceSync = handleInternalPresenceSync;
