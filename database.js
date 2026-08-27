@@ -246,10 +246,13 @@ try {
     console.error('[db] Migration check error:', err.message);
 }
 
+// Optimizing SQLite statement execution: Precompiled statements reuse compiled VDBE bytecode
+// and eliminate on-the-fly SQL parsing & AST generation overhead on high-frequency paths.
+
 function getUserAvatar(username) {
     if (!username) return null;
     try {
-        const row = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?').get(username);
+        const row = stmtUserAvatarGet.get(username);
         return row ? row.avatar : null;
     } catch {
         return null;
@@ -258,7 +261,7 @@ function getUserAvatar(username) {
 
 function getAllUserAvatars() {
     try {
-        const rows = db.prepare('SELECT username, avatar FROM user_profiles').all();
+        const rows = stmtAllUserAvatars.all();
         const map = {};
         rows.forEach(r => { if (r.avatar) map[r.username] = r.avatar; });
         return map;
@@ -291,7 +294,7 @@ function resetBlockedUsersCache() {
 
 function getBlockedUsersSet() {
     if (!blockedUsersCache) {
-        const rows = db.prepare('SELECT username FROM blocked_users').all();
+        const rows = stmtBlockedUsersAll.all();
         blockedUsersCache = new Set(rows.map(r => r.username));
     }
     return blockedUsersCache;
@@ -305,7 +308,7 @@ function isUserBlocked(username) {
     } catch {
         // Safe fallback if cache population throws (e.g. transient DB lock)
         try {
-            const row = db.prepare('SELECT username FROM blocked_users WHERE username = ?').get(username);
+            const row = stmtBlockedUserSingle.get(username);
             return !!row;
         } catch {
             return false;
@@ -344,7 +347,7 @@ function unblockUser(username) {
 
 function getBlockedUsers() {
     try {
-        return db.prepare('SELECT username, reason, blocked_at FROM blocked_users').all();
+        return stmtBlockedUsersFull.all();
     } catch {
         return [];
     }
@@ -484,7 +487,7 @@ function destroyAllSessions(keepCurrentSid = null) {
 function countUserSessions(username) {
     if (!username) return 0;
     try {
-        const row = db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE json_extract(sess, '$.user') = ? AND expires_at > ?").get(username, Date.now());
+        const row = stmtCountUserSessions.get(username, Date.now());
         return row ? row.count : 0;
     } catch {
         return 0;
@@ -524,6 +527,14 @@ const stmtPresenceUpsert = db.prepare(`
 const stmtPresenceGet = db.prepare('SELECT * FROM user_presence WHERE username = ?');
 const stmtVideoMiniInfo = db.prepare('SELECT thumbnail, title FROM videos WHERE id = ?');
 const stmtVideoTitleOnly = db.prepare('SELECT title FROM videos WHERE id = ?');
+const stmtUserAvatarGet = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?');
+const stmtAllUserAvatars = db.prepare('SELECT username, avatar FROM user_profiles');
+const stmtBlockedUsersAll = db.prepare('SELECT username FROM blocked_users');
+const stmtBlockedUserSingle = db.prepare('SELECT username FROM blocked_users WHERE username = ?');
+const stmtBlockedUsersFull = db.prepare('SELECT username, reason, blocked_at FROM blocked_users');
+const stmtUserSettingsGet = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?');
+const stmtCountUserSessions = db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE json_extract(sess, '$.user') = ? AND expires_at > ?");
+const stmtVideoBySourceUrl = db.prepare('SELECT id, title, filename, thumbnail, duration, size, source_url, uploaded_by, uploaded_at FROM videos WHERE source_url = ? LIMIT 1');
 
 const stmtActivityRecentDebounce = db.prepare(`
     SELECT id, action, video_id, created_at
@@ -1295,7 +1306,7 @@ function getRecentCallLogs(user1, user2, limit = 30) {
 function getUserSettings(username) {
     if (!username) return { ui_mode: 'standard', theme: 'cinematic' };
     try {
-        const row = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?').get(username);
+        const row = stmtUserSettingsGet.get(username);
         const defaultTheme = (username === 'hajera') ? 'sunset' : 'cinematic';
         if (!row) {
             return { ui_mode: 'standard', theme: defaultTheme };
@@ -1381,7 +1392,7 @@ db.getRecentCallLogs = getRecentCallLogs;
 function getVideoBySourceUrl(sourceUrl) {
     if (!sourceUrl) return null;
     try {
-        return db.prepare('SELECT id, title, filename, thumbnail, duration, size, source_url, uploaded_by, uploaded_at FROM videos WHERE source_url = ? LIMIT 1').get(sourceUrl) || null;
+        return stmtVideoBySourceUrl.get(sourceUrl) || null;
     } catch {
         return null;
     }
