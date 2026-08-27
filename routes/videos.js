@@ -734,7 +734,8 @@ router.post('/delete/:id', isAuthenticated, requireCsrf, async (req, res) => {
     }
 });
 
-// POST /api/presence/ping - Client heartbeat ping (every 10s or on user interaction)
+// POST /api/presence/ping - Client heartbeat ping (every 10s or on user interaction).
+// CSRF is enforced by the application-wide middleware.
 router.post('/api/presence/ping', isAuthenticated, (req, res) => {
     const user = req.session.user;
     const { page, videoId, videoTitle, isPlaying, currentTime, duration, isIdle, action, deltaSeconds } = req.body;
@@ -837,17 +838,20 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
 
     if (ended || nearEnd) {
         // Video finished — keep progress record with safeDuration so it does NOT appear in "Continue Watching" but also never reverts to "NEW"
-        db.prepare(
+        const progressWrite = db.prepare(
             `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
              ON CONFLICT(video_id, user) DO UPDATE SET
                 position_seconds = excluded.position_seconds,
                 duration_seconds = excluded.duration_seconds,
-                updated_at = CURRENT_TIMESTAMP`
+                updated_at = CURRENT_TIMESTAMP
+             WHERE watch_progress.position_seconds != excluded.position_seconds
+                OR watch_progress.duration_seconds != excluded.duration_seconds`
         ).run(req.params.id, user, Math.floor(safeDuration || position), Math.floor(safeDuration));
 
-        db.recordWatchPulse(user, req.params.id, safeDuration || position, safeDuration, true, 5);
-        db.logActivity(user, 'watch_complete', {
+        if (progressWrite.changes) {
+            db.recordWatchPulse(user, req.params.id, safeDuration || position, safeDuration, true, 5);
+            db.logActivity(user, 'watch_complete', {
             videoId: req.params.id,
             videoTitle,
             position: safeDuration || position,
@@ -855,7 +859,8 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
             details: `Completed 100% of "${videoTitle || 'video'}"`,
             deviceInfo,
             ipAddress
-        });
+            });
+        }
 
         return res.json({ success: true, completed: true });
     }
@@ -869,7 +874,9 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
          ON CONFLICT(video_id, user) DO UPDATE SET
             position_seconds = excluded.position_seconds,
             duration_seconds = excluded.duration_seconds,
-            updated_at = CURRENT_TIMESTAMP`
+            updated_at = CURRENT_TIMESTAMP
+         WHERE watch_progress.position_seconds != excluded.position_seconds
+            OR watch_progress.duration_seconds != excluded.duration_seconds`
     ).run(req.params.id, user, savePosition, Math.floor(safeDuration));
 
     // Note: recordWatchPulse is only called on watch_complete (above) to reduce DB writes.
@@ -913,17 +920,20 @@ function handleInternalPresenceSync(req, res) {
 
     try {
         if (isCompleted) {
-            db.prepare(
+            const progressWrite = db.prepare(
                 `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
                  VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
                  ON CONFLICT(video_id, user) DO UPDATE SET
                     position_seconds = excluded.position_seconds,
                     duration_seconds = excluded.duration_seconds,
-                    updated_at = CURRENT_TIMESTAMP`
+                    updated_at = CURRENT_TIMESTAMP
+                 WHERE watch_progress.position_seconds != excluded.position_seconds
+                    OR watch_progress.duration_seconds != excluded.duration_seconds`
             ).run(videoId, user, Math.floor(durNum || posNum), Math.floor(durNum));
 
-            db.recordWatchPulse(user, videoId, durNum || posNum, durNum, true, 5);
-            db.logActivity(user, 'watch_complete', {
+            if (progressWrite.changes) {
+                db.recordWatchPulse(user, videoId, durNum || posNum, durNum, true, 5);
+                db.logActivity(user, 'watch_complete', {
                 videoId,
                 videoTitle: title,
                 position: durNum || posNum,
@@ -931,7 +941,8 @@ function handleInternalPresenceSync(req, res) {
                 details: `Completed 100% of "${title || 'video'}"`,
                 deviceInfo,
                 ipAddress
-            });
+                });
+            }
         } else {
             const savePos = posNum < 5 ? 1 : Math.floor(posNum);
             db.prepare(
@@ -940,7 +951,9 @@ function handleInternalPresenceSync(req, res) {
                  ON CONFLICT(video_id, user) DO UPDATE SET
                     position_seconds = excluded.position_seconds,
                     duration_seconds = excluded.duration_seconds,
-                    updated_at = CURRENT_TIMESTAMP`
+                    updated_at = CURRENT_TIMESTAMP
+                 WHERE watch_progress.position_seconds != excluded.position_seconds
+                    OR watch_progress.duration_seconds != excluded.duration_seconds`
             ).run(videoId, user, savePos, Math.floor(durNum));
 
             if (playing && posNum >= 5) {

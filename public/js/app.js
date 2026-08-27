@@ -2185,6 +2185,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const edgeTrackerUrl = vid.getAttribute('data-edge-tracker-url');
             const videoTitle = vid.getAttribute('data-video-title') || '';
+            let lastProgressSignature = '';
 
             function sendEdgeWatchTelemetry(options = {}) {
                 const ended = options.ended === true || vid.ended;
@@ -2216,6 +2217,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         headers: { 'Content-Type': 'application/json' },
                         body: payload,
                         keepalive: options.keepalive === true
+                    }).then((response) => {
+                        // A Worker 530 (and every 4xx/5xx) means the edge did
+                        // not accept telemetry. Persist directly to the VPS.
+                        if (!response.ok && (response.status === 530 || response.status >= 400)) {
+                            saveWatchProgress({ ...options, force: true });
+                        }
                     }).catch(() => {
                         saveWatchProgress(options);
                     });
@@ -2231,6 +2238,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ended = options.ended === true || vid.ended;
                 const position = Number.isFinite(vid.currentTime) ? Math.floor(vid.currentTime) : 0;
                 const duration = Number.isFinite(vid.duration) ? Math.floor(vid.duration) : 0;
+                const signature = `${position}:${duration}:${ended}`;
+
+                // Several player lifecycle events can fire for the same video
+                // frame. Do not issue an identical VPS progress write twice.
+                if (!options.force && signature === lastProgressSignature) return;
+                lastProgressSignature = signature;
 
                 if (ended || position < 5) {
                     storage.removeItem(savedPosKey);
@@ -2263,15 +2276,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             let lastEdgeTelemetry = 0;
-            let currentEdgeInterval = 1400 + Math.floor(Math.random() * 500); // 1.4s ~ 1.9s adaptive jitter
+            const edgeTelemetryInterval = 5000;
             let lastPositionSave = 0;
             vid.addEventListener('timeupdate', () => {
                 const now = Date.now();
                 if (vid.currentTime > 0.5 && !vid.ended) {
-                    // Edge Telemetry: adaptive jitter 1.4s ~ 1.9s to prevent simultaneous request bursts
-                    if (now - lastEdgeTelemetry >= currentEdgeInterval) {
+                    // Periodic telemetry is intentionally coarse; lifecycle
+                    // events below still synchronize immediately.
+                    if (now - lastEdgeTelemetry >= edgeTelemetryInterval) {
                         lastEdgeTelemetry = now;
-                        currentEdgeInterval = 1400 + Math.floor(Math.random() * 500);
                         sendEdgeWatchTelemetry({ playing: true });
                     }
                     // SQLite persistent progress save fallback (if Edge Worker is not configured)
@@ -2292,7 +2305,7 @@ document.addEventListener('DOMContentLoaded', () => {
             vid.addEventListener('pause', () => {
                 if (!vid.ended && vid.currentTime > 1) {
                     sendEdgeWatchTelemetry({ playing: false });
-                    saveWatchProgress();
+                    if (!edgeTrackerUrl) saveWatchProgress();
                 }
                 if (typeof window.__sendPresenceAction === 'function') {
                     window.__sendPresenceAction('watch_pause');
@@ -2301,7 +2314,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             vid.addEventListener('ended', () => {
                 sendEdgeWatchTelemetry({ ended: true, playing: false });
-                saveWatchProgress({ ended: true });
+                if (!edgeTrackerUrl) saveWatchProgress({ ended: true });
                 if (typeof window.__sendPresenceAction === 'function') {
                     window.__sendPresenceAction('watch_complete');
                 }
@@ -2310,7 +2323,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const handleUnloadSave = () => {
                 if (!vid.ended && vid.currentTime > 1) {
                     sendEdgeWatchTelemetry({ keepalive: true, beacon: true, playing: false });
-                    saveWatchProgress({ keepalive: true });
+                    if (!edgeTrackerUrl) saveWatchProgress({ keepalive: true });
                 }
             };
 
@@ -3830,7 +3843,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             fetch('/api/presence/ping', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-csrf-token': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                },
                 body: JSON.stringify(payload),
                 keepalive: true
             })
@@ -5074,4 +5090,3 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof window.applyWhatsAppEmojis === 'function') window.applyWhatsAppEmojis(document);
 
 });
-
