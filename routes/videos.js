@@ -606,6 +606,7 @@ router.get('/watch/:id', isAuthenticated, async (req, res) => {
 
 // POST /rename/:id — Rename video title (any authenticated user)
 router.post('/rename/:id', isAuthenticated, (req, res) => {
+    if (!validateCsrf(req)) return handleCsrfError(req, res);
     const newTitle = String(req.body.title || '').trim().slice(0, 180);
     if (!newTitle) {
         return res.status(400).json({ error: 'Title cannot be empty.' });
