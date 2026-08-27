@@ -30,6 +30,17 @@ describe('Security CSRF Protection & Error Handling', () => {
         expect(validateCsrf(reqWithHeader)).toBe(true);
     });
 
+    test('validateCsrf should reject video rename request without valid CSRF token', () => {
+        const reqWithoutCsrf = {
+            method: 'POST',
+            path: '/rename/123',
+            session: { csrfToken: 'secret_token_123' },
+            body: { title: 'New Title' },
+            get: () => null
+        };
+        expect(validateCsrf(reqWithoutCsrf)).toBe(false);
+    });
+
     test('handleCsrfError should send 403 JSON for AJAX / JSON requests', () => {
         let statusCode = null;
         let jsonResponse = null;
