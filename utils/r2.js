@@ -438,35 +438,39 @@ function uploadToR2(filePath, filename) {
  * @returns {Promise<boolean>} true if deletion succeeded
  */
 async function deleteFromR2(filename) {
-    if (!r2Enabled || !filename) return false;
+    if (!r2Enabled || !s3Client || !filename) return false;
 
     console.log(`[R2] ⬇ Delete start: ${filename}`);
 
     // Abort any in-flight upload for this filename immediately
-    const activeController = activeUploadControllers.get(filename);
-    if (activeController) {
-        console.log(`[R2] 🛑 Aborting in-flight upload for deleted file: ${filename}`);
-        activeController.aborted = true;
-        if (activeController.upload && typeof activeController.upload.abort === 'function') {
-            try {
-                activeController.upload.abort();
-            } catch (abortErr) {
-                console.warn(`[R2] Error aborting upload:`, abortErr.message);
+    try {
+        const activeController = activeUploadControllers.get(filename);
+        if (activeController) {
+            console.log(`[R2] 🛑 Aborting in-flight upload for deleted file: ${filename}`);
+            activeController.aborted = true;
+            if (activeController.upload && typeof activeController.upload.abort === 'function') {
+                try {
+                    activeController.upload.abort();
+                } catch (abortErr) {
+                    console.warn(`[R2] Error aborting upload:`, abortErr.message);
+                }
             }
+            activeUploadControllers.delete(filename);
+            inFlightUploads.delete(filename);
+            activeUploads.delete(filename);
         }
-        activeUploadControllers.delete(filename);
-        inFlightUploads.delete(filename);
-        activeUploads.delete(filename);
+    } catch (controllerErr) {
+        console.warn(`[R2] Error cleaning up upload controller for ${filename}:`, controllerErr.message);
     }
 
     _r2ConfirmedCache.delete(filename);
 
-    const command = new DeleteObjectCommand({
-        Bucket: R2_BUCKET,
-        Key: filename,
-    });
-
     try {
+        const command = new DeleteObjectCommand({
+            Bucket: R2_BUCKET,
+            Key: filename,
+        });
+
         let timer;
         const deletePromise = s3Client.send(command);
         const timeoutPromise = new Promise((_, reject) => {
