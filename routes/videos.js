@@ -671,7 +671,8 @@ router.post('/delete/:id', isAuthenticated, requireCsrf, async (req, res) => {
                         'Authorization': `Bearer ${process.env.CF_API_TOKEN}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ files: purgeUrls })
+                    body: JSON.stringify({ files: purgeUrls }),
+                    signal: AbortSignal.timeout(5000)
                 })
                     .then(() => console.log(`[delete] CF cache purge sent for ${video.filename}`))
                     .catch(err => console.warn(`[delete] CF cache purge failed: ${err.message}`));
