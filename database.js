@@ -353,8 +353,6 @@ function getBlockedUsers() {
 function pruneExpiredSessions() {
     try {
         db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now());
-        // Clean unauthenticated / ghost sessions older than 30 minutes
-        db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user') IS NULL AND expires_at <= ?").run(Date.now() + 30 * 60 * 1000);
     } catch (err) {
         console.error('[db] Error pruning expired sessions:', err.message);
     }
