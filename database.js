@@ -268,7 +268,7 @@ try {
 function getUserAvatar(username) {
     if (!username) return null;
     try {
-        const row = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?').get(username);
+        const row = stmtGetUserAvatar.get(username);
         return row ? row.avatar : null;
     } catch {
         return null;
@@ -277,7 +277,7 @@ function getUserAvatar(username) {
 
 function getAllUserAvatars() {
     try {
-        const rows = db.prepare('SELECT username, avatar FROM user_profiles').all();
+        const rows = stmtGetAllUserAvatars.all();
         const map = {};
         rows.forEach(r => { if (r.avatar) map[r.username] = r.avatar; });
         return map;
@@ -287,15 +287,11 @@ function getAllUserAvatars() {
 }
 
 function setUserAvatar(username, avatarFilename) {
-    db.prepare(`
-        INSERT INTO user_profiles (username, avatar, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(username) DO UPDATE SET avatar = excluded.avatar, updated_at = CURRENT_TIMESTAMP
-    `).run(username, avatarFilename);
+    stmtSetUserAvatar.run(username, avatarFilename);
 }
 
 function deleteUserAvatar(username) {
-    db.prepare('DELETE FROM user_profiles WHERE username = ?').run(username);
+    stmtDeleteUserAvatar.run(username);
 }
 
 // --- In-memory cache for blocked users set ---
@@ -310,7 +306,7 @@ function resetBlockedUsersCache() {
 
 function getBlockedUsersSet() {
     if (!blockedUsersCache) {
-        const rows = db.prepare('SELECT username FROM blocked_users').all();
+        const rows = stmtGetBlockedUsersSet.all();
         blockedUsersCache = new Set(rows.map(r => r.username));
     }
     return blockedUsersCache;
@@ -324,7 +320,7 @@ function isUserBlocked(username) {
     } catch {
         // Safe fallback if cache population throws (e.g. transient DB lock)
         try {
-            const row = db.prepare('SELECT username FROM blocked_users WHERE username = ?').get(username);
+            const row = stmtIsUserBlocked.get(username);
             return !!row;
         } catch {
             return false;
@@ -335,11 +331,7 @@ function isUserBlocked(username) {
 function blockUser(username, reason = 'Blocked by admin') {
     if (!username) return;
     try {
-        db.prepare(`
-            INSERT INTO blocked_users (username, reason, blocked_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(username) DO UPDATE SET reason = excluded.reason, blocked_at = CURRENT_TIMESTAMP
-        `).run(username, reason);
+        stmtBlockUser.run(username, reason);
         if (blockedUsersCache) {
             blockedUsersCache.add(username);
         }
@@ -352,7 +344,7 @@ function blockUser(username, reason = 'Blocked by admin') {
 function unblockUser(username) {
     if (!username) return;
     try {
-        db.prepare('DELETE FROM blocked_users WHERE username = ?').run(username);
+        stmtUnblockUser.run(username);
         if (blockedUsersCache) {
             blockedUsersCache.delete(username);
         }
@@ -363,7 +355,7 @@ function unblockUser(username) {
 
 function getBlockedUsers() {
     try {
-        return db.prepare('SELECT username, reason, blocked_at FROM blocked_users').all();
+        return stmtGetBlockedUsers.all();
     } catch {
         return [];
     }
@@ -501,7 +493,7 @@ function destroyAllSessions(keepCurrentSid = null) {
 function countUserSessions(username) {
     if (!username) return 0;
     try {
-        const row = db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE json_extract(sess, '$.user') = ? AND expires_at > ?").get(username, Date.now());
+        const row = stmtCountUserSessions.get(username, Date.now());
         return row ? row.count : 0;
     } catch {
         return 0;
@@ -518,6 +510,40 @@ function getLocalDateString(d = new Date()) {
 // ============================================================
 //  Precompiled Statements for High-Speed DB Execution
 // ============================================================
+const stmtGetUserAvatar = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?');
+const stmtGetAllUserAvatars = db.prepare('SELECT username, avatar FROM user_profiles');
+const stmtSetUserAvatar = db.prepare(`
+    INSERT INTO user_profiles (username, avatar, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(username) DO UPDATE SET avatar = excluded.avatar, updated_at = CURRENT_TIMESTAMP
+`);
+const stmtDeleteUserAvatar = db.prepare('DELETE FROM user_profiles WHERE username = ?');
+const stmtGetBlockedUsersSet = db.prepare('SELECT username FROM blocked_users');
+const stmtIsUserBlocked = db.prepare('SELECT username FROM blocked_users WHERE username = ?');
+const stmtBlockUser = db.prepare(`
+    INSERT INTO blocked_users (username, reason, blocked_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(username) DO UPDATE SET reason = excluded.reason, blocked_at = CURRENT_TIMESTAMP
+`);
+const stmtUnblockUser = db.prepare('DELETE FROM blocked_users WHERE username = ?');
+const stmtGetBlockedUsers = db.prepare('SELECT username, reason, blocked_at FROM blocked_users');
+const stmtCountUserSessions = db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE json_extract(sess, '$.user') = ? AND expires_at > ?");
+const stmtGetUserSettings = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?');
+const stmtSetUserSettingUiMode = db.prepare(`
+    INSERT INTO user_settings (username, ui_mode, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET ui_mode = excluded.ui_mode, updated_at = excluded.updated_at
+`);
+const stmtSetUserSettingTheme = db.prepare(`
+    INSERT INTO user_settings (username, theme, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
+`);
+const stmtGetVideoBySourceUrl = db.prepare('SELECT id, title, filename, thumbnail, duration, size, source_url, uploaded_by, uploaded_at FROM videos WHERE source_url = ? LIMIT 1');
+const stmtGetPushSubscriptions = db.prepare('SELECT * FROM push_subscriptions WHERE username = ?');
+const stmtDeletePushSubscriptionsForUser = db.prepare('DELETE FROM push_subscriptions WHERE username = ?');
+const stmtTouchPushSubscription = db.prepare('UPDATE push_subscriptions SET last_used_at = ? WHERE endpoint = ?');
+
 const stmtPresenceUpsert = db.prepare(`
     INSERT INTO user_presence (
         username, status, last_seen, current_page, current_video_id,
@@ -1312,7 +1338,7 @@ function getRecentCallLogs(user1, user2, limit = 30) {
 function getUserSettings(username) {
     if (!username) return { ui_mode: 'standard', theme: 'cinematic' };
     try {
-        const row = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?').get(username);
+        const row = stmtGetUserSettings.get(username);
         const defaultTheme = (username === 'hajera') ? 'sunset' : 'cinematic';
         if (!row) {
             return { ui_mode: 'standard', theme: defaultTheme };
@@ -1333,20 +1359,12 @@ function setUserSetting(username, key, value) {
         const now = new Date().toISOString();
         if (key === 'ui_mode') {
             const cleanVal = String(value);
-            db.prepare(`
-                INSERT INTO user_settings (username, ui_mode, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET ui_mode = excluded.ui_mode, updated_at = excluded.updated_at
-            `).run(username, cleanVal, now);
+            stmtSetUserSettingUiMode.run(username, cleanVal, now);
             return true;
         }
         if (key === 'theme') {
             const cleanVal = String(value);
-            db.prepare(`
-                INSERT INTO user_settings (username, theme, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
-            `).run(username, cleanVal, now);
+            stmtSetUserSettingTheme.run(username, cleanVal, now);
             return true;
         }
         return false;
@@ -1398,7 +1416,7 @@ db.getRecentCallLogs = getRecentCallLogs;
 function getVideoBySourceUrl(sourceUrl) {
     if (!sourceUrl) return null;
     try {
-        return db.prepare('SELECT id, title, filename, thumbnail, duration, size, source_url, uploaded_by, uploaded_at FROM videos WHERE source_url = ? LIMIT 1').get(sourceUrl) || null;
+        return stmtGetVideoBySourceUrl.get(sourceUrl) || null;
     } catch {
         return null;
     }
@@ -1435,7 +1453,7 @@ function savePushSubscription(username, subscription, userAgent = null) {
 function getPushSubscriptions(username) {
     if (!username) return [];
     try {
-        return db.prepare('SELECT * FROM push_subscriptions WHERE username = ?').all(username);
+        return stmtGetPushSubscriptions.all(username);
     } catch (err) {
         console.error('[db] Error getting push subscriptions:', err.message);
         return [];
@@ -1456,7 +1474,7 @@ function deletePushSubscription(endpoint) {
 function deletePushSubscriptionsForUser(username) {
     if (!username) return 0;
     try {
-        const result = db.prepare('DELETE FROM push_subscriptions WHERE username = ?').run(username);
+        const result = stmtDeletePushSubscriptionsForUser.run(username);
         return result.changes || 0;
     } catch (err) {
         console.error('[db] Error deleting user push subscriptions:', err.message);
@@ -1481,7 +1499,7 @@ function cleanupStalePushSubscriptions(maxAgeDays = 30) {
 function touchPushSubscription(endpoint) {
     if (!endpoint) return;
     try {
-        db.prepare('UPDATE push_subscriptions SET last_used_at = ? WHERE endpoint = ?').run(new Date().toISOString(), endpoint);
+        stmtTouchPushSubscription.run(new Date().toISOString(), endpoint);
     } catch {}
 }
 
