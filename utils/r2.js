@@ -30,6 +30,12 @@ const R2_MAX_SOCKETS = readBoundedInt('R2_MAX_SOCKETS', 8, 4, 16);
 // stream chunk handoffs per part than necessary on the 1 vCPU VPS; 1 MiB keeps
 // the uploader fed without meaningfully raising resident memory.
 const R2_READ_BUFFER_KB = readBoundedInt('R2_READ_BUFFER_KB', 1024, 64, 8192);
+// Escape hatch: the pre-upload faststart remux is a full-file ffmpeg rewrite
+// that runs BEFORE a single byte reaches R2.  On a 1 vCPU VPS it can dominate
+// the perceived "upload" time, and if ffmpeg is missing or wedged it blocks the
+// transfer entirely.  Set R2_SKIP_FASTSTART=1 to upload immediately and let the
+// periodic backfillFaststart() job optimize on its own schedule instead.
+const R2_SKIP_FASTSTART = process.env.R2_SKIP_FASTSTART === '1';
 
 let r2Enabled = false;
 let s3Client = null;
@@ -232,29 +238,66 @@ function uploadToR2(filePath, filename) {
 
             if (controller.aborted) return false;
 
+            // Publish a progress entry with the real file size BEFORE any
+            // long-running preparation work.  The faststart remux below happens
+            // before a single byte reaches R2, so if the entry is only created
+            // afterwards an SSE client that connects during the remux is served
+            // the bare 'queued' placeholder from registerProgressListener()
+            // (total: 0, no speed) and renders as a dead
+            // "0%  0.0 / 78.3 MB  Connecting..." for the whole remux — the exact
+            // stall reported from the admin page.
+            const initialStat = await fs.promises.stat(filePath);
+            let progressEntry = activeUploads.get(filename);
+            if (!progressEntry) {
+                progressEntry = {
+                    filename,
+                    loaded: 0,
+                    total: initialStat.size,
+                    percent: 0,
+                    speed: '',
+                    eta: '',
+                    status: 'preparing',
+                    error: null,
+                    listeners: new Set(),
+                    startedAt: Date.now(),
+                    lastUpdate: Date.now()
+                };
+                activeUploads.set(filename, progressEntry);
+            } else {
+                progressEntry.total = initialStat.size;
+                progressEntry.status = 'preparing';
+                progressEntry.error = null;
+            }
+
+            const notify = () => {
+                if (!progressEntry || !progressEntry.listeners) return;
+                progressEntry.lastUpdate = Date.now();
+                for (const cb of progressEntry.listeners) {
+                    try { cb(progressEntry); } catch {}
+                }
+            };
+
+            progressEntry.eta = 'Preparing transfer...';
+            notify();
+
             // Pre-upload Faststart Optimization: Ensure moov atom is at file start for instant CDN playback.
             // This is a full-file ffmpeg remux and on a 1 vCPU VPS it can take
             // tens of seconds for a large video.  Surface it as an explicit
             // 'optimizing' phase so the UI shows what is happening instead of
             // looking frozen at "100% — saving".
             const ext = path.extname(filename).toLowerCase();
-            if (ext === '.mp4' || ext === '.m4v') {
+            if (!R2_SKIP_FASTSTART && (ext === '.mp4' || ext === '.m4v')) {
                 try {
                     const { isFaststartOptimized, optimizeFaststart } = require('./faststart');
                     const isOpt = await isFaststartOptimized(filePath);
                     if (controller.aborted) return false;
                     if (!isOpt) {
                         console.log(`[R2] 🚀 Faststart optimizing ${filename} prior to R2 upload...`);
-                        const optEntry = activeUploads.get(filename);
-                        if (optEntry) {
-                            optEntry.status = 'optimizing';
-                            optEntry.percent = 0;
-                            optEntry.speed = '';
-                            optEntry.eta = 'Optimizing for instant playback...';
-                            if (optEntry.listeners) {
-                                for (const cb of optEntry.listeners) { try { cb(optEntry); } catch {} }
-                            }
-                        }
+                        progressEntry.status = 'optimizing';
+                        progressEntry.percent = 0;
+                        progressEntry.speed = '';
+                        progressEntry.eta = 'Optimizing for instant playback...';
+                        notify();
                         await optimizeFaststart(filePath);
                         if (controller.aborted) return false;
                     }
@@ -271,35 +314,20 @@ function uploadToR2(filePath, filename) {
             const uploadStart = Date.now();
             console.log(`[R2] ⬆ Upload start: ${filename} (${sizeMB} MB)`);
 
-            let progressEntry = activeUploads.get(filename);
-            if (!progressEntry) {
-                progressEntry = {
-                    filename,
-                    loaded: 0,
-                    total: stat.size,
-                    percent: 0,
-                    speed: '',
-                    eta: '',
-                    status: 'uploading',
-                    error: null,
-                    listeners: new Set(),
-                    startedAt: uploadStart,
-                    lastUpdate: uploadStart
-                };
-                activeUploads.set(filename, progressEntry);
-            } else {
-                progressEntry.total = stat.size;
-                progressEntry.status = 'uploading';
-                progressEntry.startedAt = uploadStart;
-            }
-
-            const notify = () => {
-                if (!progressEntry || !progressEntry.listeners) return;
-                for (const cb of progressEntry.listeners) {
-                    try { cb(progressEntry); } catch {}
-                }
-            };
-
+            // The entry already exists (created before the faststart step above);
+            // refresh the size, since the remux rewrites the file, and flip to
+            // the uploading phase.
+            progressEntry.total = stat.size;
+            progressEntry.loaded = 0;
+            progressEntry.percent = 0;
+            progressEntry.status = 'uploading';
+            progressEntry.startedAt = uploadStart;
+            progressEntry.speed = '';
+            // The first httpUploadProgress event does not arrive until a whole
+            // part has been accepted by R2, which on a slow link is many seconds
+            // of visible silence.  Say what is actually happening rather than
+            // leaving the client's initial "Connecting..." on screen.
+            progressEntry.eta = 'Starting transfer to R2...';
             notify();
 
             // Progress is measured from bytes CONFIRMED UPLOADED to R2 (the SDK's
@@ -346,8 +374,13 @@ function uploadToR2(filePath, filename) {
 
                 progressEntry.percent = Math.min(99, Math.round((progressEntry.loaded / progressEntry.total) * 100));
 
+                // Always emit the first real progress event immediately so the
+                // bar leaves 0% as soon as R2 acknowledges any data, instead of
+                // waiting for the throttle window to elapse.
+                const isFirstProgress = lastLoadedBytes === 0;
+
                 // Throttle SSE updates to ~200ms for a smooth progress bar.
-                if (now - lastNotifyTime >= 200) {
+                if (isFirstProgress || now - lastNotifyTime >= 200) {
                     const timeDiff = (now - lastNotifyTime) / 1000;
                     const bytesDiff = progressEntry.loaded - lastLoadedBytes;
                     const bps = timeDiff > 0 ? Math.max(0, bytesDiff / timeDiff) : 0;
@@ -833,6 +866,20 @@ async function uploadToR2WithRetry(filePath, filename, maxAttempts = 3) {
         if (attempt < maxAttempts) {
             const delay = delays[attempt - 1] || 120000;
             console.log(`[R2-Retry] Retrying ${filename} in ${delay / 1000}s...`);
+            // Make the backoff visible. Without this the dashboard sits on the
+            // last frame it received for up to two minutes with no explanation.
+            try {
+                const waitEntry = activeUploads.get(filename);
+                if (waitEntry) {
+                    waitEntry.status = 'retrying';
+                    waitEntry.error = null;
+                    waitEntry.speed = '';
+                    waitEntry.eta = `Retry ${attempt + 1} of ${maxAttempts} in ${Math.round(delay / 1000)}s...`;
+                    if (waitEntry.listeners) {
+                        for (const cb of waitEntry.listeners) { try { cb(waitEntry); } catch {} }
+                    }
+                }
+            } catch {}
             await new Promise(r => setTimeout(r, delay));
             // Re-check if file still exists before retrying (might have been deleted)
             if (!fs.existsSync(filePath)) {
@@ -842,6 +889,20 @@ async function uploadToR2WithRetry(filePath, filename, maxAttempts = 3) {
         }
     }
     console.error(`[R2-Retry] Permanently failed after ${maxAttempts} attempts: ${filename}`);
+    // Push a terminal error frame so the SSE client closes and renders the
+    // "Retry Sync" button instead of holding a half-drawn progress bar forever.
+    try {
+        const failEntry = activeUploads.get(filename);
+        if (failEntry) {
+            failEntry.status = 'error';
+            failEntry.speed = '';
+            failEntry.eta = '';
+            failEntry.error = `R2 upload failed after ${maxAttempts} attempts`;
+            if (failEntry.listeners) {
+                for (const cb of failEntry.listeners) { try { cb(failEntry); } catch {} }
+            }
+        }
+    } catch {}
     // Mark as failed in DB so admin can see it
     try {
         const dbModule = require('../database');

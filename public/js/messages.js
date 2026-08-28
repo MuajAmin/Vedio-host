@@ -216,7 +216,8 @@
 
     function toAppleEmojiImg(rawEmoji) {
         if (!rawEmoji) return '';
-        if (!window.twemoji || !window.twemoji.convert) {
+        // Android/system emoji avoid a network request per glyph on the full chat page.
+        if (State.isMessagesPage || !window.twemoji || !window.twemoji.convert) {
             return escapeHtml(rawEmoji);
         }
         try {
@@ -2420,8 +2421,8 @@
         if (!grid) return;
         const catData = WA_EMOJI_CATEGORIES[categoryKey] || WA_EMOJI_CATEGORIES.smileys;
         const itemsHtml = catData.emojis.map(em => {
-            const appleImg = toAppleEmojiImg(em);
-            return `<button type="button" class="wa-picker-item" data-emoji="${escapeHtml(em)}" title="${escapeHtml(em)}">${appleImg}</button>`;
+            const emojiMarkup = State.isMessagesPage ? escapeHtml(em) : toAppleEmojiImg(em);
+            return `<button type="button" class="wa-picker-item" data-emoji="${escapeHtml(em)}" title="${escapeHtml(em)}">${emojiMarkup}</button>`;
         }).join('');
         grid.innerHTML = itemsHtml;
     }
@@ -2594,11 +2595,12 @@
         if (attachBtn && attachModal) {
             attachBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                attachModal.classList.toggle('is-open');
+                const isOpen = attachModal.classList.toggle('is-open');
+                attachBtn.setAttribute('aria-expanded', String(isOpen));
                 const searchInput = attachModal.querySelector('.msg-attach-search-input');
-                if (searchInput) {
+                if (isOpen && searchInput) {
                     searchInput.value = '';
-                    searchInput.focus();
+                    searchInput.focus({ preventScroll: true });
                     filterAttachList(attachModal, '');
                 }
             });
@@ -2606,6 +2608,7 @@
             document.addEventListener('click', (e) => {
                 if (!attachModal.contains(e.target) && e.target !== attachBtn) {
                     attachModal.classList.remove('is-open');
+                    attachBtn.setAttribute('aria-expanded', 'false');
                 }
             });
 
@@ -2622,6 +2625,7 @@
                     if (videoId) {
                         sendMessage('', videoId);
                         attachModal.classList.remove('is-open');
+                        attachBtn.setAttribute('aria-expanded', 'false');
                     }
                 });
             });
@@ -2720,12 +2724,71 @@
                 closeMobileActionSheet();
                 return;
             }
+            const details = document.getElementById('msgConversationDetails');
+            if (details?.classList.contains('is-open')) {
+                setConversationDetailsOpen(false);
+                return;
+            }
+            const openAttachment = document.querySelector('.msg-attach-video-modal.is-open');
+            if (openAttachment) {
+                openAttachment.classList.remove('is-open');
+                openAttachment.closest('.msg-composer-wrap')?.querySelector('.msg-attach-btn')?.setAttribute('aria-expanded', 'false');
+                return;
+            }
             if (State.replyToMessage) {
                 cancelReply();
                 return;
             }
         }
     });
+
+    // ------------------------------------------------------------
+    //  18.5. ANDROID RESPONSIVE SHEETS & VIEWPORT
+    // ------------------------------------------------------------
+    function setConversationDetailsOpen(isOpen) {
+        const details = document.getElementById('msgConversationDetails');
+        const backdrop = document.getElementById('msgDetailsBackdrop');
+        const toggle = document.getElementById('msgDetailsToggleBtn');
+        if (!details || !backdrop) return;
+
+        details.classList.toggle('is-open', isOpen);
+        backdrop.classList.toggle('is-open', isOpen);
+        if (toggle) toggle.setAttribute('aria-expanded', String(isOpen));
+        document.body.classList.toggle('msg-sheet-open', isOpen);
+
+        if (isOpen) {
+            details.querySelector('#msgDetailsCloseBtn')?.focus({ preventScroll: true });
+        } else if (toggle && window.innerWidth < 960) {
+            toggle.focus({ preventScroll: true });
+        }
+    }
+
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('#msgDetailsToggleBtn')) {
+            const details = document.getElementById('msgConversationDetails');
+            setConversationDetailsOpen(!details?.classList.contains('is-open'));
+            return;
+        }
+        if (e.target.closest('#msgDetailsCloseBtn') || e.target.closest('#msgDetailsBackdrop')) {
+            setConversationDetailsOpen(false);
+        }
+    });
+
+    let viewportFrame = 0;
+    function syncMessagingViewport() {
+        if (!State.isMessagesPage) return;
+        cancelAnimationFrame(viewportFrame);
+        viewportFrame = requestAnimationFrame(() => {
+            const viewportHeight = window.visualViewport?.height || window.innerHeight;
+            document.body.style.setProperty('--msg-app-height', `${Math.round(viewportHeight)}px`);
+        });
+    }
+
+    syncMessagingViewport();
+    window.addEventListener('resize', () => {
+        syncMessagingViewport();
+        if (window.innerWidth >= 960) setConversationDetailsOpen(false);
+    }, { passive: true });
 
     // ------------------------------------------------------------
     //  19. LIFECYCLE, BFCACHE & NAVIGATION LISTENERS
@@ -2978,19 +3041,21 @@
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', () => {
             if (State.isMessagesPage) {
+                syncMessagingViewport();
                 setTimeout(() => {
                     getActiveContainers().forEach(c => {
                         if (isScrolledNearBottom(c)) scrollToBottom(c);
                     });
                 }, 100);
             }
-        });
+        }, { passive: true });
     }
 
     // SPA Navigation Handler
     window.addEventListener('page:navigate', () => {
         const isMessagesNow = !!document.getElementById('msgFullpageList') || document.body.getAttribute('data-page') === 'messages';
         State.isMessagesPage = isMessagesNow;
+        syncMessagingViewport();
 
         // Re-setup composers in newly swapped DOM
         document.querySelectorAll('.msg-composer-wrap').forEach(setupComposer);

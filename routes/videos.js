@@ -472,15 +472,24 @@ router.get('/api/r2-progress/:filename', isAuthenticated, (req, res) => {
 
     const current = r2.getUploadProgress(filename);
     if (!current) {
+        // No in-memory entry yet. Look up the real file size so the client shows
+        // "0.0 / 78.3 MB" against a correct total instead of 0, and label the
+        // phase as queued rather than leaving the initial "Connecting..." text.
+        let knownTotal = 0;
+        try {
+            const row = db.prepare('SELECT size FROM videos WHERE filename = ?').get(filename);
+            if (row && row.size) knownTotal = Number(row.size) || 0;
+        } catch {}
+
         r2.existsOnR2(filename).then((exists) => {
             if (exists) {
-                send({ filename, percent: 100, loaded: 0, total: 0, speed: '', eta: '', status: 'done' });
+                send({ filename, percent: 100, loaded: 0, total: knownTotal, speed: '', eta: '', status: 'done' });
                 setTimeout(() => { try { res.end(); } catch {} }, 500);
             } else {
-                send({ filename, percent: 0, loaded: 0, total: 0, speed: '', eta: '', status: 'starting' });
+                send({ filename, percent: 0, loaded: 0, total: knownTotal, speed: '', eta: 'Waiting for transfer to start...', status: 'queued' });
             }
         }).catch(() => {
-            send({ filename, percent: 0, loaded: 0, total: 0, speed: '', eta: '', status: 'starting' });
+            send({ filename, percent: 0, loaded: 0, total: knownTotal, speed: '', eta: 'Waiting for transfer to start...', status: 'queued' });
         });
     } else {
         send({

@@ -5,7 +5,7 @@
 //  + Web Push Notification Handler for Messenger-style notifications
 // ============================================================
 
-const CACHE_NAME = 'videohost-v13.9';
+const CACHE_NAME = 'videohost-v14.0';
 const MEDIA_CACHE_NAME = 'videohost-media-v3';
 const MAX_MEDIA_CACHE_ITEMS = 300;
 
@@ -13,13 +13,13 @@ const MAX_MEDIA_CACHE_ITEMS = 300;
 const PRECACHE_ASSETS = [
     '/css/style.css?v=13.9',
     '/css/minimal.css?v=13.9',
-    '/css/messages.css?v=13.9',
+    '/css/messages.css?v=14.0',
     '/css/calling.css?v=13.9',
     '/js/theme-init.js?v=13.9',
     '/js/twemoji.min.js?v=13.9',
     '/js/whatsapp-emojis.js?v=13.9',
     '/js/app.js?v=13.9',
-    '/js/messages.js?v=13.9',
+    '/js/messages.js?v=14.0',
     '/js/watchTogether.js?v=13.9',
     '/js/calling.js?v=13.9',
     '/css/icon-192.png',
