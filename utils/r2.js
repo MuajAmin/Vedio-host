@@ -5,7 +5,6 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { Transform } = require('stream');
 
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
@@ -24,9 +23,13 @@ function readBoundedInt(name, fallback, min, max) {
     return Number.isInteger(value) && value >= min && value <= max ? value : fallback;
 }
 
-const R2_MULTIPART_PART_SIZE_MB = readBoundedInt('R2_MULTIPART_PART_SIZE_MB', 16, 5, 512);
-const R2_MULTIPART_QUEUE_SIZE = readBoundedInt('R2_MULTIPART_QUEUE_SIZE', 3, 1, 4);
+const R2_MULTIPART_PART_SIZE_MB = readBoundedInt('R2_MULTIPART_PART_SIZE_MB', 8, 5, 512);
+const R2_MULTIPART_QUEUE_SIZE = readBoundedInt('R2_MULTIPART_QUEUE_SIZE', 4, 1, 8);
 const R2_MAX_SOCKETS = readBoundedInt('R2_MAX_SOCKETS', 8, 4, 16);
+// Disk read buffer feeding the multipart uploader.  256 KiB caused ~4x more
+// stream chunk handoffs per part than necessary on the 1 vCPU VPS; 1 MiB keeps
+// the uploader fed without meaningfully raising resident memory.
+const R2_READ_BUFFER_KB = readBoundedInt('R2_READ_BUFFER_KB', 1024, 64, 8192);
 
 let r2Enabled = false;
 let s3Client = null;
@@ -56,7 +59,7 @@ if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY) {
         maxAttempts: 5,
     });
     r2Enabled = true;
-    console.log(`[R2] Cloudflare R2 CDN configured successfully (multipart: ${R2_MULTIPART_PART_SIZE_MB} MiB x ${R2_MULTIPART_QUEUE_SIZE}, sockets: ${R2_MAX_SOCKETS}).`);
+    console.log(`[R2] Cloudflare R2 CDN configured successfully (multipart: ${R2_MULTIPART_PART_SIZE_MB} MiB x ${R2_MULTIPART_QUEUE_SIZE}, sockets: ${R2_MAX_SOCKETS}, read buffer: ${R2_READ_BUFFER_KB} KiB).`);
 } else {
     console.warn('[R2] R2 credentials not configured — videos will stream from VPS only.');
 }
@@ -229,7 +232,11 @@ function uploadToR2(filePath, filename) {
 
             if (controller.aborted) return false;
 
-            // Pre-upload Faststart Optimization: Ensure moov atom is at file start for instant CDN playback
+            // Pre-upload Faststart Optimization: Ensure moov atom is at file start for instant CDN playback.
+            // This is a full-file ffmpeg remux and on a 1 vCPU VPS it can take
+            // tens of seconds for a large video.  Surface it as an explicit
+            // 'optimizing' phase so the UI shows what is happening instead of
+            // looking frozen at "100% — saving".
             const ext = path.extname(filename).toLowerCase();
             if (ext === '.mp4' || ext === '.m4v') {
                 try {
@@ -238,6 +245,16 @@ function uploadToR2(filePath, filename) {
                     if (controller.aborted) return false;
                     if (!isOpt) {
                         console.log(`[R2] 🚀 Faststart optimizing ${filename} prior to R2 upload...`);
+                        const optEntry = activeUploads.get(filename);
+                        if (optEntry) {
+                            optEntry.status = 'optimizing';
+                            optEntry.percent = 0;
+                            optEntry.speed = '';
+                            optEntry.eta = 'Optimizing for instant playback...';
+                            if (optEntry.listeners) {
+                                for (const cb of optEntry.listeners) { try { cb(optEntry); } catch {} }
+                            }
+                        }
                         await optimizeFaststart(filePath);
                         if (controller.aborted) return false;
                     }
@@ -285,64 +302,70 @@ function uploadToR2(filePath, filename) {
 
             notify();
 
-            let bytesStreamed = 0;
+            // Progress is measured from bytes CONFIRMED UPLOADED to R2 (the SDK's
+            // httpUploadProgress event), not from bytes read off local disk.
+            // Reading from disk is far faster than the WAN upload, so the old
+            // disk-read counter reached "100%" while up to
+            // partSize * queueSize bytes were still buffered in RAM and in
+            // flight — which is exactly why the UI appeared to hang on
+            // "Saving..." for a long time after supposedly finishing.
             let lastNotifyTime = uploadStart;
-            let lastBytesStreamed = 0;
+            let lastLoadedBytes = 0;
 
-            const progressStream = new Transform({
-                transform(chunk, encoding, callback) {
-                    bytesStreamed += chunk.length;
-                    progressEntry.loaded = bytesStreamed;
-                    const now = Date.now();
-                    if (progressEntry.loaded >= stat.size) {
-                        progressEntry.percent = 99;
-                        progressEntry.eta = 'Finalizing with R2...';
-                        progressEntry.speed = 'Saving...';
-                    } else {
-                        progressEntry.percent = Math.min(99, Math.round((progressEntry.loaded / progressEntry.total) * 100));
-                    }
-
-                    // Throttle SSE updates to every 200ms for continuous smooth progress bar animation
-                    if (now - lastNotifyTime >= 200) {
-                        const timeDiff = (now - lastNotifyTime) / 1000;
-                        const bytesDiff = progressEntry.loaded - lastBytesStreamed;
-                        const bps = timeDiff > 0 ? Math.max(0, bytesDiff / timeDiff) : 0;
-                        if (progressEntry.loaded < stat.size) {
-                            if (bps >= 1024 * 1024) {
-                                progressEntry.speed = (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
-                            } else if (bps >= 1024) {
-                                progressEntry.speed = (bps / 1024).toFixed(0) + ' KB/s';
-                            }
-                            const remainingBytes = progressEntry.total - progressEntry.loaded;
-                            if (bps > 0 && remainingBytes > 0) {
-                                const etaSec = Math.ceil(remainingBytes / bps);
-                                if (etaSec < 60) progressEntry.eta = `~${etaSec}s left`;
-                                else progressEntry.eta = `~${Math.floor(etaSec / 60)}m ${etaSec % 60}s left`;
-                            }
-                        }
-                        lastNotifyTime = now;
-                        lastBytesStreamed = progressEntry.loaded;
-                        notify();
-                    }
-                    callback(null, chunk);
-                }
-            });
-
-            const fileStream = fs.createReadStream(filePath, { highWaterMark: 256 * 1024 }); // 256KB read buffer — prevents pipe over-buffering on 1GB VPS
-            const uploadBody = fileStream.pipe(progressStream);
+            const fileStream = fs.createReadStream(filePath, { highWaterMark: R2_READ_BUFFER_KB * 1024 });
 
             const parallelUpload = new Upload({
                 client: s3Client,
                 params: {
                     Bucket: R2_BUCKET,
                     Key: filename,
-                    Body: uploadBody,
+                    Body: fileStream,
                     ContentType: contentType,
                     CacheControl: 'public, max-age=2592000, immutable', // 30 days — videos are UUID-named & never change
                 },
                 partSize: R2_MULTIPART_PART_SIZE_MB * 1024 * 1024,
                 queueSize: R2_MULTIPART_QUEUE_SIZE,
                 leavePartsOnError: false,
+            });
+
+            parallelUpload.on('httpUploadProgress', (progress) => {
+                const loaded = Number(progress.loaded || 0);
+                if (loaded <= 0) return;
+                progressEntry.loaded = Math.min(loaded, stat.size);
+
+                const now = Date.now();
+                if (progressEntry.loaded >= stat.size) {
+                    // Every byte is acknowledged by R2; only CompleteMultipartUpload remains.
+                    progressEntry.percent = 99;
+                    progressEntry.status = 'finalizing';
+                    progressEntry.eta = 'Finalizing with R2...';
+                    progressEntry.speed = '';
+                    notify();
+                    return;
+                }
+
+                progressEntry.percent = Math.min(99, Math.round((progressEntry.loaded / progressEntry.total) * 100));
+
+                // Throttle SSE updates to ~200ms for a smooth progress bar.
+                if (now - lastNotifyTime >= 200) {
+                    const timeDiff = (now - lastNotifyTime) / 1000;
+                    const bytesDiff = progressEntry.loaded - lastLoadedBytes;
+                    const bps = timeDiff > 0 ? Math.max(0, bytesDiff / timeDiff) : 0;
+                    if (bps >= 1024 * 1024) {
+                        progressEntry.speed = (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
+                    } else if (bps >= 1024) {
+                        progressEntry.speed = (bps / 1024).toFixed(0) + ' KB/s';
+                    }
+                    const remainingBytes = progressEntry.total - progressEntry.loaded;
+                    if (bps > 0 && remainingBytes > 0) {
+                        const etaSec = Math.ceil(remainingBytes / bps);
+                        if (etaSec < 60) progressEntry.eta = `~${etaSec}s left`;
+                        else progressEntry.eta = `~${Math.floor(etaSec / 60)}m ${etaSec % 60}s left`;
+                    }
+                    lastNotifyTime = now;
+                    lastLoadedBytes = progressEntry.loaded;
+                    notify();
+                }
             });
 
             controller.upload = parallelUpload;
@@ -365,20 +388,30 @@ function uploadToR2(filePath, filename) {
             }
 
             // Verify upload integrity: HEAD the object to confirm size and accessibility.
-            // R2 has an eventual consistency window — wait until the object is actually readable.
+            // CompleteMultipartUpload has already returned at this point, so R2 is
+            // read-after-write consistent and the first HEAD virtually always
+            // succeeds.  The retries exist only for rare propagation edge cases,
+            // so use a short backoff (250ms/500ms/1s/2s instead of 1s..5s) and
+            // never sleep after the final attempt — the old loop burned up to 15s
+            // of dead time (5s of it *after* deciding to give up), which the user
+            // experienced as the upload hanging at "saving".
+            const VERIFY_BACKOFF_MS = [250, 500, 1000, 2000];
+            const VERIFY_ATTEMPTS = VERIFY_BACKOFF_MS.length + 1;
             let verified = false;
-            for (let attempt = 0; attempt < 5; attempt++) {
+            for (let attempt = 0; attempt < VERIFY_ATTEMPTS; attempt++) {
                 try {
                     const head = await s3Client.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: filename }));
                     if (Number(head.ContentLength) === stat.size) {
                         verified = true;
                         break;
                     }
-                    console.warn(`[R2] Verification attempt ${attempt + 1}/5: size mismatch for ${filename} (expected ${stat.size}, got ${head.ContentLength})`);
+                    console.warn(`[R2] Verification attempt ${attempt + 1}/${VERIFY_ATTEMPTS}: size mismatch for ${filename} (expected ${stat.size}, got ${head.ContentLength})`);
                 } catch (headErr) {
-                    console.warn(`[R2] Verification attempt ${attempt + 1}/5: HEAD failed for ${filename}: ${headErr.message}`);
+                    console.warn(`[R2] Verification attempt ${attempt + 1}/${VERIFY_ATTEMPTS}: HEAD failed for ${filename}: ${headErr.message}`);
                 }
-                await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // 1s, 2s, 3s, 4s, 5s
+                if (attempt < VERIFY_BACKOFF_MS.length) {
+                    await new Promise(r => setTimeout(r, VERIFY_BACKOFF_MS[attempt]));
+                }
             }
 
             if (!verified) {
@@ -392,19 +425,40 @@ function uploadToR2(filePath, filename) {
                 try {
                     const dbModule = require('../database');
                     dbModule.prepare("UPDATE videos SET cdn_status = 'upload_failed' WHERE filename = ?").run(filename);
+                    if (typeof dbModule.recordR2Transfer === 'function') {
+                        dbModule.recordR2Transfer({
+                            filename,
+                            bytes: 0,
+                            durationMs: Date.now() - uploadStart,
+                            status: 'verify_failed',
+                            error: 'R2 verification failed after upload'
+                        });
+                    }
                 } catch {}
                 setTimeout(() => activeUploads.delete(filename), 5 * 60 * 1000).unref();
                 return false;
             }
 
-            const elapsed = ((Date.now() - uploadStart) / 1000).toFixed(1);
-            console.log(`[R2] ✓ Upload verified: ${filename} (${sizeMB} MB) in ${elapsed}s`);
+            const elapsedMs = Date.now() - uploadStart;
+            const elapsed = (elapsedMs / 1000).toFixed(1);
+            const throughputMBs = elapsedMs > 0 ? (stat.size / 1024 / 1024) / (elapsedMs / 1000) : 0;
+            console.log(`[R2] ✓ Upload verified: ${filename} (${sizeMB} MB) in ${elapsed}s (${throughputMBs.toFixed(2)} MB/s)`);
             _r2ConfirmedCache.add(filename);
 
             // Update DB: mark video as R2-ready (authoritative source of truth for fallback)
+            // and record the REAL transferred byte count so the admin dashboard can
+            // report actual R2 transfer volume rather than a watch-time estimate.
             try {
                 const dbModule = require('../database');
                 dbModule.prepare("UPDATE videos SET cdn_status = 'r2_ready' WHERE filename = ?").run(filename);
+                if (typeof dbModule.recordR2Transfer === 'function') {
+                    dbModule.recordR2Transfer({
+                        filename,
+                        bytes: stat.size,
+                        durationMs: elapsedMs,
+                        status: 'success'
+                    });
+                }
             } catch (dbErr) {
                 console.warn('[R2] Could not update cdn_status in DB:', dbErr.message);
             }

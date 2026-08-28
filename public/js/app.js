@@ -4700,6 +4700,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (speedEl && data.speed) speedEl.textContent = data.speed;
                 if (etaEl && data.eta) etaEl.textContent = data.eta;
 
+                // Pre-upload faststart remux and post-upload multipart completion
+                // are distinct phases; label them so a long step never looks frozen.
+                if (data.status === 'optimizing') {
+                    if (speedEl) speedEl.textContent = 'Optimizing';
+                    if (etaEl) etaEl.textContent = data.eta || 'Preparing for instant playback...';
+                } else if (data.status === 'finalizing') {
+                    if (speedEl) speedEl.textContent = 'Finalizing';
+                    if (etaEl) etaEl.textContent = data.eta || 'Finalizing with R2...';
+                }
+
                 if (data.status === 'done' || pct >= 100) {
                     if (r2EventSources[videoId]) {
                         try { r2EventSources[videoId].close(); } catch(e){}
@@ -4857,6 +4867,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
+        // Mirrors formatDataSize() in routes/admin.js so live-refreshed values
+        // render identically to the server-rendered ones.
+        function formatBytesClient(bytes) {
+            const b = Number(bytes || 0);
+            if (b >= 1024 ** 4) return (b / (1024 ** 4)).toFixed(2) + ' TB';
+            if (b >= 1024 ** 3) return (b / (1024 ** 3)).toFixed(2) + ' GB';
+            if (b >= 1024 ** 2) return (b / (1024 ** 2)).toFixed(1) + ' MB';
+            if (b >= 1024) return (b / 1024).toFixed(1) + ' KB';
+            return b + ' B';
+        }
+
         function refreshR2DashboardStats() {
             fetch('/admin/r2/live-status')
                 .then(r => r.json())
@@ -4877,6 +4898,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         warnCount.textContent = s.unsyncedCount;
                         if (s.unsyncedCount === 0) {
                             warnCount.className = 'r2-tile-count color-ok';
+                        }
+                    }
+
+                    // Real bytes stored on R2, straight from the bucket inventory.
+                    const cdnSize = document.getElementById('r2CdnSizeText');
+                    if (cdnSize && typeof s.r2TotalBytes === 'number') {
+                        cdnSize.textContent = formatBytesClient(s.r2TotalBytes);
+                    }
+
+                    // Real measured VPS/client -> R2 transfer total.
+                    if (data.transferStats) {
+                        const xfer = document.getElementById('r2TransferredText');
+                        if (xfer && data.transferStats.totalFormatted) {
+                            xfer.textContent = data.transferStats.totalFormatted;
                         }
                     }
                 })

@@ -360,7 +360,21 @@ router.post('/api/upload/finalize', isAuthenticated, async (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid video size.' });
     }
 
-    const objectMeta = await r2.getObjectMetadata(filename);
+    // Verify the object really landed on R2 before trusting client-supplied metadata.
+    // A single HEAD immediately after the client's PUT can occasionally race the
+    // bucket's read-after-write visibility, which previously surfaced as a hard
+    // "not found on R2" failure. Retry briefly with a short backoff instead, so
+    // finalize is both reliable and still fast in the common case (first try hits).
+    let objectMeta = null;
+    const FINALIZE_BACKOFF_MS = [150, 400, 800];
+    for (let attempt = 0; attempt <= FINALIZE_BACKOFF_MS.length; attempt++) {
+        objectMeta = await r2.getObjectMetadata(filename);
+        if (objectMeta) break;
+        if (attempt < FINALIZE_BACKOFF_MS.length) {
+            await new Promise(r => setTimeout(r, FINALIZE_BACKOFF_MS[attempt]));
+        }
+    }
+
     if (!objectMeta) {
         return res.status(400).json({ success: false, error: 'Uploaded video was not found on Cloudflare R2.' });
     }
@@ -409,6 +423,20 @@ router.post('/api/upload/finalize', isAuthenticated, async (req, res) => {
         // Direct-to-R2 uploads bypass VPS disk — mark as R2-ready immediately
         try {
             db.prepare("UPDATE videos SET cdn_status = 'r2_ready' WHERE id = ?").run(id);
+        } catch {}
+
+        // Record the transfer so the admin dashboard's R2 transfer totals include
+        // direct-to-R2 (client -> Worker) uploads, not just VPS -> R2 uploads.
+        try {
+            if (typeof db.recordR2Transfer === 'function') {
+                db.recordR2Transfer({
+                    filename,
+                    bytes: objectMeta.size,
+                    durationMs: 0,
+                    status: 'success',
+                    direction: 'client_to_r2'
+                });
+            }
         } catch {}
 
         return res.json({
