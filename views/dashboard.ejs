@@ -178,7 +178,7 @@ const videoGrid = videos.length === 0
                     <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
                 </svg>
             </button>
-            <div class="user-badge ${isAdmin ? 'badge-admin' : 'badge-viewer'} user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture">
+            <div class="user-badge ${isAdmin ? 'badge-admin' : 'badge-viewer'} user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture" aria-label="Change profile picture">
                 <div class="badge-avatar-wrap">
                     <div class="badge-avatar">${renderAvatar(user, 'nav-avatar')}</div>
                     <span class="badge-status-dot"></span>
