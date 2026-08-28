@@ -4650,10 +4650,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // Cloudflare R2 & VPS Storage Tracker Live Sync Engine
         // ============================================================
         const r2EventSources = {};
+        // Polling-fallback timers, keyed by video id, used when the SSE stream
+        // is unavailable or gets cut by an intermediate proxy.
+        const r2PollTimers = {};
 
         function attachR2ProgressListener(videoId, filename, totalSize) {
             if (r2EventSources[videoId]) {
                 try { r2EventSources[videoId].close(); } catch(e){}
+            }
+            if (r2PollTimers[videoId]) {
+                clearInterval(r2PollTimers[videoId]);
+                delete r2PollTimers[videoId];
             }
 
             const actionCell = document.getElementById('r2Action_' + videoId);
@@ -4700,11 +4707,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (speedEl && data.speed) speedEl.textContent = data.speed;
                 if (etaEl && data.eta) etaEl.textContent = data.eta;
 
-                // Pre-upload faststart remux and post-upload multipart completion
-                // are distinct phases; label them so a long step never looks frozen.
-                if (data.status === 'optimizing') {
+                // Every pre-transfer / post-transfer phase gets an explicit label.
+                // Otherwise the box keeps the initial "Connecting..." text while
+                // the server is busy remuxing or waiting on a retry backoff,
+                // which reads as a frozen 0% bar.
+                if (data.status === 'queued') {
+                    if (speedEl) speedEl.textContent = 'Queued';
+                    if (etaEl) etaEl.textContent = data.eta || 'Waiting for a transfer slot...';
+                } else if (data.status === 'preparing' || data.status === 'starting') {
+                    if (speedEl) speedEl.textContent = 'Preparing';
+                    if (etaEl) etaEl.textContent = data.eta || 'Preparing transfer...';
+                } else if (data.status === 'optimizing') {
                     if (speedEl) speedEl.textContent = 'Optimizing';
                     if (etaEl) etaEl.textContent = data.eta || 'Preparing for instant playback...';
+                } else if (data.status === 'retrying') {
+                    if (speedEl) speedEl.textContent = 'Retrying';
+                    if (etaEl) etaEl.textContent = data.eta || 'Waiting before retry...';
+                } else if (data.status === 'uploading' && !data.loaded) {
+                    if (speedEl) speedEl.textContent = 'Starting';
+                    if (etaEl) etaEl.textContent = data.eta || 'Starting transfer to R2...';
                 } else if (data.status === 'finalizing') {
                     if (speedEl) speedEl.textContent = 'Finalizing';
                     if (etaEl) etaEl.textContent = data.eta || 'Finalizing with R2...';
@@ -4714,6 +4735,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (r2EventSources[videoId]) {
                         try { r2EventSources[videoId].close(); } catch(e){}
                         delete r2EventSources[videoId];
+                    }
+                    if (r2PollTimers[videoId]) {
+                        clearInterval(r2PollTimers[videoId]);
+                        delete r2PollTimers[videoId];
                     }
                     if (actionCell) {
                         actionCell.innerHTML = `
@@ -4737,6 +4762,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         try { r2EventSources[videoId].close(); } catch(e){}
                         delete r2EventSources[videoId];
                     }
+                    if (r2PollTimers[videoId]) {
+                        clearInterval(r2PollTimers[videoId]);
+                        delete r2PollTimers[videoId];
+                    }
                     if (actionCell) {
                         actionCell.innerHTML = `
                             <button type="button" class="btn-android-sync-r2" onclick="syncSingleVideo('${videoId}', '${filename}', ${totalSize}, this)">
@@ -4757,28 +4786,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch(err){}
             };
 
-            es.onerror = function() {
-                es.close();
-                fetch('/admin/r2/live-status')
+            // If the SSE stream dies (or is swallowed by an intermediate proxy
+            // that buffers text/event-stream), fall back to *repeated* polling.
+            // The old handler polled a single time and then gave up, which left
+            // the progress box frozen on whatever frame it had last received.
+            function pollOnce() {
+                return fetch('/admin/r2/live-status')
                     .then(r => r.json())
                     .then(data => {
-                        if (!data) return;
+                        if (!data) return false;
                         if (Array.isArray(data.activeUploads)) {
                             const u = data.activeUploads.find(x => x.filename === filename);
                             if (u) {
                                 updateUI(u);
-                                return;
+                                return u.status === 'done' || u.status === 'error';
                             }
                         }
                         if (Array.isArray(data.videos)) {
                             const v = data.videos.find(x => x.id === videoId || x.filename === filename);
                             if (v && (v.onR2 || v.cdn_status === 'r2_ready' || v.cdn_status === 'r2_only')) {
                                 updateUI({ filename, percent: 100, status: 'done' });
-                                return;
+                                return true;
                             }
                         }
+                        return false;
                     })
-                    .catch(() => {});
+                    .catch(() => false);
+            }
+
+            function startPollingFallback() {
+                if (r2PollTimers[videoId]) return;
+                r2PollTimers[videoId] = setInterval(() => {
+                    pollOnce().then((finished) => {
+                        if (finished) {
+                            clearInterval(r2PollTimers[videoId]);
+                            delete r2PollTimers[videoId];
+                        }
+                    });
+                }, 3000);
+            }
+
+            es.onerror = function() {
+                try { es.close(); } catch (e) {}
+                delete r2EventSources[videoId];
+                pollOnce().then((finished) => {
+                    if (!finished) startPollingFallback();
+                });
             };
         }
 
