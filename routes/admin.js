@@ -286,8 +286,10 @@ async function getDiskFilesWithCache() {
 }
 
 async function collectAdminStats(currentSid = null) {
+    // Include cdn_status in query so R2 status check uses DB metadata first
+    // instead of triggering outbound HTTP HEAD requests to Cloudflare R2 for every video.
     const videos = db.prepare(
-        'SELECT id, title, filename, thumbnail, size, duration, uploaded_by, uploaded_at, import_quality FROM videos ORDER BY uploaded_at DESC'
+        'SELECT id, title, filename, thumbnail, size, duration, uploaded_by, uploaded_at, import_quality, cdn_status FROM videos ORDER BY uploaded_at DESC'
     ).all();
     const commentsCount = db.prepare('SELECT COUNT(*) AS count FROM comments').get().count;
     const progressCount = db.prepare('SELECT COUNT(*) AS count FROM watch_progress').get().count;
@@ -386,7 +388,8 @@ async function collectAdminStats(currentSid = null) {
     await Promise.all(videos.map(async (v) => {
         v.onDisk = vpsDiskFileSet.has(v.filename);
         try {
-            v.onR2 = r2.isConfirmedOnR2(v.filename) || await r2.existsOnR2(v.filename);
+            // Check DB cdn_status and in-memory cache first to avoid slow network I/O
+            v.onR2 = v.cdn_status === 'r2_ready' || v.cdn_status === 'r2_only' || r2.isConfirmedOnR2(v.filename) || await r2.existsOnR2(v.filename);
         } catch {
             v.onR2 = false;
         }
