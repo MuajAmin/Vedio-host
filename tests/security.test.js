@@ -1,5 +1,6 @@
 const { describe, test, expect } = require('bun:test');
 const { validateCsrf, handleCsrfError } = require('../utils/security');
+const { isValidImportUrl } = require('../routes/import');
 
 describe('Security CSRF Protection & Error Handling', () => {
     test('validateCsrf should allow safe HTTP methods (GET, HEAD, OPTIONS)', () => {
@@ -87,5 +88,16 @@ describe('Security CSRF Protection & Error Handling', () => {
         expect(renderView).toBe('forbidden');
         expect(renderData.user).toBe('hajera');
         expect(renderData.message).toBe('Invalid request token. Please refresh the page and try again.');
+    });
+
+    test('isValidImportUrl should block IPv4-mapped IPv6 loopback and metadata addresses (SSRF mitigation)', async () => {
+        // Dotted quad mapped loopback
+        expect(await isValidImportUrl('http://[::ffff:127.0.0.1]/')).toBe(false);
+        // Compressed hex mapped loopback
+        expect(await isValidImportUrl('http://[::ffff:7f00:1]/')).toBe(false);
+        // Zero-padded mapped loopback
+        expect(await isValidImportUrl('http://[0:0:0:0:0:ffff:127.0.0.1]/')).toBe(false);
+        // Cloud metadata via mapped IPv6
+        expect(await isValidImportUrl('http://[::ffff:a9fe:a9fe]/latest/meta-data/')).toBe(false);
     });
 });

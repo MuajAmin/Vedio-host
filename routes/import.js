@@ -97,6 +97,18 @@ function isPrivateAddress(address) {
     }
 
     if (version === 6) {
+        // Normalise IPv4-mapped IPv6 literals (e.g., ::ffff:7f00:1, ::ffff:127.0.0.1, 0:0:0:0:0:ffff:7f00:1) to dotted quad
+        const mappedMatch = host.match(/^(?:::ffff:|0:0:0:0:0:ffff:)(?:(\d+\.\d+\.\d+\.\d+)|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/i);
+        if (mappedMatch) {
+            if (mappedMatch[1]) {
+                return isPrivateAddress(mappedMatch[1]);
+            }
+            const hi = parseInt(mappedMatch[2], 16);
+            const lo = parseInt(mappedMatch[3], 16);
+            const v4 = [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff].join('.');
+            return isPrivateAddress(v4);
+        }
+
         return (
             host === '::' ||
             host === '::1' ||
