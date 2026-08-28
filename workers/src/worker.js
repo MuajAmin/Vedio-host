@@ -1675,7 +1675,7 @@ async function handleEdgeWatchProgress(request, env, ctx, _capturedKey, url) {
     const syncPromise = (async () => {
       try {
         const sig = await generateHmacHex(`sync:${exp}`, secret);
-        await fetch(`${syncUrl}?sig=${sig}&exp=${exp}&user=${encodeURIComponent(user)}`, {
+        const response = await fetch(`${syncUrl}?sig=${sig}&exp=${exp}&user=${encodeURIComponent(user)}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1693,6 +1693,9 @@ async function handleEdgeWatchProgress(request, env, ctx, _capturedKey, url) {
           }),
           signal: AbortSignal.timeout(8000)
         });
+        if (!response.ok) {
+          throw new Error(`Origin presence sync failed with ${response.status}`);
+        }
       } catch {}
     })();
 
@@ -1822,4 +1825,3 @@ function getImageMimeType(filename) {
 function encodeBasename(name) {
   return name.replace(/["\\\\r\n\x00-\x1F\x7F]/g, '_');
 }
-

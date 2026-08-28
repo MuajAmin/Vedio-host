@@ -254,6 +254,8 @@ function serveMediaFile(dir, internalPrefix, cacheControlHeader) {
 
 // Register stream routes BEFORE the full session middleware
 const videoRoutes = require('./routes/videos');
+// This non-browser Worker relay bypasses session CSRF only because its handler
+// validates the short-lived HMAC before processing any telemetry.
 app.post('/api/internal-presence-sync', videoRoutes.handleInternalPresenceSync);
 app.head('/stream/:videoKey', fastMediaAuth, (req, res, next) => {
     req.params = { videoKey: req.params.videoKey };
