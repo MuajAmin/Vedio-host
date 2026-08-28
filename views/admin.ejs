@@ -87,11 +87,18 @@ const cfSavings = (safeStats && safeStats.cloudflareSavings) ? safeStats.cloudfl
     zoneId: null,
     totalOffloadedBytes: 0,
     totalOffloadedFormatted: '0 MB',
+    totalTransferredBytes: 0,
+    totalTransferredFormatted: '0 B',
+    transferCount: 0,
+    transferFailureCount: 0,
+    avgTransferSpeed: '—',
+    peakTransferSpeed: '—',
     totalWatchSeconds: 0,
     totalWatchFormatted: '0m',
     vpsQuotaBytes: 1000 * 1024 * 1024 * 1024,
     vpsQuotaPreservedPercent: '0.00',
-    edgeOffloadEfficiency: 0
+    edgeOffloadEfficiency: 0,
+    recentTransfers: []
 };
 const activeJobs = importJobs.filter(job => ['queued', 'starting', 'downloading'].includes(job.status));
 const failedJobs = importJobs.filter(job => ['error', 'canceled'].includes(job.status)).slice(0, 8);
@@ -550,13 +557,29 @@ if (sys) {
                         </div>
                     </div>
                     <div class="metric-val-wrap">
-                        <span class="metric-badge-pill" style="background: rgba(34, 197, 94, 0.15); color: #22c55e; font-weight: 700;">100% Edge Served</span>
+                        <span class="metric-badge-pill" style="background: ${cfSavings.edgeOffloadEfficiency >= 100 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)'}; color: ${cfSavings.edgeOffloadEfficiency >= 100 ? '#22c55e' : '#eab308'}; font-weight: 700;">${h(cfSavings.edgeOffloadEfficiency)}% Edge Served</span>
                     </div>
                 </div>
                 <div class="metric-runtime-details">
                     <div class="runtime-chip">
-                        <span class="chip-k">Offloaded Video</span>
+                        <span class="chip-k">R2 Transferred</span>
+                        <strong class="chip-v" style="color:#f38020;" id="r2TransferredText">${h(cfSavings.totalTransferredFormatted || '0 B')}</strong>
+                    </div>
+                    <div class="runtime-chip">
+                        <span class="chip-k">Stored on R2</span>
                         <strong class="chip-v" style="color:#f38020;">${h(cfSavings.totalOffloadedFormatted)}</strong>
+                    </div>
+                    <div class="runtime-chip">
+                        <span class="chip-k">Transfers</span>
+                        <strong class="chip-v">${h(cfSavings.transferCount || 0)}${cfSavings.transferFailureCount ? ` (${h(cfSavings.transferFailureCount)} failed)` : ''}</strong>
+                    </div>
+                    <div class="runtime-chip">
+                        <span class="chip-k">Avg Upload Speed</span>
+                        <strong class="chip-v" style="color:#22c55e;">${h(cfSavings.avgTransferSpeed || '—')}</strong>
+                    </div>
+                    <div class="runtime-chip">
+                        <span class="chip-k">Peak Upload Speed</span>
+                        <strong class="chip-v" style="color:#22c55e;">${h(cfSavings.peakTransferSpeed || '—')}</strong>
                     </div>
                     <div class="runtime-chip">
                         <span class="chip-k">VPS Quota Preserved</span>
@@ -655,8 +678,13 @@ const r2HubHtml = `
                 <div class="r2-progress-fill" ${`style="width:${h(r2Stats.r2Percent)}%"`}></div>
             </div>
             <div class="r2-tile-footer">
-                <span>CDN Size: <strong>${h(formatBytes(r2Stats.r2TotalBytes))}</strong></span>
+                <span>CDN Size: <strong id="r2CdnSizeText">${h(formatBytes(r2Stats.r2TotalBytes))}</strong></span>
                 <span>Bandwidth: <strong style="color:#22c55e;">Zero VPS Cost</strong></span>
+            </div>
+            <div class="r2-tile-footer" style="font-size:0.72rem; opacity:0.7;">
+                ${r2Stats.inventoryAvailable === false
+                    ? `<span style="color:#eab308;">⚠️ Live bucket listing unavailable — showing last known status</span>`
+                    : `<span>Source: <strong>${h(r2Stats.inventorySource || 'n/a')}</strong>${r2Stats.bucketObjectCount !== null && r2Stats.bucketObjectCount !== undefined ? ` · ${h(r2Stats.bucketObjectCount)} object(s) in bucket` : ''}</span>`}
             </div>
         </div>
 

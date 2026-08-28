@@ -185,6 +185,22 @@ db.exec(`
         last_used_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Real (measured) VPS -> R2 transfer ledger.  The admin dashboard used to
+    -- *estimate* offloaded bytes from watch time multiplied by a guessed
+    -- bitrate; this table records what actually moved over the wire so the
+    -- dashboard can report real numbers instead of a fabricated figure.
+    CREATE TABLE IF NOT EXISTS r2_transfer_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        filename TEXT NOT NULL,
+        direction TEXT NOT NULL DEFAULT 'vps_to_r2',
+        bytes INTEGER NOT NULL DEFAULT 0,
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        throughput_bps REAL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'success',
+        error TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_at ON videos(uploaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_videos_uploaded_asc ON videos(uploaded_at ASC);
     CREATE INDEX IF NOT EXISTS idx_comments_video_created ON comments(video_id, created_at DESC);
@@ -201,6 +217,9 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_call_logs_created ON call_logs(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_push_subs_username ON push_subscriptions(username);
     CREATE INDEX IF NOT EXISTS idx_push_subs_endpoint ON push_subscriptions(endpoint);
+    CREATE INDEX IF NOT EXISTS idx_r2_transfer_created ON r2_transfer_log(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_r2_transfer_status ON r2_transfer_log(status);
+    CREATE INDEX IF NOT EXISTS idx_r2_transfer_filename ON r2_transfer_log(filename);
 `);
 
 // Migrations for older SQLite files.
@@ -1489,6 +1508,147 @@ function pruneActivityLogs(maxKeep = 1500) {
 // Prune activity logs every 30 minutes (unref so it doesn't block shutdown)
 setInterval(() => pruneActivityLogs(1500), 30 * 60 * 1000).unref();
 pruneActivityLogs(1500);
+
+// =============================================================================
+//  R2 Transfer Ledger — real measured VPS -> R2 transfer accounting
+// =============================================================================
+
+const stmtR2TransferInsert = db.prepare(`
+    INSERT INTO r2_transfer_log (filename, direction, bytes, duration_ms, throughput_bps, status, error)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+
+// Totals cover every successful transfer into R2 (VPS-side multipart uploads and
+// direct client -> Worker -> R2 uploads) so the dashboard reports the real total.
+const stmtR2TransferStats = db.prepare(`
+    SELECT
+        COUNT(*)                AS transferCount,
+        COALESCE(SUM(bytes), 0) AS totalBytes,
+        COALESCE(SUM(duration_ms), 0) AS totalMs
+    FROM r2_transfer_log
+    WHERE status = 'success'
+`);
+
+// Speed is only meaningful for transfers the VPS actually performed and timed;
+// direct client uploads are logged with duration_ms = 0 and must not skew it.
+const stmtR2TransferSpeed = db.prepare(`
+    SELECT
+        COALESCE(AVG(throughput_bps), 0) AS avgBps,
+        COALESCE(MAX(throughput_bps), 0) AS peakBps
+    FROM r2_transfer_log
+    WHERE status = 'success' AND direction = 'vps_to_r2' AND duration_ms > 0
+`);
+
+const stmtR2TransferFailures = db.prepare(`
+    SELECT COUNT(*) AS failureCount FROM r2_transfer_log WHERE status != 'success'
+`);
+
+const stmtR2TransferRecent = db.prepare(`
+    SELECT filename, bytes, duration_ms, throughput_bps, status, error, created_at
+    FROM r2_transfer_log
+    ORDER BY id DESC
+    LIMIT ?
+`);
+
+/**
+ * Record a completed (or failed) VPS -> R2 transfer with real measured bytes.
+ * @param {{ filename: string, bytes?: number, durationMs?: number, status?: string, error?: string, direction?: string }} entry
+ */
+function recordR2Transfer(entry) {
+    try {
+        const bytes = Math.max(0, Math.round(Number(entry.bytes || 0)));
+        const durationMs = Math.max(0, Math.round(Number(entry.durationMs || 0)));
+        const throughput = durationMs > 0 ? (bytes / (durationMs / 1000)) : 0;
+        stmtR2TransferInsert.run(
+            String(entry.filename || ''),
+            String(entry.direction || 'vps_to_r2'),
+            bytes,
+            durationMs,
+            throughput,
+            String(entry.status || 'success'),
+            entry.error ? String(entry.error).slice(0, 500) : null
+        );
+    } catch (err) {
+        console.warn('[db] Could not record R2 transfer:', err.message);
+    }
+}
+
+/**
+ * Aggregate real R2 transfer statistics for the admin dashboard.
+ * @returns {{ transferCount: number, totalBytes: number, totalMs: number, avgBps: number, peakBps: number, failureCount: number }}
+ */
+function getR2TransferStats() {
+    try {
+        const row = stmtR2TransferStats.get() || {};
+        const speed = stmtR2TransferSpeed.get() || {};
+        const fail = stmtR2TransferFailures.get() || {};
+        return {
+            transferCount: Number(row.transferCount || 0),
+            totalBytes: Number(row.totalBytes || 0),
+            totalMs: Number(row.totalMs || 0),
+            avgBps: Number(speed.avgBps || 0),
+            peakBps: Number(speed.peakBps || 0),
+            failureCount: Number(fail.failureCount || 0)
+        };
+    } catch {
+        return { transferCount: 0, totalBytes: 0, totalMs: 0, avgBps: 0, peakBps: 0, failureCount: 0 };
+    }
+}
+
+/**
+ * Most recent transfer log rows (newest first) for the admin transfer table.
+ * @param {number} [limit=10]
+ */
+function getRecentR2Transfers(limit = 10) {
+    try {
+        const n = Number.isInteger(limit) && limit > 0 && limit <= 100 ? limit : 10;
+        return stmtR2TransferRecent.all(n);
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * One-time seed: videos already confirmed on R2 before the transfer ledger
+ * existed have no log rows, which would make the admin dashboard report 0 bytes
+ * transferred on a library that is in fact fully synced. Backfill them once, with
+ * duration_ms = 0 so they never distort the measured throughput averages.
+ */
+function seedR2TransferLedger() {
+    try {
+        const existing = db.prepare('SELECT COUNT(*) AS count FROM r2_transfer_log').get();
+        if (Number(existing?.count || 0) > 0) return;
+
+        const rows = db.prepare(
+            "SELECT filename, size FROM videos WHERE cdn_status IN ('r2_ready', 'r2_only') AND filename IS NOT NULL"
+        ).all();
+        if (rows.length === 0) return;
+
+        const insertMany = db.transaction((items) => {
+            for (const item of items) {
+                stmtR2TransferInsert.run(
+                    item.filename,
+                    'vps_to_r2',
+                    Math.max(0, Number(item.size || 0)),
+                    0,
+                    0,
+                    'success',
+                    null
+                );
+            }
+        });
+        insertMany(rows);
+        console.log(`[db] Seeded R2 transfer ledger with ${rows.length} pre-existing R2 video(s).`);
+    } catch (err) {
+        console.warn('[db] Could not seed R2 transfer ledger:', err.message);
+    }
+}
+
+seedR2TransferLedger();
+
+db.recordR2Transfer = recordR2Transfer;
+db.getR2TransferStats = getR2TransferStats;
+db.getRecentR2Transfers = getRecentR2Transfers;
 
 db.savePushSubscription = savePushSubscription;
 db.getPushSubscriptions = getPushSubscriptions;

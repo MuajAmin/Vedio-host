@@ -15,7 +15,11 @@ const crypto = require('crypto');
  */
 function getWorkerAdminSignedUrl(action) {
     const workerUrl = process.env.CF_WORKER_URL;
-    const secret = process.env.SESSION_SECRET;
+    // Must match the Worker's precedence (WORKER_HMAC_SECRET || SESSION_SECRET).
+    // Using SESSION_SECRET unconditionally produced signatures the Worker rejected
+    // with 401 whenever WORKER_HMAC_SECRET was set, silently degrading every
+    // bucket scan to the much slower S3 ListObjectsV2 fallback.
+    const secret = process.env.WORKER_HMAC_SECRET || process.env.SESSION_SECRET;
     if (!workerUrl || !secret) return null;
     const exp = Math.floor(Date.now() / 1000) + 300; // 5 minutes TTL
     const message = `${action}:${exp}`;
@@ -285,9 +289,121 @@ async function getDiskFilesWithCache() {
     return cachedDiskStats;
 }
 
+// ─── Cached R2 bucket inventory ──────────────────────────────────────────────
+// One bulk listing replaces the old per-video HEAD storm. Cached briefly so the
+// 4s live-status poll cannot hammer R2 (or the Worker) once per video per poll.
+let cachedR2Inventory = null;
+let cachedR2InventoryTime = 0;
+let inFlightR2Inventory = null;
+const R2_INVENTORY_CACHE_TTL = 15 * 1000;
+
+const EMPTY_INVENTORY = {
+    available: false,
+    source: 'unavailable',
+    objects: [],
+    map: new Map(),
+    totalBytes: 0,
+    ageMs: 0
+};
+
+/**
+ * Fetch the full R2 object inventory, preferring the edge Worker (single request,
+ * no S3 signing round trips) and falling back to the S3 ListObjectsV2 API.
+ * Results are cached for R2_INVENTORY_CACHE_TTL and de-duplicated while in flight.
+ *
+ * @param {boolean} [forceRefresh=false]
+ * @returns {Promise<{available: boolean, source: string, objects: Array, map: Map, totalBytes: number, ageMs: number}>}
+ */
+async function getR2InventoryWithCache(forceRefresh = false) {
+    if (!r2.isR2Enabled()) {
+        return { ...EMPTY_INVENTORY, source: 'disabled' };
+    }
+
+    const now = Date.now();
+    if (!forceRefresh && cachedR2Inventory && (now - cachedR2InventoryTime < R2_INVENTORY_CACHE_TTL)) {
+        return { ...cachedR2Inventory, ageMs: now - cachedR2InventoryTime };
+    }
+
+    // Collapse concurrent callers (dashboard render + live-status poll) onto one fetch.
+    if (inFlightR2Inventory) return inFlightR2Inventory;
+
+    inFlightR2Inventory = (async () => {
+        let objects = null;
+        let source = 'unavailable';
+
+        // 1. Fast path — edge Worker inventory endpoint.
+        const workerUrl = getWorkerAdminSignedUrl('inventory');
+        if (workerUrl) {
+            try {
+                const response = await fetch(workerUrl, { method: 'GET', signal: AbortSignal.timeout(6000) });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && Array.isArray(data.files)) {
+                        objects = data.files.map(f => ({ key: f.key, size: Number(f.size || 0), uploaded: f.uploaded }));
+                        source = 'worker';
+                    }
+                } else {
+                    console.warn(`[admin] Worker inventory returned HTTP ${response.status}; falling back to S3.`);
+                }
+            } catch (wErr) {
+                console.warn('[admin] Worker inventory fetch failed, falling back to S3:', wErr.message);
+            }
+        }
+
+        // 2. Fallback — S3 SDK bulk listing.
+        if (!objects) {
+            try {
+                const listed = await r2.listAllR2Objects();
+                objects = listed.map(o => ({ key: o.key, size: Number(o.size || 0), uploaded: o.uploaded }));
+                source = 's3-fallback';
+            } catch (s3Err) {
+                console.error('[admin] R2 inventory unavailable (Worker and S3 both failed):', s3Err.message);
+            }
+        }
+
+        if (!objects) {
+            // Serve the last good inventory rather than reporting everything missing.
+            if (cachedR2Inventory) {
+                return { ...cachedR2Inventory, source: cachedR2Inventory.source + '-stale', ageMs: Date.now() - cachedR2InventoryTime };
+            }
+            return { ...EMPTY_INVENTORY };
+        }
+
+        const map = new Map();
+        let totalBytes = 0;
+        for (const obj of objects) {
+            if (!obj.key) continue;
+            map.set(obj.key, obj);
+            totalBytes += obj.size;
+        }
+
+        // Keep the shared confirmed-on-R2 cache in sync with reality.
+        try {
+            if (typeof r2.bulkConfirmOnR2 === 'function') r2.bulkConfirmOnR2(map.keys());
+        } catch {}
+
+        cachedR2Inventory = { available: true, source, objects, map, totalBytes, ageMs: 0 };
+        cachedR2InventoryTime = Date.now();
+        return { ...cachedR2Inventory, ageMs: 0 };
+    })().finally(() => {
+        inFlightR2Inventory = null;
+    });
+
+    return inFlightR2Inventory;
+}
+
+/**
+ * Invalidate the cached inventory so the next read reflects a mutation
+ * (upload completed, object deleted) immediately instead of after the TTL.
+ */
+function invalidateR2Inventory() {
+    cachedR2Inventory = null;
+    cachedR2InventoryTime = 0;
+}
+
 async function collectAdminStats(currentSid = null) {
     const videos = db.prepare(
-        'SELECT id, title, filename, thumbnail, size, duration, uploaded_by, uploaded_at, import_quality FROM videos ORDER BY uploaded_at DESC'
+        'SELECT id, title, filename, thumbnail, size, duration, uploaded_by, uploaded_at, import_quality, cdn_status FROM videos ORDER BY uploaded_at DESC'
     ).all();
     const commentsCount = db.prepare('SELECT COUNT(*) AS count FROM comments').get().count;
     const progressCount = db.prepare('SELECT COUNT(*) AS count FROM watch_progress').get().count;
@@ -378,23 +494,48 @@ async function collectAdminStats(currentSid = null) {
         activityTimeline
     };
 
-    // Calculate Cloudflare R2 vs VPS Storage breakdown (Parallel & Cached)
-    let r2VideoCount = 0;
-    let r2TotalBytes = 0;
+    // Calculate Cloudflare R2 vs VPS Storage breakdown.
+    //
+    // This used to issue one HEAD request to R2 per video on every dashboard
+    // render AND on every 4s live-status poll — with N videos that is N network
+    // round trips per poll, which both made the admin page slow and reported
+    // stale/incorrect values whenever a HEAD timed out (the catch turned any
+    // transient error into "not on R2", under-reporting the R2 numbers).
+    //
+    // Instead, take one cached bulk inventory of the bucket. That gives the
+    // authoritative object list *and* each object's real byte size on R2.
+    const inventory = await getR2InventoryWithCache();
     const vpsDiskFileSet = new Set(videoFiles.map(f => f.name));
 
-    await Promise.all(videos.map(async (v) => {
+    let r2VideoCount = 0;
+    let r2TotalBytes = 0;
+
+    for (const v of videos) {
         v.onDisk = vpsDiskFileSet.has(v.filename);
-        try {
-            v.onR2 = r2.isConfirmedOnR2(v.filename) || await r2.existsOnR2(v.filename);
-        } catch {
-            v.onR2 = false;
+        if (inventory.available) {
+            // Authoritative: the object either is or is not in the bucket listing.
+            const obj = inventory.map.get(v.filename);
+            if (obj) {
+                v.onR2 = true;
+                // Report the real size stored on R2, not the local DB's size column.
+                r2TotalBytes += Number(obj.size || 0);
+            } else if (r2.isConfirmedOnR2(v.filename)) {
+                // Uploaded and verified after this inventory snapshot was taken —
+                // count it now instead of showing it as unsynced until the TTL expires.
+                v.onR2 = true;
+                r2TotalBytes += Number(v.size || 0);
+            } else {
+                v.onR2 = false;
+            }
+        } else {
+            // Inventory unavailable (Worker + S3 both failed) — fall back to the
+            // confirmed cache / cdn_status so the page still renders something
+            // truthful rather than claiming everything is missing.
+            v.onR2 = r2.isConfirmedOnR2(v.filename) || v.cdn_status === 'r2_ready' || v.cdn_status === 'r2_only';
+            if (v.onR2) r2TotalBytes += Number(v.size || 0);
         }
-        if (v.onR2) {
-            r2VideoCount++;
-            r2TotalBytes += (v.size || 0);
-        }
-    }));
+        if (v.onR2) r2VideoCount++;
+    }
 
     const r2Stats = {
         enabled: r2.isR2Enabled(),
@@ -405,7 +546,18 @@ async function collectAdminStats(currentSid = null) {
         vpsCount: videoFiles.length,
         vpsTotalBytes: sumBytes(videoFiles),
         unsyncedCount: Math.max(0, videos.length - r2VideoCount),
-        unsyncedVideos: videos.filter(v => !v.onR2)
+        unsyncedVideos: videos.filter(v => !v.onR2),
+        // Surface where the numbers came from so the UI can be honest about
+        // degraded/stale data instead of silently showing wrong values.
+        inventorySource: inventory.source,
+        inventoryAvailable: inventory.available,
+        inventoryAgeSeconds: Math.round(inventory.ageMs / 1000),
+        // Objects present in the bucket but not referenced by any DB row.
+        orphanR2Count: inventory.available
+            ? Math.max(0, inventory.objects.length - r2VideoCount)
+            : 0,
+        bucketObjectCount: inventory.available ? inventory.objects.length : null,
+        bucketTotalBytes: inventory.available ? inventory.totalBytes : null
     };
 
     // Calculate Cloudflare Offload & Bandwidth Savings
@@ -415,44 +567,53 @@ async function collectAdminStats(currentSid = null) {
         totalWatchedSecondsAll = Number(row?.total || 0);
     } catch {}
 
-    let totalOffloadedBytes = 0;
-    try {
-        const rows = db.prepare(`
-            SELECT w.seconds_watched, v.size, wp.duration_seconds
-            FROM watch_time_ledger w
-            JOIN videos v ON v.id = w.video_id
-            LEFT JOIN watch_progress wp ON wp.video_id = w.video_id AND wp.user = w.user
-        `).all();
-        for (const r of rows) {
-            const dur = Number(r.duration_seconds || 0);
-            const size = Number(r.size || 0);
-            const sec = Number(r.seconds_watched || 0);
-            if (dur > 0 && size > 0) {
-                totalOffloadedBytes += (sec * (size / dur));
-            } else if (size > 0) {
-                totalOffloadedBytes += (sec * (size / 600));
-            }
-        }
-    } catch {}
+    // REAL measured VPS -> R2 transfer volume, taken from the r2_transfer_log
+    // ledger written by utils/r2.js on every completed upload.
+    //
+    // Previously this figure was invented: it multiplied watch seconds by a
+    // guessed per-second bitrate and, if that produced zero, fell back to
+    // assuming every video was 80 MB per 10 minutes. That is why the admin page
+    // never showed the actual R2 transfer value.
+    const transferStats = (typeof db.getR2TransferStats === 'function')
+        ? db.getR2TransferStats()
+        : { transferCount: 0, totalBytes: 0, totalMs: 0, avgBps: 0, peakBps: 0, failureCount: 0 };
 
-    if (totalOffloadedBytes === 0 && totalWatchedSecondsAll > 0) {
-        totalOffloadedBytes = totalWatchedSecondsAll * (80 * 1024 * 1024 / 600);
-    }
+    const totalTransferredBytes = transferStats.totalBytes;
+
+    // Bytes currently resident on R2 (authoritative, from the bucket inventory).
+    const bytesOnR2 = r2Stats.r2TotalBytes;
+
+    // Share of the library actually served from the edge instead of VPS disk.
+    const edgeOffloadEfficiency = (r2.isR2Enabled() && r2Stats.totalVideos > 0)
+        ? Math.round((r2Stats.r2Count / r2Stats.totalVideos) * 100)
+        : 0;
 
     const cloudflareSavings = {
         enabled: r2.isR2Enabled(),
         workerUrl: process.env.CF_WORKER_URL || null,
         zoneConfigured: !!(process.env.CF_ZONE_ID && process.env.CF_API_TOKEN),
         zoneId: process.env.CF_ZONE_ID ? `${process.env.CF_ZONE_ID.slice(0, 6)}...` : null,
-        totalOffloadedBytes: Math.round(totalOffloadedBytes),
-        totalOffloadedFormatted: formatBytes(totalOffloadedBytes),
+
+        // Measured VPS -> R2 transfer (real bytes pushed over the wire).
+        totalTransferredBytes,
+        totalTransferredFormatted: formatBytes(totalTransferredBytes),
+        transferCount: transferStats.transferCount,
+        transferFailureCount: transferStats.failureCount,
+        avgTransferSpeed: transferStats.avgBps > 0 ? formatSpeed(transferStats.avgBps) : '—',
+        peakTransferSpeed: transferStats.peakBps > 0 ? formatSpeed(transferStats.peakBps) : '—',
+
+        // Bytes stored on R2 right now (this is the storage offloaded from VPS).
+        totalOffloadedBytes: bytesOnR2,
+        totalOffloadedFormatted: formatBytes(bytesOnR2),
+
         totalWatchSeconds: totalWatchedSecondsAll,
         totalWatchFormatted: formatWatchTime(totalWatchedSecondsAll),
         vpsQuotaBytes: 1000 * 1024 * 1024 * 1024,
-        vpsQuotaPreservedPercent: totalOffloadedBytes > 0
-            ? ((totalOffloadedBytes / (1000 * 1024 * 1024 * 1024)) * 100).toFixed(2)
+        vpsQuotaPreservedPercent: bytesOnR2 > 0
+            ? ((bytesOnR2 / (1000 * 1024 * 1024 * 1024)) * 100).toFixed(2)
             : '0.00',
-        edgeOffloadEfficiency: r2.isR2Enabled() ? 100 : 0
+        edgeOffloadEfficiency,
+        recentTransfers: (typeof db.getRecentR2Transfers === 'function') ? db.getRecentR2Transfers(8) : []
     };
 
     return {
@@ -494,23 +655,79 @@ router.get('/admin', isMuaj, async (req, res) => {
     });
 });
 
-// GET /admin/r2/live-status — Real-time R2 stats and active uploads for admin dashboard
+// GET /admin/r2/live-status — Real-time R2 stats and active uploads for admin dashboard.
+//
+// This endpoint is polled every 4 seconds by the admin page. It used to call
+// collectAdminStats(), which recomputes *everything* — all sessions, the full
+// watch-history join, disk directory scans — and fired one HEAD request to R2
+// per video. Now it computes only the R2 numbers it actually returns, using the
+// shared cached bucket inventory.
 router.get('/admin/r2/live-status', isMuaj, async (req, res) => {
     try {
-        const stats = await collectAdminStats(req.sessionID);
+        const videos = db.prepare('SELECT id, title, filename, size, cdn_status FROM videos').all();
+        const [{ videoFiles }, inventory] = await Promise.all([
+            getDiskFilesWithCache(),
+            getR2InventoryWithCache()
+        ]);
+
+        const vpsDiskFileSet = new Set(videoFiles.map(f => f.name));
+        let r2Count = 0;
+        let r2TotalBytes = 0;
+
+        const videoRows = videos.map((v) => {
+            const onDisk = vpsDiskFileSet.has(v.filename);
+            let onR2;
+            if (inventory.available) {
+                const obj = inventory.map.get(v.filename);
+                if (obj) {
+                    onR2 = true;
+                    r2TotalBytes += Number(obj.size || 0);
+                } else if (r2.isConfirmedOnR2(v.filename)) {
+                    // Confirmed after the inventory snapshot — reflect it immediately.
+                    onR2 = true;
+                    r2TotalBytes += Number(v.size || 0);
+                } else {
+                    onR2 = false;
+                }
+            } else {
+                onR2 = r2.isConfirmedOnR2(v.filename) || v.cdn_status === 'r2_ready' || v.cdn_status === 'r2_only';
+                if (onR2) r2TotalBytes += Number(v.size || 0);
+            }
+            if (onR2) r2Count++;
+            return { id: v.id, filename: v.filename, title: v.title, size: v.size, onDisk, onR2 };
+        });
+
         const activeUploads = typeof r2.getActiveUploadsList === 'function' ? r2.getActiveUploadsList() : [];
+        const transferStats = (typeof db.getR2TransferStats === 'function')
+            ? db.getR2TransferStats()
+            : { transferCount: 0, totalBytes: 0, avgBps: 0, peakBps: 0, failureCount: 0 };
+
         res.json({
             success: true,
-            r2Stats: stats.r2Stats,
+            r2Stats: {
+                enabled: r2.isR2Enabled(),
+                totalVideos: videos.length,
+                r2Count,
+                r2TotalBytes,
+                r2Percent: videos.length > 0 ? Math.round((r2Count / videos.length) * 100) : 0,
+                vpsCount: videoFiles.length,
+                vpsTotalBytes: sumBytes(videoFiles),
+                unsyncedCount: Math.max(0, videos.length - r2Count),
+                inventorySource: inventory.source,
+                inventoryAvailable: inventory.available,
+                inventoryAgeSeconds: Math.round(inventory.ageMs / 1000),
+                bucketObjectCount: inventory.available ? inventory.objects.length : null,
+                bucketTotalBytes: inventory.available ? inventory.totalBytes : null
+            },
+            transferStats: {
+                totalBytes: transferStats.totalBytes,
+                totalFormatted: formatBytes(transferStats.totalBytes),
+                transferCount: transferStats.transferCount,
+                failureCount: transferStats.failureCount,
+                avgSpeed: transferStats.avgBps > 0 ? formatSpeed(transferStats.avgBps) : '—'
+            },
             activeUploads,
-            videos: stats.videos.map(v => ({
-                id: v.id,
-                filename: v.filename,
-                title: v.title,
-                size: v.size,
-                onDisk: v.onDisk,
-                onR2: v.onR2
-            }))
+            videos: videoRows
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -616,36 +833,12 @@ router.post('/admin/r2/scan-bucket', isMuaj, async (req, res) => {
         const dbVideos = db.prepare('SELECT id, filename, title, size FROM videos').all();
         const dbFilenameSet = new Set(dbVideos.map(v => v.filename).filter(Boolean));
 
-        let r2Objects = [];
-        let source = 'worker';
-        let workerHandled = false;
-
-        // 1. Try Worker inventory endpoint first
-        const workerScanUrl = getWorkerAdminSignedUrl('inventory');
-        if (workerScanUrl) {
-            try {
-                const response = await fetch(workerScanUrl, { method: 'GET', signal: AbortSignal.timeout(6000) });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data && Array.isArray(data.files)) {
-                        r2Objects = data.files;
-                        workerHandled = true;
-                    }
-                }
-            } catch (wErr) {
-                console.warn('[admin] Worker inventory fetch failed, falling back to S3:', wErr.message);
-            }
-        }
-
-        // 2. Fallback to S3 SDK if Worker is unavailable
-        if (!workerHandled && r2.isR2Enabled()) {
-            source = 's3-fallback';
-            try {
-                r2Objects = await r2.listAllR2Objects();
-            } catch (s3Err) {
-                console.error('[admin] S3 list failed:', s3Err.message);
-            }
-        }
+        // An explicit admin-triggered scan should see current state, so force a
+        // refresh — but reuse the shared inventory helper (Worker fast path,
+        // S3 fallback) instead of duplicating that logic here.
+        const inventory = await getR2InventoryWithCache(true);
+        const r2Objects = inventory.objects;
+        const source = inventory.source;
 
         // 3. Match objects and detect true orphans
         let totalR2Bytes = 0;
@@ -739,6 +932,9 @@ router.post('/admin/r2/clean-orphans', isMuaj, async (req, res) => {
                 r2.unmarkConfirmedOnR2(key);
             }
         }
+
+        // Deleted objects must disappear from the dashboard immediately.
+        if (deletedKeys.length > 0) invalidateR2Inventory();
 
         res.json({
             success: true,
