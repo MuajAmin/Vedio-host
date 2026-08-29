@@ -1,10 +1,34 @@
 const crypto = require('crypto');
 const ejs = require('ejs');
-const cookie = require('cookie');
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const VALID_THEMES = new Set(['cinematic', 'cyberpunk', 'emerald', 'sunset']);
 const VALID_MODES = new Set(['standard', 'minimal']);
+
+/**
+ * Fast zero-dependency cookie value extractor for high-frequency middleware.
+ * Avoids allocating object maps and decoding unneeded cookies on every request.
+ */
+function getCookieValue(cookieHeader, name) {
+    if (!cookieHeader || typeof cookieHeader !== 'string') return null;
+    const prefix = name + '=';
+    const cookies = cookieHeader.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.startsWith(prefix)) {
+            let val = cookie.slice(prefix.length).trim();
+            if (val.startsWith('"') && val.endsWith('"')) {
+                val = val.slice(1, -1);
+            }
+            try {
+                return decodeURIComponent(val);
+            } catch {
+                return val;
+            }
+        }
+    }
+    return null;
+}
 
 // --- Avatar in-memory cache -------------------------------------------
 // getAllUserAvatars() was being called on every HTTP request (including
@@ -107,12 +131,13 @@ function attachLocals(req, res, next) {
     let cookieUiMode = null;
     try {
         if (req.headers.cookie) {
-            const parsedCookies = cookie.parse(req.headers.cookie);
-            if (parsedCookies.videohosk_theme && VALID_THEMES.has(parsedCookies.videohosk_theme)) {
-                cookieTheme = parsedCookies.videohosk_theme;
+            const theme = getCookieValue(req.headers.cookie, 'videohosk_theme');
+            if (theme && VALID_THEMES.has(theme)) {
+                cookieTheme = theme;
             }
-            if (parsedCookies.videohosk_uimode && VALID_MODES.has(parsedCookies.videohosk_uimode)) {
-                cookieUiMode = parsedCookies.videohosk_uimode;
+            const uiMode = getCookieValue(req.headers.cookie, 'videohosk_uimode');
+            if (uiMode && VALID_MODES.has(uiMode)) {
+                cookieUiMode = uiMode;
             }
         }
     } catch {}
@@ -209,6 +234,7 @@ module.exports = {
     attachLocals,
     escapeHtml,
     getCachedAvatars,
+    getCookieValue,
     getCsrfToken,
     handleCsrfError,
     invalidateAvatarCache,

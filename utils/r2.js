@@ -1,6 +1,5 @@
 const { S3Client, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
-const { NodeHttpHandler } = require('@smithy/node-http-handler');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
@@ -50,22 +49,27 @@ const r2Agent = new https.Agent({
 });
 
 if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY) {
-    s3Client = new S3Client({
-        region: 'auto',
-        endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-        credentials: {
-            accessKeyId: R2_ACCESS_KEY_ID,
-            secretAccessKey: R2_SECRET_ACCESS_KEY,
-        },
-        requestHandler: new NodeHttpHandler({
-            httpsAgent: r2Agent,
-            connectionTimeout: 10000,
-            socketTimeout: 120000,
-        }),
-        maxAttempts: 5,
-    });
-    r2Enabled = true;
-    console.log(`[R2] Cloudflare R2 CDN configured successfully (multipart: ${R2_MULTIPART_PART_SIZE_MB} MiB x ${R2_MULTIPART_QUEUE_SIZE}, sockets: ${R2_MAX_SOCKETS}, read buffer: ${R2_READ_BUFFER_KB} KiB).`);
+    try {
+        const { NodeHttpHandler } = require('@smithy/node-http-handler');
+        s3Client = new S3Client({
+            region: 'auto',
+            endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+            credentials: {
+                accessKeyId: R2_ACCESS_KEY_ID,
+                secretAccessKey: R2_SECRET_ACCESS_KEY,
+            },
+            requestHandler: new NodeHttpHandler({
+                httpsAgent: r2Agent,
+                connectionTimeout: 10000,
+                socketTimeout: 120000,
+            }),
+            maxAttempts: 5,
+        });
+        r2Enabled = true;
+        console.log(`[R2] Cloudflare R2 CDN configured successfully (multipart: ${R2_MULTIPART_PART_SIZE_MB} MiB x ${R2_MULTIPART_QUEUE_SIZE}, sockets: ${R2_MAX_SOCKETS}, read buffer: ${R2_READ_BUFFER_KB} KiB).`);
+    } catch (err) {
+        console.warn('[R2] Could not initialize R2 client:', err.message);
+    }
 } else {
     console.warn('[R2] R2 credentials not configured — videos will stream from VPS only.');
 }
