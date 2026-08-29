@@ -198,4 +198,69 @@ describe('Video Deletion & CSRF Token Validation', () => {
         const dbVideo = db.prepare('SELECT * FROM videos WHERE id = ?').get(missingFileId);
         expect(dbVideo == null).toBe(true);
     });
+
+    test('Non-owner/non-admin user is forbidden (403) from renaming or deleting another user\'s video', async () => {
+        const protectId = 'test-protect-id';
+        const protectFilename = 'test-protect-video.mp4';
+
+        db.prepare('DELETE FROM videos WHERE id = ? OR filename = ?').run(protectId, protectFilename);
+        db.prepare(`
+            INSERT INTO videos (id, title, filename, original_name, size, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(protectId, 'Protected Video', protectFilename, 'test.mp4', 1000, 'muaj');
+
+        const express = require('express');
+        const videosRouter = require('../routes/videos');
+        const app = express();
+        app.use(express.urlencoded({ extended: true }));
+        app.use(express.json());
+        // Mock session as non-admin, non-owner user 'hajera'
+        app.use((req, res, next) => {
+            req.session = { user: 'hajera', csrfToken: 'test-csrf-token' };
+            next();
+        });
+        app.use('/', videosRouter);
+
+        const server = app.listen(0);
+        const port = server.address().port;
+
+        // Try renaming video owned by 'muaj' as user 'hajera'
+        const renameRes = await fetch(`http://localhost:${port}/rename/${protectId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-csrf-token': 'test-csrf-token'
+            },
+            body: JSON.stringify({ title: 'Hacked Title' })
+        });
+
+        expect(renameRes.status).toBe(403);
+        const renameData = await renameRes.json();
+        expect(renameData.error).toContain('Forbidden');
+
+        // Verify title in DB did NOT change
+        const videoAfterRename = db.prepare('SELECT title FROM videos WHERE id = ?').get(protectId);
+        expect(videoAfterRename.title).toBe('Protected Video');
+
+        // Try deleting video owned by 'muaj' as user 'hajera'
+        const deleteRes = await fetch(`http://localhost:${port}/delete/${protectId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'x-csrf-token': 'test-csrf-token',
+                'Accept': 'application/json'
+            }
+        });
+
+        expect(deleteRes.status).toBe(403);
+        const deleteData = await deleteRes.json();
+        expect(deleteData.error).toContain('Forbidden');
+
+        // Verify video record in DB still exists
+        const videoAfterDelete = db.prepare('SELECT * FROM videos WHERE id = ?').get(protectId);
+        expect(videoAfterDelete).not.toBeNull();
+
+        server.close();
+        db.prepare('DELETE FROM videos WHERE id = ?').run(protectId);
+    });
 });
