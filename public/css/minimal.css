@@ -3033,6 +3033,90 @@ html[data-ui-mode="minimal"] .r2-android-video-card.is-pending {
     border-color: rgba(245, 158, 11, 0.25) !important;
 }
 
+/* --------------------------------------------------------------------------
+   17. Messaging spacing rhythm
+   Keep the chat surface compact and consistent without shrinking touch targets.
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header {
+    min-height: 52px !important;
+    padding: 4px 8px !important;
+    gap: 4px !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-user-group {
+    gap: 8px !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-avatar {
+    width: 36px !important;
+    height: 36px !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-actions {
+    gap: 0 !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-body-container {
+    padding: 10px 10px 8px !important;
+    gap: 6px !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-row {
+    max-width: 88% !important;
+    margin: 1px 0 !important;
+    gap: 4px !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-bubble {
+    padding: 8px 12px !important;
+    line-height: 1.4 !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-meta-row {
+    margin-top: 2px !important;
+    padding: 0 3px !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-footer {
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)) 8px !important;
+    gap: 4px !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-input-row {
+    gap: 4px !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-input-wrap {
+    padding: 4px 8px !important;
+    gap: 4px !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-textarea {
+    padding: 4px 0 !important;
+}
+
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-reply-bar,
+html[data-ui-mode="minimal"] body[data-page="messages"] .msg-recording-bar {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+@media (max-width: 600px) {
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-body-container {
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-row {
+        max-width: 92% !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-name {
+        font-size: 14px !important;
+    }
+}
+
+
 html[data-ui-mode="minimal"] .r2-android-progress-box {
     background: var(--min-bg-root, #08090e) !important;
     border: 1px solid rgba(56, 189, 248, 0.3) !important;
