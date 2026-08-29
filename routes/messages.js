@@ -222,8 +222,9 @@ router.post('/api/messages', isAuthenticated, (req, res) => {
     // Log activity
     const deviceInfo = parseUserAgent(req.headers['user-agent']);
     const ipAddress = getClientIp(req);
+    const safeText = text || '';
     db.logActivity(user, 'message_sent', {
-        details: videoId ? `Shared video: ${saved.video ? saved.video.title : 'video'}` : (text.length > 50 ? text.slice(0, 50) + '...' : text),
+        details: videoId ? `Shared video: ${saved.video ? saved.video.title : 'video'}` : (safeText.length > 50 ? safeText.slice(0, 50) + '...' : safeText),
         deviceInfo,
         ipAddress
     });
