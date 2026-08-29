@@ -794,6 +794,26 @@
         }, 6000);
     }
 
+    // Open the floating message drawer (non-messages pages only).
+    // Per product requirement: the drawer is hidden by default and only
+    // appears when a new message arrives. Keeps the launcher visible so the
+    // user can dismiss/reopen the drawer without losing the unread entry point.
+    function openFloatingDrawer() {
+        if (State.isMessagesPage) return;
+        const drawer = document.getElementById('msgDrawerWidget');
+        if (!drawer) return;
+        const launcher = document.getElementById('msgFloatingLauncher');
+        hideFloatingMessageToast();
+        drawer.classList.add('is-open');
+        if (launcher) {
+            launcher.classList.add('is-open');
+            launcher.style.display = 'flex';
+        }
+        const list = getDrawerList();
+        if (list) scrollToBottom(list);
+        markMessagesAsRead();
+    }
+
     function hideFloatingMessageToast() {
         const toast = document.getElementById('msgFloatingToast');
         if (!toast) return;
@@ -1395,7 +1415,10 @@
                     if (State.isMessagesPage || isDrawerOpen) {
                         markMessagesAsRead();
                     } else {
-                        showFloatingMessageToast(msg);
+                        // Per product requirement: the floating message drawer
+                        // only appears when a new message arrives; otherwise it
+                        // stays hidden. Auto-open it on the incoming message.
+                        openFloatingDrawer();
                         if (typeof data.unreadCount === 'number') {
                             updateUnreadBadges(data.unreadCount);
                         }
@@ -2362,24 +2385,32 @@
     let activeEmojiTargetTextarea = null;
 
     function createWhatsAppEmojiPicker() {
+        // Fallback picker (only used when the global whatsapp-emojis.js module
+        // failed to load). Build tabs dynamically from WA_EMOJI_CATEGORIES so
+        // it stays in sync with the shared emoji dataset.
+        const FALLBACK_TAB_META = [
+            ['smileys', '😀', 'Smileys & Emotion'],
+            ['people', '👋', 'People & Body'],
+            ['nature', '🐻', 'Animals & Nature'],
+            ['food', '🍕', 'Food & Drink'],
+            ['travel', '✈️', 'Travel & Places'],
+            ['activities', '⚽', 'Activities'],
+            ['objects', '💡', 'Objects'],
+            ['symbols', '❤️', 'Symbols']
+        ];
+        const availableCats = Object.keys(window.WA_EMOJI_CATEGORIES || {});
+        const tabs = FALLBACK_TAB_META.filter(([key]) => availableCats.length === 0 || availableCats.includes(key));
+
         const picker = document.createElement('div');
         picker.className = 'wa-emoji-picker';
         picker.id = 'waEmojiPicker';
         picker.innerHTML = `
             <div class="wa-picker-header">
                 <div class="wa-picker-tabs">
-                    <button type="button" class="wa-tab-btn active" data-cat="smileys" title="Smileys & Emotion">
-                        <span>${toAppleEmojiImg('😀')}</span>
-                    </button>
-                    <button type="button" class="wa-tab-btn" data-cat="love" title="Love & Gestures">
-                        <span>${toAppleEmojiImg('❤️')}</span>
-                    </button>
-                    <button type="button" class="wa-tab-btn" data-cat="fun" title="Cinema & Media">
-                        <span>${toAppleEmojiImg('🍿')}</span>
-                    </button>
-                    <button type="button" class="wa-tab-btn" data-cat="party" title="Party & Objects">
-                        <span>${toAppleEmojiImg('🔥')}</span>
-                    </button>
+                    ${tabs.map(([key, icon, title], i) => `
+                    <button type="button" class="wa-tab-btn${i === 0 ? ' active' : ''}" data-cat="${key}" title="${title}">
+                        <span>${toAppleEmojiImg(icon)}</span>
+                    </button>`).join('')}
                 </div>
             </div>
             <div class="wa-picker-body">

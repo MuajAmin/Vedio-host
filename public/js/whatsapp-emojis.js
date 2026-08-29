@@ -1,7 +1,8 @@
 /**
  * VideoHost — Global WhatsApp / Apple Color Emoji System
- * Provides Apple 3D/HD emoji rendering, Twemoji fallback,
- * universal WhatsApp emoji picker popups, and auto-parsing across all pages.
+ * Provides Apple HD emoji rendering, Twemoji SVG fallback, and a
+ * WhatsApp-style emoji picker with search, categories, recents and
+ * skin-tone variations. Preserves the public API used across the app.
  */
 (function (window, document) {
     'use strict';
@@ -9,55 +10,45 @@
     const WA_APPLE_EMOJI_BASE = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/';
     const WA_TWEMOJI_FALLBACK_BASE = 'https://unpkg.com/twemoji@14.0.2/dist/svg/';
 
-    const WA_EMOJI_CATEGORIES = {
-        smileys: {
-            name: 'Smileys & Emotion',
-            icon: '😀',
-            emojis: [
-                '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃',
-                '😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😋',
-                '😛','😜','🤪','😝','🤗','🤭','🤫','🤔','🤐','🤨',
-                '😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔',
-                '😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵',
-                '🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐',
-                '😕','😟','🙁','😮','😯','😲','😳','🥺','😦','😧',
-                '😨','😰','😥','😢','😭','😱','😖','😣','😞','😓',
-                '😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀'
-            ]
-        },
-        love: {
-            name: 'Love & Gestures',
-            icon: '❤️',
-            emojis: [
-                '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔',
-                '❣️','💕','💞','💓','💗','💖','💘','💝','💟','💌',
-                '💋','🫂','🫶','👍','👎','👏','🙌','👐','🤲','🤝',
-                '🙏','✍️','💅','🤳','💪','👊','✊','🤛','🤜','✌️',
-                '🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👋',
-                '🫡','👀','👁️','👅','👄','🧠','🫀','🫁','🔥','✨'
-            ]
-        },
-        fun: {
-            name: 'Cinema & Entertainment',
-            icon: '🍿',
-            emojis: [
-                '🍿','🎬','🎥','📽️','📺','📷','📸','📹','📼','🎧',
-                '🎤','🎵','🎶','🎸','🎹','🥁','🎮','🕹️','🎲','🎯',
-                '🎨','🎭','🎪','🎟️','🎫','🏆','🥇','🥈','🥉','⚽',
-                '🏀','🏈','⚾','🎾','🏐','🎱','🏓','🏸','🎳','🥊'
-            ]
-        },
-        party: {
-            name: 'Party & Lifestyle',
-            icon: '🔥',
-            emojis: [
-                '🍕','🍔','🍟','🌭','🍿','🍩','🍪','🎂','🍰','🍫',
-                '🍬','🍭','☕','🍵','🧋','🍺','🍻','🥂','🍷','🍸',
-                '🍹','🍾','🎁','🎉','🎊','🎈','🌹','🌸','🌺','🌻',
-                '🌼','💐','🧸','👑','💎','⚡','🌟','💫','🌈','☀️'
-            ]
-        }
-    };
+    // Rich categorized dataset (auto-generated in emoji-data.js)
+    const WA_EMOJI_DATA = window.WA_EMOJI_DATA || {};
+
+    // Legacy raw-string category map (kept for messages.js fallback picker compat)
+    const WA_EMOJI_CATEGORIES = {};
+    Object.keys(WA_EMOJI_DATA).forEach(key => {
+        WA_EMOJI_CATEGORIES[key] = {
+            name: WA_EMOJI_DATA[key].name,
+            icon: WA_EMOJI_DATA[key].icon,
+            emojis: WA_EMOJI_DATA[key].emojis.map(it => it.e)
+        };
+    });
+
+    // Category tab order + icons
+    const CATEGORY_ORDER = [
+        { key: 'recent',    name: 'Recently Used', icon: '🕘' },
+        { key: 'smileys',   name: (WA_EMOJI_DATA.smileys && WA_EMOJI_DATA.smileys.name) || 'Smileys',   icon: '😀' },
+        { key: 'people',    name: (WA_EMOJI_DATA.people && WA_EMOJI_DATA.people.name) || 'People',      icon: '👋' },
+        { key: 'nature',    name: (WA_EMOJI_DATA.nature && WA_EMOJI_DATA.nature.name) || 'Nature',      icon: '🐻' },
+        { key: 'food',      name: (WA_EMOJI_DATA.food && WA_EMOJI_DATA.food.name) || 'Food',            icon: '🍕' },
+        { key: 'travel',    name: (WA_EMOJI_DATA.travel && WA_EMOJI_DATA.travel.name) || 'Travel',      icon: '✈️' },
+        { key: 'activities',name: (WA_EMOJI_DATA.activities && WA_EMOJI_DATA.activities.name) || 'Activities', icon: '⚽' },
+        { key: 'objects',   name: (WA_EMOJI_DATA.objects && WA_EMOJI_DATA.objects.name) || 'Objects',   icon: '💡' },
+        { key: 'symbols',   name: (WA_EMOJI_DATA.symbols && WA_EMOJI_DATA.symbols.name) || 'Symbols',   icon: '❤️' }
+    ];
+
+    // Skin-tone modifiers ( Fitzpatrick ) mapped to their codepoint hex
+    const SKIN_TONES = [
+        { key: '',        hex: '',      emoji: '👋' },
+        { key: 'light',   hex: '1f3fb', emoji: '👋🏻' },
+        { key: 'mediuml', hex: '1f3fc', emoji: '👋🏼' },
+        { key: 'medium',  hex: '1f3fd', emoji: '👋🏽' },
+        { key: 'mediumd', hex: '1f3fe', emoji: '👋🏾' },
+        { key: 'dark',    hex: '1f3ff', emoji: '👋🏿' }
+    ];
+
+    const RECENT_KEY = 'wa_recent_emojis';
+    const TONE_KEY = 'wa_skin_tone_hex';
+    const MAX_RECENT = 24;
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -67,6 +58,31 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function toCodePoint(emoji) {
+        if (!window.twemoji || !window.twemoji.convert) return '';
+        try { return window.twemoji.convert.toCodePoint(emoji, '-'); } catch { return ''; }
+    }
+
+    /**
+     * Apply a Fitzpatrick skin-tone modifier to a base emoji character.
+     * Inserts the tone after the first codepoint and drops a directly-following
+     * FE0F (matches emoji-datasource unified codes 100%).
+     */
+    function applySkinTone(emojiChar, toneHex) {
+        if (!toneHex || !emojiChar) return emojiChar;
+        const base = toCodePoint(emojiChar);
+        if (!base) return emojiChar;
+        const cps = base.split('-');
+        let rest = cps.slice(1);
+        if (rest[0] === 'fe0f') rest = rest.slice(1);
+        const toned = cps[0] + '-' + toneHex + (rest.length ? '-' + rest.join('-') : '');
+        try {
+            return toned.split('-').map(h => String.fromCodePoint(parseInt(h, 16))).join('');
+        } catch {
+            return emojiChar;
+        }
     }
 
     /**
@@ -83,7 +99,7 @@
             const appleUrl = `${WA_APPLE_EMOJI_BASE}${code}.png`;
             const fallbackUrl = `${WA_TWEMOJI_FALLBACK_BASE}${codeNoFE0F}.svg`;
             const safeEmoji = escapeHtml(rawEmoji);
-            return `<img class="wa-emoji" draggable="false" alt="${safeEmoji}" data-code="${code}" src="${appleUrl}" loading="lazy" decoding="async" onerror="this.onerror=null;if(this.src!=='${fallbackUrl}'){this.src='${fallbackUrl}';}else{this.outerHTML='<span class=\\'wa-raw-emoji\\'>${safeEmoji}</span>';}" />`;
+            return `<img class="wa-emoji" draggable="false" alt="${safeEmoji}" data-code="${code}" src="${appleUrl}" loading="lazy" decoding="async" onerror="this.onerror=null;if(this.src!=='${fallbackUrl}'){this.src='${fallbackUrl}';}else{this.outerHTML='<span class=\'wa-raw-emoji\'>${safeEmoji}</span>';}" />`;
         } catch (e) {
             return escapeHtml(rawEmoji);
         }
@@ -128,72 +144,202 @@
         targetInput.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    /* ------------------------- Recents & tone state ------------------------- */
+    function getRecents() {
+        try {
+            const raw = localStorage.getItem(RECENT_KEY);
+            const arr = raw ? JSON.parse(raw) : [];
+            return Array.isArray(arr) ? arr.filter(x => typeof x === 'string') : [];
+        } catch { return []; }
+    }
+    function pushRecent(emoji) {
+        try {
+            let arr = getRecents().filter(e => e !== emoji);
+            arr.unshift(emoji);
+            if (arr.length > MAX_RECENT) arr = arr.slice(0, MAX_RECENT);
+            localStorage.setItem(RECENT_KEY, JSON.stringify(arr));
+        } catch {}
+    }
+    function getSkinTone() {
+        try { return localStorage.getItem(TONE_KEY) || ''; } catch { return ''; }
+    }
+    function setSkinTone(hex) {
+        try { localStorage.setItem(TONE_KEY, hex); } catch {}
+    }
+
     /**
-     * Creates a reusable WhatsApp Emoji Picker DOM element
+     * Creates a full-featured WhatsApp Emoji Picker DOM element
      */
     function createWhatsAppEmojiPicker(onSelect) {
         const picker = document.createElement('div');
         picker.className = 'wa-emoji-picker';
         picker.setAttribute('role', 'dialog');
-        picker.setAttribute('aria-label', 'WhatsApp Emoji Picker');
+        picker.setAttribute('aria-label', 'Emoji picker');
 
-        const tabsHtml = Object.keys(WA_EMOJI_CATEGORIES).map((key, idx) => {
-            const cat = WA_EMOJI_CATEGORIES[key];
-            const activeClass = idx === 0 ? ' active' : '';
-            return `<button type="button" class="wa-tab-btn${activeClass}" data-cat="${key}" title="${escapeHtml(cat.name)}">
-                <span>${toAppleEmojiImg(cat.icon)}</span>
+        let currentTone = getSkinTone();
+        let activeCat = 'smileys';
+        let searchQuery = '';
+
+        // Flatten all emojis once for search
+        const allEmojis = [];
+        Object.keys(WA_EMOJI_DATA).forEach(catKey => {
+            (WA_EMOJI_DATA[catKey].emojis || []).forEach(it => allEmojis.push(it));
+        });
+
+        const tabsHtml = CATEGORY_ORDER.map(c => {
+            const activeClass = c.key === activeCat ? ' active' : '';
+            return `<button type="button" class="wa-tab-btn${activeClass}" data-cat="${c.key}" title="${escapeHtml(c.name)}" aria-label="${escapeHtml(c.name)}">
+                <span>${toAppleEmojiImg(c.icon)}</span>
             </button>`;
         }).join('');
 
+        const currentToneEmoji = (SKIN_TONES.find(t => t.hex === currentTone) || SKIN_TONES[0]).emoji;
+
         picker.innerHTML = `
+            <div class="wa-picker-search">
+                <input type="text" class="wa-picker-search-input" placeholder="Search emoji" aria-label="Search emoji" autocomplete="off" />
+                <button type="button" class="wa-skin-tone-btn" title="Skin tone" aria-label="Choose skin tone">${escapeHtml(currentToneEmoji)}</button>
+            </div>
             <div class="wa-picker-header">
-                <div class="wa-picker-tabs">
-                    ${tabsHtml}
-                </div>
+                <div class="wa-picker-tabs">${tabsHtml}</div>
             </div>
             <div class="wa-picker-body">
-                <div class="wa-picker-grid"></div>
+                <div class="wa-picker-grid" id="waPickerGrid"></div>
+            </div>
+            <div class="wa-skin-tone-row" style="display:none;">
+                ${SKIN_TONES.map(t => `<button type="button" class="wa-skin-tone-option${t.hex === currentTone ? ' active' : ''}" data-hex="${t.hex}" title="Skin tone" aria-label="Skin tone ${t.key || 'default'}">${escapeHtml(t.emoji)}</button>`).join('')}
             </div>
         `;
 
-        function renderCategory(categoryKey) {
-            const grid = picker.querySelector('.wa-picker-grid');
-            if (!grid) return;
-            const catData = WA_EMOJI_CATEGORIES[categoryKey] || WA_EMOJI_CATEGORIES.smileys;
-            const itemsHtml = catData.emojis.map(em => {
-                const appleImg = toAppleEmojiImg(em);
-                return `<button type="button" class="wa-picker-item" data-emoji="${escapeHtml(em)}" title="${escapeHtml(em)}">${appleImg}</button>`;
-            }).join('');
-            grid.innerHTML = itemsHtml;
+        const grid = picker.querySelector('.wa-picker-grid');
+        const searchInput = picker.querySelector('.wa-picker-search-input');
+        const toneBtn = picker.querySelector('.wa-skin-tone-btn');
+        const toneRow = picker.querySelector('.wa-skin-tone-row');
+        const tabBtns = Array.from(picker.querySelectorAll('.wa-tab-btn'));
+
+        function emojiItemHtml(rawEmoji) {
+            return `<button type="button" class="wa-picker-item" data-emoji="${escapeHtml(rawEmoji)}" title="${escapeHtml(rawEmoji)}">${toAppleEmojiImg(rawEmoji)}</button>`;
         }
 
-        // Category tab switches
-        const tabBtns = picker.querySelectorAll('.wa-tab-btn');
+        function renderCategory(catKey) {
+            if (!grid) return;
+            searchQuery = '';
+            let html = '';
+
+            // Recently used section (only on the primary category view)
+            const recents = getRecents();
+            if (catKey === 'smileys' && recents.length > 0) {
+                html += `<div class="wa-picker-section-label" style="grid-column:1/-1;">Recently Used</div>`;
+                html += recents.map(emojiItemHtml).join('');
+            }
+
+            let items;
+            if (catKey === 'recent') {
+                items = recents.map(e => ({ e }));
+            } else {
+                items = (WA_EMOJI_DATA[catKey] && WA_EMOJI_DATA[catKey].emojis) || [];
+            }
+
+            if (catKey !== 'smileys' || recents.length === 0) {
+                const label = (CATEGORY_ORDER.find(c => c.key === catKey) || {}).name || '';
+                if (label) html += `<div class="wa-picker-section-label" style="grid-column:1/-1;">${escapeHtml(label)}</div>`;
+            }
+
+            html += items.map(it => {
+                const disp = (it.s && currentTone) ? applySkinTone(it.e, currentTone) : it.e;
+                return emojiItemHtml(disp);
+            }).join('');
+
+            if (!items.length && catKey === 'recent') {
+                html = `<div class="wa-picker-empty">No recent emojis yet</div>`;
+            }
+            grid.innerHTML = html;
+            grid.parentElement.scrollTop = 0;
+        }
+
+        function renderSearch(query) {
+            if (!grid) return;
+            const q = query.trim().toLowerCase();
+            if (!q) { renderCategory(activeCat); return; }
+            const results = allEmojis.filter(it => {
+                if (it.n && it.n.toLowerCase().includes(q)) return true;
+                if (it.k && it.k.some(k => k.toLowerCase().includes(q))) return true;
+                return false;
+            }).slice(0, 120);
+            if (!results.length) {
+                grid.innerHTML = `<div class="wa-picker-empty">No emoji found for “${escapeHtml(query)}”</div>`;
+                return;
+            }
+            grid.innerHTML = results.map(it => {
+                const disp = (it.s && currentTone) ? applySkinTone(it.e, currentTone) : it.e;
+                return emojiItemHtml(disp);
+            }).join('');
+            grid.parentElement.scrollTop = 0;
+        }
+
+        function refreshToneUI() {
+            const t = SKIN_TONES.find(x => x.hex === currentTone) || SKIN_TONES[0];
+            if (toneBtn) toneBtn.textContent = t.emoji;
+            picker.querySelectorAll('.wa-skin-tone-option').forEach(o => {
+                o.classList.toggle('active', o.getAttribute('data-hex') === currentTone);
+            });
+        }
+
+        // Tab switching
         tabBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 tabBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                const cat = btn.getAttribute('data-cat');
-                renderCategory(cat);
+                activeCat = btn.getAttribute('data-cat');
+                if (searchInput) searchInput.value = '';
+                renderCategory(activeCat);
             });
         });
 
-        // Click on emoji item
+        // Search input
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                searchQuery = searchInput.value;
+                renderSearch(searchQuery);
+            });
+            searchInput.addEventListener('click', e => e.stopPropagation());
+        }
+
+        // Skin tone button toggles the tone row
+        if (toneBtn) {
+            toneBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const open = toneRow.style.display === 'none';
+                toneRow.style.display = open ? 'flex' : 'none';
+            });
+        }
+
+        // Skin tone option select
+        toneRow.addEventListener('click', (e) => {
+            const opt = e.target.closest('.wa-skin-tone-option');
+            if (!opt) return;
+            e.stopPropagation();
+            currentTone = opt.getAttribute('data-hex') || '';
+            setSkinTone(currentTone);
+            refreshToneUI();
+            toneRow.style.display = 'none';
+            if (searchQuery) renderSearch(searchQuery); else renderCategory(activeCat);
+        });
+
+        // Emoji select
         picker.addEventListener('click', (e) => {
             const emojiBtn = e.target.closest('.wa-picker-item');
             if (emojiBtn) {
                 e.stopPropagation();
                 const emoji = emojiBtn.getAttribute('data-emoji');
-                if (typeof onSelect === 'function') {
-                    onSelect(emoji, emojiBtn);
-                }
+                pushRecent(emoji);
+                if (typeof onSelect === 'function') onSelect(emoji, emojiBtn);
             }
         });
 
-        // Render initial category
-        renderCategory('smileys');
-
+        refreshToneUI();
+        renderCategory(activeCat);
         return picker;
     }
 
@@ -208,9 +354,7 @@
             const pickerRef = activeGlobalPicker;
             setTimeout(() => {
                 if (pickerRef && !pickerRef.classList.contains('is-open')) {
-                    if (pickerRef.parentElement) {
-                        pickerRef.parentElement.removeChild(pickerRef);
-                    }
+                    if (pickerRef.parentElement) pickerRef.parentElement.removeChild(pickerRef);
                 }
             }, 220);
         }
@@ -222,7 +366,6 @@
     function toggleWhatsAppEmojiPicker(triggerBtn, targetInput, options = {}) {
         if (!triggerBtn || !targetInput) return;
 
-        // If clicking the same trigger that's already open, close it
         if (activeGlobalTrigger === triggerBtn && activeGlobalPicker && activeGlobalPicker.classList.contains('is-open')) {
             closeGlobalEmojiPicker();
             return;
@@ -232,28 +375,20 @@
 
         const picker = createWhatsAppEmojiPicker((emoji) => {
             insertEmojiAtCursor(targetInput, emoji);
-            if (options.closeOnSelect) {
-                closeGlobalEmojiPicker();
-            }
+            if (options.closeOnSelect) closeGlobalEmojiPicker();
         });
 
         activeGlobalPicker = picker;
         activeGlobalTrigger = triggerBtn;
         activeGlobalTargetInput = targetInput;
 
-        // Positioning: Choose parent container or document body
         const container = triggerBtn.closest('.msg-composer-wrap, .msg-footer, .msg-input-row, .msg-composer-form, .comment-form, .comment-input-group, .wt-chat-footer, .form-group, .form-input-box, .title-edit-form') || triggerBtn.parentElement || document.body;
-        
         container.style.position = container.style.position && container.style.position !== 'static' ? container.style.position : 'relative';
         container.appendChild(picker);
 
-        // Adjust position dynamically
         const placement = options.placement || 'top';
-        if (placement === 'bottom') {
-            picker.classList.add('wa-picker-bottom');
-        }
+        if (placement === 'bottom') picker.classList.add('wa-picker-bottom');
 
-        // Force reflow and show animation
         void picker.offsetWidth;
         picker.classList.add('is-open');
     }
@@ -278,7 +413,6 @@
     function applyWhatsAppEmojis(container = document) {
         if (!container || !window.twemoji) return;
 
-        // 1. Comment texts and message elements
         const textSelectors = '.comment-text, .wt-msg-text, .msg-text-content, .selected-name, .activity-summary';
         const commentTexts = container.querySelectorAll ? container.querySelectorAll(textSelectors) : [];
         commentTexts.forEach(el => {
@@ -288,7 +422,6 @@
             }
         });
 
-        // 2. Emoji Chips & Reaction Buttons
         const chipSelectors = '.emoji-chip, .wt-emoji-btn, .call-quick-emoji-btn, .msg-react-emoji-btn, .msg-mobile-react-btn, .msg-quick-emoji-btn, .msg-reaction-badge span:first-child, .msg-empty-starter-chip';
         const chips = container.querySelectorAll ? container.querySelectorAll(chipSelectors) : [];
         chips.forEach(chip => {
@@ -306,73 +439,52 @@
      * Automatically wires up any known emoji buttons on the page
      */
     function autoBindEmojiPickers(root = document) {
-        // 1. Video Watch Page Comments
         const commentForm = root.querySelector('#commentForm, .comment-form');
         if (commentForm) {
             const commentTextarea = commentForm.querySelector('#commentTextarea, textarea[name="text"]');
             const commentEmojiBtn = commentForm.querySelector('.comment-emoji-picker-toggle, .msg-emoji-toggle-btn');
-            if (commentEmojiBtn && commentTextarea) {
-                attachWhatsAppEmojiPicker(commentEmojiBtn, commentTextarea);
-            }
+            if (commentEmojiBtn && commentTextarea) attachWhatsAppEmojiPicker(commentEmojiBtn, commentTextarea);
         }
 
-        // 2. Watch Together Live Chat
         const wtChatPanel = root.querySelector('#wtChatPanel, .wt-chat-drawer');
         if (wtChatPanel) {
             const wtChatInput = wtChatPanel.querySelector('#wtChatInput, .wt-chat-input');
             const wtEmojiBtn = wtChatPanel.querySelector('.wt-chat-emoji-btn, .msg-emoji-toggle-btn');
-            if (wtEmojiBtn && wtChatInput) {
-                attachWhatsAppEmojiPicker(wtEmojiBtn, wtChatInput);
-            }
+            if (wtEmojiBtn && wtChatInput) attachWhatsAppEmojiPicker(wtEmojiBtn, wtChatInput);
         }
 
-        // 3. Watch Page Inline Title Rename
         const titleEditForm = root.querySelector('#titleEditForm, .title-edit-form');
         if (titleEditForm) {
             const titleInput = titleEditForm.querySelector('#titleEditInput, .title-edit-input');
             const titleEmojiBtn = titleEditForm.querySelector('.title-emoji-toggle-btn, .msg-emoji-toggle-btn');
-            if (titleEmojiBtn && titleInput) {
-                attachWhatsAppEmojiPicker(titleEmojiBtn, titleInput);
-            }
+            if (titleEmojiBtn && titleInput) attachWhatsAppEmojiPicker(titleEmojiBtn, titleInput);
         }
 
-        // 4. Media Upload Page Title
         const uploadTitleGroup = root.querySelector('.upload-container, .upload-form, #uploadForm');
         if (uploadTitleGroup) {
             const titleInput = uploadTitleGroup.querySelector('#title');
             const titleEmojiBtn = uploadTitleGroup.querySelector('.upload-title-emoji-btn');
-            if (titleEmojiBtn && titleInput) {
-                attachWhatsAppEmojiPicker(titleEmojiBtn, titleInput);
-            }
+            if (titleEmojiBtn && titleInput) attachWhatsAppEmojiPicker(titleEmojiBtn, titleInput);
 
             const importTitleInput = uploadTitleGroup.querySelector('#importTitle');
             const importTitleEmojiBtn = uploadTitleGroup.querySelector('.import-title-emoji-btn');
-            if (importTitleEmojiBtn && importTitleInput) {
-                attachWhatsAppEmojiPicker(importTitleEmojiBtn, importTitleInput);
-            }
+            if (importTitleEmojiBtn && importTitleInput) attachWhatsAppEmojiPicker(importTitleEmojiBtn, importTitleInput);
         }
 
-        // 5. Generic auto-bind by data attribute: data-emoji-target="#myInput"
         const genericBtns = root.querySelectorAll ? root.querySelectorAll('[data-emoji-target]') : [];
         genericBtns.forEach(btn => {
             const targetSelector = btn.getAttribute('data-emoji-target');
             const targetEl = root.querySelector(targetSelector);
-            if (targetEl) {
-                attachWhatsAppEmojiPicker(btn, targetEl);
-            }
+            if (targetEl) attachWhatsAppEmojiPicker(btn, targetEl);
         });
 
-        // 6. Direct Message Composers & Full-Page Chat
         const msgComposers = root.querySelectorAll ? root.querySelectorAll('.msg-composer-wrap, .msg-footer') : [];
         msgComposers.forEach(composer => {
             const textarea = composer.querySelector('.msg-textarea');
             const emojiBtn = composer.querySelector('.msg-emoji-toggle-btn');
-            if (emojiBtn && textarea) {
-                attachWhatsAppEmojiPicker(emojiBtn, textarea);
-            }
+            if (emojiBtn && textarea) attachWhatsAppEmojiPicker(emojiBtn, textarea);
         });
 
-        // Apply emoji text parsing
         applyWhatsAppEmojis(root);
     }
 
@@ -391,7 +503,6 @@
         }
     });
 
-    // Auto-init on DOMContentLoaded
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => autoBindEmojiPickers(document));
     } else {
@@ -400,6 +511,7 @@
 
     // Export API
     window.WA_EMOJI_CATEGORIES = WA_EMOJI_CATEGORIES;
+    window.WA_EMOJI_DATA = WA_EMOJI_DATA;
     window.toAppleEmojiImg = toAppleEmojiImg;
     window.parseWhatsAppEmoji = parseWhatsAppEmoji;
     window.applyWhatsAppEmojis = applyWhatsAppEmojis;
