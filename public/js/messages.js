@@ -1807,6 +1807,14 @@
             touchTimer = null;
         }
 
+        // Vertical intent wins: hand the row back so native thread scrolling
+        // proceeds without leaving a stuck swipe/highlight on the bubble.
+        if (Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx)) {
+            resetSwipedRow(swipedRow);
+            swipedRow = null;
+            return;
+        }
+
         // Swipe right to reply (WhatsApp/Telegram style)
         if (dx > 10 && Math.abs(dx) > Math.abs(dy) * 1.15) {
             const bubbleWrap = swipedRow.querySelector('.msg-bubble-wrap') || swipedRow;
@@ -1824,9 +1832,6 @@
             swipedRow.classList.add('is-swiping');
             bubbleWrap.style.transform = `translateX(${dragDistance}px)`;
             bubbleWrap.style.transition = 'none';
-
-            // Positioning hint icon
-            hint.style.left = `${Math.min(dx * 0.35, 36) - 34}px`;
 
             if (dragDistance >= 40) {
                 if (!swipedRow.classList.contains('is-swipe-ready')) {
@@ -1886,6 +1891,19 @@
             swipedRow = null;
         }
     }, { passive: true });
+
+    // Cancels any in-progress long-press / swipe when the thread itself scrolls
+    // (finger held on a bubble then dragged to scroll).
+    document.addEventListener('scroll', () => {
+        if (touchTimer) {
+            clearTimeout(touchTimer);
+            touchTimer = null;
+        }
+        if (swipedRow) {
+            resetSwipedRow(swipedRow);
+            swipedRow = null;
+        }
+    }, { passive: true, capture: true });
 
     // ------------------------------------------------------------
     //  11. SENDING MESSAGES & INTERACTIONS (Double-Send Protected)
@@ -2693,14 +2711,22 @@
     // ------------------------------------------------------------
     document.addEventListener('click', (e) => {
         const toast = document.getElementById('msgFloatingToast');
-        if (toast && toast.contains(e.target)) {
-            if (e.target.closest('#msgFloatingToastClose') || e.target.closest('.msg-floating-toast-close-btn')) {
-                hideFloatingMessageToast();
-                return;
-            }
+        if (!toast || !toast.contains(e.target)) return;
+
+        if (e.target.closest('#msgFloatingToastClose') || e.target.closest('.msg-floating-toast-close-btn')) {
             hideFloatingMessageToast();
-            window.location.href = '/messages';
+            return;
         }
+
+        // Call-back actions are handled by calling.js. Do not turn their
+        // intentional button click into a navigation to /messages.
+        if (e.target.closest('.btn-trigger-audio-call, .btn-trigger-video-call')) {
+            hideFloatingMessageToast();
+            return;
+        }
+
+        hideFloatingMessageToast();
+        window.location.href = '/messages';
     });
 
     // ------------------------------------------------------------

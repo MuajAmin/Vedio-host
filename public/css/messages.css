@@ -572,6 +572,7 @@ body[data-page="messages"] .app-container.msg-page-shell {
    --------------------------------------------------------------------------- */
 .msg-row {
     position: relative;
+    touch-action: pan-y;
     display: flex;
     flex-direction: column;
     margin: 2px 0;
@@ -1173,6 +1174,8 @@ body[data-page="messages"] .app-container.msg-page-shell {
     transition: opacity var(--msg-dur-1);
 }
 .msg-row.is-swiping .msg-swipe-reply-hint { opacity: 1; }
+.msg-row-incoming .msg-swipe-reply-hint { left: 12px; right: auto; }
+.msg-row-outgoing .msg-swipe-reply-hint { right: 12px; left: auto; }
 .msg-row.is-swipe-ready .msg-swipe-reply-hint {
     background: var(--msg-primary);
     color: var(--msg-on-primary);
@@ -1745,8 +1748,9 @@ body[data-page="messages"] .msg-floating-launcher { display: none !important; }
     opacity: 0;
     transition: transform var(--msg-dur-3) var(--msg-ease-out), opacity var(--msg-dur-2);
     cursor: pointer;
+    pointer-events: none;
 }
-.msg-floating-toast.is-visible { transform: translateX(-50%) translateY(0); opacity: 1; }
+.msg-floating-toast.is-visible { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
 .msg-floating-toast-card {
     display: flex;
     align-items: center;
