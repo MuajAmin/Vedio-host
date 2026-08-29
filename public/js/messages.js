@@ -216,8 +216,7 @@
 
     function toAppleEmojiImg(rawEmoji) {
         if (!rawEmoji) return '';
-        // Android/system emoji avoid a network request per glyph on the full chat page.
-        if (State.isMessagesPage || !window.twemoji || !window.twemoji.convert) {
+        if (!window.twemoji || !window.twemoji.convert) {
             return escapeHtml(rawEmoji);
         }
         try {
@@ -2779,8 +2778,16 @@
         if (!State.isMessagesPage) return;
         cancelAnimationFrame(viewportFrame);
         viewportFrame = requestAnimationFrame(() => {
-            const viewportHeight = window.visualViewport?.height || window.innerHeight;
+            const vv = window.visualViewport;
+            const viewportHeight = vv ? vv.height : window.innerHeight;
+            // When the Android virtual keyboard opens, the visual viewport
+            // shrinks AND shifts down (offsetTop > 0). The page shell is
+            // position:fixed at top:0, so without applying the offset the
+            // composer detaches from the keyboard and floats in the middle
+            // of the screen. Keep both height and offset in sync.
+            const viewportOffset = vv ? vv.offsetTop : 0;
             document.body.style.setProperty('--msg-app-height', `${Math.round(viewportHeight)}px`);
+            document.body.style.setProperty('--msg-app-offset-top', `${Math.round(viewportOffset)}px`);
         });
     }
 
@@ -3039,7 +3046,7 @@
 
     // Mobile Virtual Keyboard Scroll Adjuster
     if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', () => {
+        const handleVisualViewportShift = () => {
             if (State.isMessagesPage) {
                 syncMessagingViewport();
                 setTimeout(() => {
@@ -3048,7 +3055,11 @@
                     });
                 }, 100);
             }
-        }, { passive: true });
+        };
+        window.visualViewport.addEventListener('resize', handleVisualViewportShift, { passive: true });
+        // Keyboard open/close also fires scroll events on visualViewport
+        // (offsetTop changes without a height change); keep the shell aligned.
+        window.visualViewport.addEventListener('scroll', handleVisualViewportShift, { passive: true });
     }
 
     // SPA Navigation Handler
