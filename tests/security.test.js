@@ -1,5 +1,26 @@
 const { describe, test, expect } = require('bun:test');
-const { validateCsrf, handleCsrfError } = require('../utils/security');
+const { validateCsrf, handleCsrfError, getCookieValue } = require('../utils/security');
+
+describe('Security Cookie Extraction & Optimization', () => {
+    test('getCookieValue should extract specific cookie from cookie header string', () => {
+        const header = 'videohost.sid=s%3A12345; videohosk_theme=cinematic; videohosk_uimode=standard';
+        expect(getCookieValue(header, 'videohost.sid')).toBe('s:12345');
+        expect(getCookieValue(header, 'videohosk_theme')).toBe('cinematic');
+        expect(getCookieValue(header, 'videohosk_uimode')).toBe('standard');
+    });
+
+    test('getCookieValue should return null if cookie is missing or header invalid', () => {
+        const header = 'videohosk_theme=sunset';
+        expect(getCookieValue(header, 'videohost.sid')).toBe(null);
+        expect(getCookieValue('', 'videohost.sid')).toBe(null);
+        expect(getCookieValue(null, 'videohost.sid')).toBe(null);
+    });
+
+    test('getCookieValue should handle quoted cookie values', () => {
+        const header = 'session="abc-123"; user=test';
+        expect(getCookieValue(header, 'session')).toBe('abc-123');
+    });
+});
 
 describe('Security CSRF Protection & Error Handling', () => {
     test('validateCsrf should allow safe HTTP methods (GET, HEAD, OPTIONS)', () => {
