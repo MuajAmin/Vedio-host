@@ -99,23 +99,33 @@ const MAX_ADMIN_BODY_SIZE = 100 * 1024;
 const DELETE_BATCH_CONCURRENCY = 10;
 
 // ─── 103 Early Hints Resources ──────────────────────────────────────────────
+// ASSET_VERSION must stay in sync with ASSET_VERSION in utils/assets.js.
+// If the Worker preloads a different ?v= than the page actually requests, the
+// browser downloads the same file twice and the preload is wasted. CI enforces
+// that these two values match.
+const ASSET_VERSION = '14.1';
+const v = (p) => `${p}?v=${ASSET_VERSION}`;
+
 const GLOBAL_EARLY_HINT_LINKS = [
-  '</css/style.css?v=13.9>; rel=preload; as=style',
-  '</css/minimal.css?v=13.9>; rel=preload; as=style',
-  '</js/theme-init.js?v=13.9>; rel=preload; as=script',
-  '</js/twemoji.min.js?v=13.9>; rel=preload; as=script',
-  '</js/whatsapp-emojis.js?v=13.9>; rel=preload; as=script',
-  '</js/app.js?v=13.9>; rel=preload; as=script',
+  `<${v('/css/style.css')}>; rel=preload; as=style`,
+  `<${v('/js/theme-init.js')}>; rel=preload; as=script`,
+  `<${v('/js/app.js')}>; rel=preload; as=script`,
+  `<${v('/js/twemoji.min.js')}>; rel=preload; as=script`,
+  `<${v('/js/whatsapp-emojis.js')}>; rel=preload; as=script`,
   '<https://fonts.googleapis.com>; rel=preconnect',
   '<https://fonts.gstatic.com>; rel=preconnect; crossorigin',
   '<https://cdn.jsdelivr.net>; rel=preconnect'
 ];
 
+// Realtime (messaging + calling) assets load on every authenticated page,
+// because incoming calls and messages must be received from any page — not
+// only /messages. Preloading them globally matches actual page behaviour.
 const MESSAGES_EARLY_HINT_LINKS = [
-  '</css/messages.css?v=13.9>; rel=preload; as=style',
-  '</css/calling.css?v=13.9>; rel=preload; as=style',
-  '</js/messages.js?v=13.9>; rel=preload; as=script',
-  '</js/calling.js?v=13.9>; rel=preload; as=script'
+  `<${v('/css/messages.css')}>; rel=preload; as=style`,
+  `<${v('/css/calling.css')}>; rel=preload; as=style`,
+  `<${v('/js/messages.js')}>; rel=preload; as=script`,
+  `<${v('/js/calling.js')}>; rel=preload; as=script`,
+  `<${v('/js/watchTogether.js')}>; rel=preload; as=script`
 ];
 
 /**
@@ -125,10 +135,11 @@ const MESSAGES_EARLY_HINT_LINKS = [
  * @returns {string}
  */
 function getEarlyHintLinkHeader(pathname) {
-  const links = [...GLOBAL_EARLY_HINT_LINKS];
-  if (pathname.startsWith('/messages') || pathname.startsWith('/call')) {
-    links.push(...MESSAGES_EARLY_HINT_LINKS);
-  }
+  // Realtime assets are referenced by layout.ejs on every authenticated page
+  // (so incoming calls/messages work site-wide), not just under /messages.
+  // Restricting the hint to those prefixes meant most navigations discovered
+  // messages.js / calling.js late in the waterfall.
+  const links = [...GLOBAL_EARLY_HINT_LINKS, ...MESSAGES_EARLY_HINT_LINKS];
   return links.join(', ');
 }
 

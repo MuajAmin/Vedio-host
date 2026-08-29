@@ -157,6 +157,137 @@ router.get('/api/call/edge-token', isAuthenticated, (req, res) => {
 });
 
 // ------------------------------------------------------------
+//  GET /api/call/ice-servers — ICE (STUN + TURN) Configuration
+// ------------------------------------------------------------
+//  Why this exists:
+//  STUN alone cannot traverse symmetric NAT / CGNAT, which is the norm on
+//  mobile carrier networks. Without a TURN relay, a call between two mobile
+//  devices on cellular data can fail to connect 100% of the time.
+//  TURN credentials are short-lived and must never be embedded in client JS,
+//  so they are minted server-side per request.
+//
+//  Supported providers (auto-detected, first match wins):
+//   1. Cloudflare Realtime TURN  — CF_TURN_KEY_ID + CF_TURN_API_TOKEN
+//   2. Static/self-hosted TURN   — TURN_URLS + TURN_USERNAME + TURN_CREDENTIAL
+//   3. None                      — STUN-only (previous behaviour, logged as a warning)
+// ------------------------------------------------------------
+
+// Baseline STUN servers. Trimmed to 2 distinct providers: RTCPeerConnection
+// queries every STUN server in this list on every ICE gather, so a long list
+// adds network chatter, battery drain and candidate-gathering latency on
+// mobile without improving reachability.
+const BASE_STUN_SERVERS = [
+    { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }
+];
+
+// Cache minted TURN credentials until shortly before they expire so we don't
+// hit the provider API on every single call setup (saves ~100-300ms per call).
+let _turnCache = null; // { iceServers, expiresAt }
+const TURN_TTL_SECONDS = 2 * 60 * 60; // request 2h lifetime
+const TURN_CACHE_SAFETY_MS = 5 * 60 * 1000; // refresh 5 min early
+
+function getStaticTurnServers() {
+    const urls = (process.env.TURN_URLS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const username = process.env.TURN_USERNAME;
+    const credential = process.env.TURN_CREDENTIAL;
+    if (!urls.length || !username || !credential) return null;
+    return [{ urls, username, credential }];
+}
+
+async function getCloudflareTurnServers() {
+    const keyId = process.env.CF_TURN_KEY_ID;
+    const apiToken = process.env.CF_TURN_API_TOKEN;
+    if (!keyId || !apiToken) return null;
+
+    const endpoint = `https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId)}/credentials/generate-ice-servers`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    try {
+        const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ttl: TURN_TTL_SECONDS }),
+            signal: controller.signal
+        });
+        if (!resp.ok) {
+            callLog('TURN_FETCH_FAILED', { provider: 'cloudflare', status: resp.status });
+            return null;
+        }
+        const json = await resp.json();
+        // Cloudflare returns { iceServers: { urls: [...], username, credential } }
+        const ice = json && json.iceServers;
+        if (!ice) return null;
+        return Array.isArray(ice) ? ice : [ice];
+    } catch (err) {
+        callLog('TURN_FETCH_ERROR', { provider: 'cloudflare', error: err.name === 'AbortError' ? 'timeout' : err.message });
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function resolveTurnServers() {
+    const now = Date.now();
+    if (_turnCache && _turnCache.expiresAt > now) {
+        return _turnCache.iceServers;
+    }
+
+    // Static TURN needs no minting and never expires — prefer it when present.
+    const staticTurn = getStaticTurnServers();
+    if (staticTurn) {
+        _turnCache = { iceServers: staticTurn, expiresAt: now + 12 * 60 * 60 * 1000 };
+        return staticTurn;
+    }
+
+    const cfTurn = await getCloudflareTurnServers();
+    if (cfTurn) {
+        _turnCache = {
+            iceServers: cfTurn,
+            expiresAt: now + (TURN_TTL_SECONDS * 1000) - TURN_CACHE_SAFETY_MS
+        };
+        return cfTurn;
+    }
+
+    return null;
+}
+
+let _warnedNoTurn = false;
+
+router.get('/api/call/ice-servers', isAuthenticated, async (req, res) => {
+    let turnServers = null;
+    try {
+        turnServers = await resolveTurnServers();
+    } catch (err) {
+        callLog('TURN_RESOLVE_ERROR', { error: err.message });
+    }
+
+    if (!turnServers && !_warnedNoTurn) {
+        _warnedNoTurn = true;
+        console.warn(
+            '[calls] No TURN server configured. Calls will use STUN only and may fail ' +
+            'on symmetric NAT / CGNAT (common on mobile data). Set CF_TURN_KEY_ID + ' +
+            'CF_TURN_API_TOKEN, or TURN_URLS + TURN_USERNAME + TURN_CREDENTIAL.'
+        );
+    }
+
+    const iceServers = turnServers
+        ? [...BASE_STUN_SERVERS, ...turnServers]
+        : [...BASE_STUN_SERVERS];
+
+    // Never cache on a shared/CDN layer — payload contains per-user credentials.
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({
+        iceServers,
+        turnAvailable: Boolean(turnServers),
+        // Client keeps its own copy slightly shorter than the server cache.
+        refreshAfterSeconds: turnServers ? Math.floor(TURN_TTL_SECONDS / 2) : 300
+    });
+});
+
+// ------------------------------------------------------------
 //  POST /api/call/initiate — Start a Call
 // ------------------------------------------------------------
 router.post('/api/call/initiate', isAuthenticated, (req, res) => {

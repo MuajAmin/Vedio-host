@@ -1,0 +1,97 @@
+name: CI
+
+# Validates every Pull Request before it can be merged, and re-validates main
+# after merge. The existing deploy-worker.yml workflow deploys on push to main;
+# this workflow is what gates a PR from getting there in a broken state.
+#
+# Deliberately does NOT deploy anything — deployment stays owned by
+# deploy-worker.yml so rollback behaviour is unchanged.
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, test & build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Syntax check server & shared modules
+        # Catches parse errors in files the unit tests may not import.
+        run: |
+          set -e
+          for f in server.js database.js utils/*.js middleware/*.js routes/*.js; do
+            node --check "$f"
+          done
+          echo "All server-side files parsed OK"
+
+      - name: Syntax check browser bundles
+        run: |
+          set -e
+          for f in public/js/*.js; do
+            node --check "$f"
+          done
+          echo "All client-side bundles parsed OK"
+
+      - name: Syntax check Cloudflare Worker
+        run: |
+          set -e
+          for f in workers/src/*.js; do
+            node --check "$f"
+          done
+          echo "Worker sources parsed OK"
+
+      - name: Validate EJS templates
+        run: |
+          set -e
+          npx --yes ejs-lint views/*.ejs
+          echo "EJS templates OK"
+
+      - name: Run tests
+        run: bun test
+
+      - name: Verify Worker build (dry-run, no deploy)
+        # Proves the Worker actually bundles before we let a PR merge and
+        # trigger the real deployment workflow.
+        run: bunx wrangler deploy --config wrangler.toml --dry-run --outdir /tmp/worker-build
+        env:
+          CLOUDFLARE_API_TOKEN: ''
+
+      - name: Check for accidentally committed secrets
+        run: |
+          set -e
+          # Fail the build if real credentials or key material get committed.
+          if git grep -nE '(BEGIN [A-Z ]*PRIVATE KEY|sshpass|SSHPASS=)' -- \
+              ':!*.github/workflows/*' ':!SECURITY_AUDIT.md' ; then
+            echo "::error::Possible secret or key material committed"
+            exit 1
+          fi
+          # .env must never be committed.
+          if git ls-files --error-unmatch .env 2>/dev/null; then
+            echo "::error::.env is tracked by git"
+            exit 1
+          fi
+          echo "No committed secrets detected"
