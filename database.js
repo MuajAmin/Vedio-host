@@ -265,10 +265,43 @@ try {
     console.error('[db] Migration check error:', err.message);
 }
 
+// ============================================================
+//  Precompiled Statements for User Profiles, Blocks & Sessions
+//  (Precompiled at top-level to eliminate SQL parsing overhead per query)
+// ============================================================
+const stmtGetUserAvatar = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?');
+const stmtGetAllUserAvatars = db.prepare('SELECT username, avatar FROM user_profiles');
+const stmtSetUserAvatar = db.prepare(`
+    INSERT INTO user_profiles (username, avatar, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(username) DO UPDATE SET avatar = excluded.avatar, updated_at = CURRENT_TIMESTAMP
+`);
+const stmtDeleteUserAvatar = db.prepare('DELETE FROM user_profiles WHERE username = ?');
+
+const stmtGetBlockedUsersAll = db.prepare('SELECT username FROM blocked_users');
+const stmtIsUserBlockedGet = db.prepare('SELECT username FROM blocked_users WHERE username = ?');
+const stmtBlockUserUpsert = db.prepare(`
+    INSERT INTO blocked_users (username, reason, blocked_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(username) DO UPDATE SET reason = excluded.reason, blocked_at = CURRENT_TIMESTAMP
+`);
+const stmtUnblockUserDelete = db.prepare('DELETE FROM blocked_users WHERE username = ?');
+const stmtGetBlockedUsersDetailed = db.prepare('SELECT username, reason, blocked_at FROM blocked_users');
+
+const stmtPruneExpiredSessions = db.prepare('DELETE FROM sessions WHERE expires_at <= ?');
+const stmtGetAllActiveSessions = db.prepare('SELECT sid, sess, expires_at FROM sessions WHERE expires_at > ? ORDER BY expires_at DESC');
+const stmtDestroyUserSessions = db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user') = ?");
+const stmtDestroyOtherUserSessions = db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user') = ? AND sid != ?");
+const stmtGetSessionBySid = db.prepare('SELECT sid, sess FROM sessions WHERE sid = ?');
+const stmtDeleteSessionBySid = db.prepare('DELETE FROM sessions WHERE sid = ?');
+const stmtDestroySessionsExceptSid = db.prepare('DELETE FROM sessions WHERE sid != ?');
+const stmtDestroyAllSessions = db.prepare('DELETE FROM sessions');
+const stmtCountUserSessions = db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE json_extract(sess, '$.user') = ? AND expires_at > ?");
+
 function getUserAvatar(username) {
     if (!username) return null;
     try {
-        const row = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?').get(username);
+        const row = stmtGetUserAvatar.get(username);
         return row ? row.avatar : null;
     } catch {
         return null;
@@ -277,7 +310,7 @@ function getUserAvatar(username) {
 
 function getAllUserAvatars() {
     try {
-        const rows = db.prepare('SELECT username, avatar FROM user_profiles').all();
+        const rows = stmtGetAllUserAvatars.all();
         const map = {};
         rows.forEach(r => { if (r.avatar) map[r.username] = r.avatar; });
         return map;
@@ -287,15 +320,11 @@ function getAllUserAvatars() {
 }
 
 function setUserAvatar(username, avatarFilename) {
-    db.prepare(`
-        INSERT INTO user_profiles (username, avatar, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(username) DO UPDATE SET avatar = excluded.avatar, updated_at = CURRENT_TIMESTAMP
-    `).run(username, avatarFilename);
+    stmtSetUserAvatar.run(username, avatarFilename);
 }
 
 function deleteUserAvatar(username) {
-    db.prepare('DELETE FROM user_profiles WHERE username = ?').run(username);
+    stmtDeleteUserAvatar.run(username);
 }
 
 // --- In-memory cache for blocked users set ---
@@ -310,7 +339,7 @@ function resetBlockedUsersCache() {
 
 function getBlockedUsersSet() {
     if (!blockedUsersCache) {
-        const rows = db.prepare('SELECT username FROM blocked_users').all();
+        const rows = stmtGetBlockedUsersAll.all();
         blockedUsersCache = new Set(rows.map(r => r.username));
     }
     return blockedUsersCache;
@@ -324,7 +353,7 @@ function isUserBlocked(username) {
     } catch {
         // Safe fallback if cache population throws (e.g. transient DB lock)
         try {
-            const row = db.prepare('SELECT username FROM blocked_users WHERE username = ?').get(username);
+            const row = stmtIsUserBlockedGet.get(username);
             return !!row;
         } catch {
             return false;
@@ -335,11 +364,7 @@ function isUserBlocked(username) {
 function blockUser(username, reason = 'Blocked by admin') {
     if (!username) return;
     try {
-        db.prepare(`
-            INSERT INTO blocked_users (username, reason, blocked_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(username) DO UPDATE SET reason = excluded.reason, blocked_at = CURRENT_TIMESTAMP
-        `).run(username, reason);
+        stmtBlockUserUpsert.run(username, reason);
         if (blockedUsersCache) {
             blockedUsersCache.add(username);
         }
@@ -352,7 +377,7 @@ function blockUser(username, reason = 'Blocked by admin') {
 function unblockUser(username) {
     if (!username) return;
     try {
-        db.prepare('DELETE FROM blocked_users WHERE username = ?').run(username);
+        stmtUnblockUserDelete.run(username);
         if (blockedUsersCache) {
             blockedUsersCache.delete(username);
         }
@@ -363,7 +388,7 @@ function unblockUser(username) {
 
 function getBlockedUsers() {
     try {
-        return db.prepare('SELECT username, reason, blocked_at FROM blocked_users').all();
+        return stmtGetBlockedUsersDetailed.all();
     } catch {
         return [];
     }
@@ -371,7 +396,7 @@ function getBlockedUsers() {
 
 function pruneExpiredSessions() {
     try {
-        db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now());
+        stmtPruneExpiredSessions.run(Date.now());
     } catch (err) {
         console.error('[db] Error pruning expired sessions:', err.message);
     }
@@ -379,7 +404,7 @@ function pruneExpiredSessions() {
 
 function getAllActiveSessions(currentSid = null) {
     try {
-        const rows = db.prepare('SELECT sid, sess, expires_at FROM sessions WHERE expires_at > ? ORDER BY expires_at DESC').all(Date.now());
+        const rows = stmtGetAllActiveSessions.all(Date.now());
         const hajeraPresence = getUserPresence('hajera');
         const muajPresence = getUserPresence('muaj');
 
@@ -415,7 +440,7 @@ function getAllActiveSessions(currentSid = null) {
 function destroyUserSessions(username) {
     if (!username) return 0;
     try {
-        const result = db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user') = ?").run(username);
+        const result = stmtDestroyUserSessions.run(username);
         const count = result.changes || 0;
 
         // Force user presence to offline
@@ -436,9 +461,9 @@ function destroyOtherUserSessions(username, currentSid) {
     try {
         let result;
         if (currentSid) {
-            result = db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user') = ? AND sid != ?").run(username, currentSid);
+            result = stmtDestroyOtherUserSessions.run(username, currentSid);
         } else {
-            result = db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.user') = ?").run(username);
+            result = stmtDestroyUserSessions.run(username);
         }
         const count = result.changes || 0;
 
@@ -455,7 +480,7 @@ function destroyOtherUserSessions(username, currentSid) {
 function destroySingleSession(sid) {
     if (!sid) return false;
     try {
-        const row = db.prepare('SELECT sid, sess FROM sessions WHERE sid = ?').get(sid);
+        const row = stmtGetSessionBySid.get(sid);
         if (!row) return false;
 
         let user = null;
@@ -464,7 +489,7 @@ function destroySingleSession(sid) {
             user = parsed && parsed.user ? parsed.user : null;
         } catch {}
 
-        db.prepare('DELETE FROM sessions WHERE sid = ?').run(sid);
+        stmtDeleteSessionBySid.run(sid);
 
         if (user) {
             const remaining = countUserSessions(user);
@@ -486,9 +511,9 @@ function destroyAllSessions(keepCurrentSid = null) {
     try {
         let result;
         if (keepCurrentSid) {
-            result = db.prepare('DELETE FROM sessions WHERE sid != ?').run(keepCurrentSid);
+            result = stmtDestroySessionsExceptSid.run(keepCurrentSid);
         } else {
-            result = db.prepare('DELETE FROM sessions').run();
+            result = stmtDestroyAllSessions.run();
         }
         updateUserPresence('hajera', { status: 'offline' });
         return result.changes || 0;
@@ -501,7 +526,7 @@ function destroyAllSessions(keepCurrentSid = null) {
 function countUserSessions(username) {
     if (!username) return 0;
     try {
-        const row = db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE json_extract(sess, '$.user') = ? AND expires_at > ?").get(username, Date.now());
+        const row = stmtCountUserSessions.get(username, Date.now());
         return row ? row.count : 0;
     } catch {
         return 0;
@@ -922,15 +947,17 @@ function getUserWatchStats(username) {
     }
 }
 
+const stmtClearOldActivityLogs = db.prepare(`
+    DELETE FROM activity_logs
+    WHERE username = ? AND id NOT IN (
+        SELECT id FROM activity_logs WHERE username = ? ORDER BY created_at DESC LIMIT 500
+    )
+`);
+
 function clearOldActivityLogs(username) {
     if (!username) return;
     try {
-        db.prepare(`
-            DELETE FROM activity_logs
-            WHERE username = ? AND id NOT IN (
-                SELECT id FROM activity_logs WHERE username = ? ORDER BY created_at DESC LIMIT 500
-            )
-        `).run(username, username);
+        stmtClearOldActivityLogs.run(username, username);
     } catch (err) {
         console.error('[db] Error clearing old activity logs:', err.message);
     }
@@ -1048,6 +1075,11 @@ function formatMessageRow(r, reactions = null) {
     };
 }
 
+const stmtMessageVerifyReplyRef = db.prepare(`
+    SELECT id FROM messages
+    WHERE id = ? AND ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
+`);
+
 function saveMessage({ sender, recipient, text = null, videoId = null, voiceUrl = null, replyToId = null }) {
     if (!sender || !recipient) return null;
     try {
@@ -1056,10 +1088,7 @@ function saveMessage({ sender, recipient, text = null, videoId = null, voiceUrl 
             const parsedId = parseInt(replyToId, 10);
             if (!isNaN(parsedId) && parsedId > 0) {
                 // Ensure referenced message belongs to the conversation
-                const refMsg = db.prepare(`
-                    SELECT id FROM messages
-                    WHERE id = ? AND ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
-                `).get(parsedId, sender, recipient, recipient, sender);
+                const refMsg = stmtMessageVerifyReplyRef.get(parsedId, sender, recipient, recipient, sender);
                 if (refMsg) {
                     validReplyToId = parsedId;
                 }
@@ -1309,10 +1338,22 @@ function getRecentCallLogs(user1, user2, limit = 30) {
     }
 }
 
+const stmtGetUserSettings = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?');
+const stmtSetUserUiMode = db.prepare(`
+    INSERT INTO user_settings (username, ui_mode, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET ui_mode = excluded.ui_mode, updated_at = excluded.updated_at
+`);
+const stmtSetUserTheme = db.prepare(`
+    INSERT INTO user_settings (username, theme, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
+`);
+
 function getUserSettings(username) {
     if (!username) return { ui_mode: 'standard', theme: 'cinematic' };
     try {
-        const row = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?').get(username);
+        const row = stmtGetUserSettings.get(username);
         const defaultTheme = (username === 'hajera') ? 'sunset' : 'cinematic';
         if (!row) {
             return { ui_mode: 'standard', theme: defaultTheme };
@@ -1333,20 +1374,12 @@ function setUserSetting(username, key, value) {
         const now = new Date().toISOString();
         if (key === 'ui_mode') {
             const cleanVal = String(value);
-            db.prepare(`
-                INSERT INTO user_settings (username, ui_mode, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET ui_mode = excluded.ui_mode, updated_at = excluded.updated_at
-            `).run(username, cleanVal, now);
+            stmtSetUserUiMode.run(username, cleanVal, now);
             return true;
         }
         if (key === 'theme') {
             const cleanVal = String(value);
-            db.prepare(`
-                INSERT INTO user_settings (username, theme, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
-            `).run(username, cleanVal, now);
+            stmtSetUserTheme.run(username, cleanVal, now);
             return true;
         }
         return false;
@@ -1395,10 +1428,12 @@ db.updateCallLog = updateCallLog;
 db.getCallLog = getCallLog;
 db.getRecentCallLogs = getRecentCallLogs;
 
+const stmtGetVideoBySourceUrl = db.prepare('SELECT id, title, filename, thumbnail, duration, size, source_url, uploaded_by, uploaded_at FROM videos WHERE source_url = ? LIMIT 1');
+
 function getVideoBySourceUrl(sourceUrl) {
     if (!sourceUrl) return null;
     try {
-        return db.prepare('SELECT id, title, filename, thumbnail, duration, size, source_url, uploaded_by, uploaded_at FROM videos WHERE source_url = ? LIMIT 1').get(sourceUrl) || null;
+        return stmtGetVideoBySourceUrl.get(sourceUrl) || null;
     } catch {
         return null;
     }
@@ -1410,21 +1445,36 @@ db.getVideoBySourceUrl = getVideoBySourceUrl;
 //  PUSH SUBSCRIPTION HELPERS
 // ============================================================
 
+const stmtSavePushSubscription = db.prepare(`
+    INSERT INTO push_subscriptions (username, endpoint, keys_p256dh, keys_auth, user_agent, created_at, last_used_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET
+        username = excluded.username,
+        keys_p256dh = excluded.keys_p256dh,
+        keys_auth = excluded.keys_auth,
+        user_agent = COALESCE(excluded.user_agent, push_subscriptions.user_agent),
+        last_used_at = excluded.last_used_at
+`);
+const stmtGetPushSubscriptions = db.prepare('SELECT * FROM push_subscriptions WHERE username = ?');
+const stmtDeletePushSubscription = db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?');
+const stmtDeletePushSubscriptionsForUser = db.prepare('DELETE FROM push_subscriptions WHERE username = ?');
+const stmtCleanupStalePushSubscriptions = db.prepare('DELETE FROM push_subscriptions WHERE last_used_at < ?');
+const stmtTouchPushSubscription = db.prepare('UPDATE push_subscriptions SET last_used_at = ? WHERE endpoint = ?');
+const stmtPruneActivityLogs = db.prepare(`
+    DELETE FROM activity_logs
+    WHERE id NOT IN (
+        SELECT id FROM activity_logs
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?
+    )
+`);
+
 function savePushSubscription(username, subscription, userAgent = null) {
     if (!username || !subscription || !subscription.endpoint) return null;
     try {
         const keys = subscription.keys || {};
         const nowIso = new Date().toISOString();
-        db.prepare(`
-            INSERT INTO push_subscriptions (username, endpoint, keys_p256dh, keys_auth, user_agent, created_at, last_used_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(endpoint) DO UPDATE SET
-                username = excluded.username,
-                keys_p256dh = excluded.keys_p256dh,
-                keys_auth = excluded.keys_auth,
-                user_agent = COALESCE(excluded.user_agent, push_subscriptions.user_agent),
-                last_used_at = excluded.last_used_at
-        `).run(username, subscription.endpoint, keys.p256dh || '', keys.auth || '', userAgent, nowIso, nowIso);
+        stmtSavePushSubscription.run(username, subscription.endpoint, keys.p256dh || '', keys.auth || '', userAgent, nowIso, nowIso);
         return true;
     } catch (err) {
         console.error('[db] Error saving push subscription:', err.message);
@@ -1435,7 +1485,7 @@ function savePushSubscription(username, subscription, userAgent = null) {
 function getPushSubscriptions(username) {
     if (!username) return [];
     try {
-        return db.prepare('SELECT * FROM push_subscriptions WHERE username = ?').all(username);
+        return stmtGetPushSubscriptions.all(username);
     } catch (err) {
         console.error('[db] Error getting push subscriptions:', err.message);
         return [];
@@ -1445,7 +1495,7 @@ function getPushSubscriptions(username) {
 function deletePushSubscription(endpoint) {
     if (!endpoint) return false;
     try {
-        db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(endpoint);
+        stmtDeletePushSubscription.run(endpoint);
         return true;
     } catch (err) {
         console.error('[db] Error deleting push subscription:', err.message);
@@ -1456,7 +1506,7 @@ function deletePushSubscription(endpoint) {
 function deletePushSubscriptionsForUser(username) {
     if (!username) return 0;
     try {
-        const result = db.prepare('DELETE FROM push_subscriptions WHERE username = ?').run(username);
+        const result = stmtDeletePushSubscriptionsForUser.run(username);
         return result.changes || 0;
     } catch (err) {
         console.error('[db] Error deleting user push subscriptions:', err.message);
@@ -1467,7 +1517,7 @@ function deletePushSubscriptionsForUser(username) {
 function cleanupStalePushSubscriptions(maxAgeDays = 30) {
     try {
         const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
-        const result = db.prepare('DELETE FROM push_subscriptions WHERE last_used_at < ?').run(cutoff);
+        const result = stmtCleanupStalePushSubscriptions.run(cutoff);
         if (result.changes > 0) {
             console.log(`[db] Cleaned up ${result.changes} stale push subscriptions.`);
         }
@@ -1481,20 +1531,13 @@ function cleanupStalePushSubscriptions(maxAgeDays = 30) {
 function touchPushSubscription(endpoint) {
     if (!endpoint) return;
     try {
-        db.prepare('UPDATE push_subscriptions SET last_used_at = ? WHERE endpoint = ?').run(new Date().toISOString(), endpoint);
+        stmtTouchPushSubscription.run(new Date().toISOString(), endpoint);
     } catch {}
 }
 
 function pruneActivityLogs(maxKeep = 1500) {
     try {
-        const result = db.prepare(`
-            DELETE FROM activity_logs
-            WHERE id NOT IN (
-                SELECT id FROM activity_logs
-                ORDER BY created_at DESC, id DESC
-                LIMIT ?
-            )
-        `).run(maxKeep);
+        const result = stmtPruneActivityLogs.run(maxKeep);
         if (result.changes > 0) {
             console.log(`[db] Pruned ${result.changes} old activity logs.`);
         }
