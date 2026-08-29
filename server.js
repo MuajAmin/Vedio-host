@@ -5,12 +5,16 @@ const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
 const { attachLocals, requireCsrf, renderAvatar } = require('./utils/security');
+const { ASSET_VERSION, buildEarlyHintsHeader } = require('./utils/assets');
 const { isAuthenticated } = require('./middleware/auth');
 const SQLiteSessionStore = require('./utils/sessionStore');
 const db = require('./database');
 
 const app = express();
 app.locals.renderAvatar = renderAvatar;
+// Single source of truth for asset cache-busting, shared with the Early Hints
+// Link header so preloaded URLs always match the URLs the page requests.
+app.locals.assetVersion = ASSET_VERSION;
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const useSecureCookies = isProduction || process.env.COOKIE_SECURE === 'true';
@@ -92,28 +96,18 @@ app.use((req, res, next) => {
         `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com data:; ${mediaSrc}; ${imgSrc}; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'`
     );
 
-    // 103 Early Hints Link header for HTML navigation requests
+    // 103 Early Hints Link header for HTML navigation requests.
+    // Versions come from utils/assets.js so preload URLs can never drift out of
+    // sync with the URLs layout.ejs actually requests. When they drift the
+    // browser downloads the same file twice (once preloaded, once for real).
     if (req.method === 'GET' && req.accepts('html') && !req.path.startsWith('/api/') && !req.path.startsWith('/stream/')) {
-        const earlyHints = [
-            '</css/style.css?v=13.9>; rel=preload; as=style',
-            '</css/minimal.css?v=13.9>; rel=preload; as=style',
-            '</js/theme-init.js?v=13.9>; rel=preload; as=script',
-            '</js/twemoji.min.js?v=13.9>; rel=preload; as=script',
-            '</js/whatsapp-emojis.js?v=13.9>; rel=preload; as=script',
-            '</js/app.js?v=13.9>; rel=preload; as=script',
-            '<https://fonts.googleapis.com>; rel=preconnect',
-            '<https://fonts.gstatic.com>; rel=preconnect; crossorigin',
-            '<https://cdn.jsdelivr.net>; rel=preconnect'
-        ];
-        if (req.path.startsWith('/messages') || req.path.startsWith('/call')) {
-            earlyHints.push(
-                '</css/messages.css?v=13.9>; rel=preload; as=style',
-                '</css/calling.css?v=13.9>; rel=preload; as=style',
-                '</js/messages.js?v=13.9>; rel=preload; as=script',
-                '</js/calling.js?v=13.9>; rel=preload; as=script'
-            );
-        }
-        res.setHeader('Link', earlyHints.join(', '));
+        let minimalUi = false;
+        try {
+            if (req.headers.cookie) {
+                minimalUi = /videohosk_uimode=minimal/.test(req.headers.cookie);
+            }
+        } catch {}
+        res.setHeader('Link', buildEarlyHintsHeader({ minimalUi }));
     }
 
     next();

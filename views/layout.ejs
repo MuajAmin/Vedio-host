@@ -14,13 +14,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <script src="/js/theme-init.js?v=13.9"></script>
-    <script defer src="/js/twemoji.min.js?v=13.9"></script>
-    <script defer src="/js/whatsapp-emojis.js?v=13.9"></script>
-    <link rel="stylesheet" href="/css/style.css?v=13.9">
-    <link rel="stylesheet" href="/css/messages.css?v=14.0">
-    <link rel="stylesheet" href="/css/calling.css?v=13.9">
-    <link rel="stylesheet" href="/css/minimal.css?v=13.9">
+    <script src="/js/theme-init.js?v=<%= assetVersion %>"></script>
+    <script defer src="/js/twemoji.min.js?v=<%= assetVersion %>"></script>
+    <script defer src="/js/whatsapp-emojis.js?v=<%= assetVersion %>"></script>
+    <link rel="stylesheet" href="/css/style.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/messages.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/calling.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/minimal.css?v=<%= assetVersion %>">
     <meta name="csrf-token" content="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
     <% if (typeof extraHead !== 'undefined' && extraHead) { %><%- extraHead %><% } %>
 </head>
@@ -675,10 +675,10 @@
             <audio id="remoteAudioTrack" autoplay playsinline style="display:none;"></audio>
             <% } %>
 
-            <script src="/js/app.js?v=13.9"></script>
-            <script defer src="/js/messages.js?v=14.0"></script>
-            <script defer src="/js/watchTogether.js?v=13.9"></script>
-            <script defer src="/js/calling.js?v=13.9"></script>
+            <script src="/js/app.js?v=<%= assetVersion %>"></script>
+            <script defer src="/js/messages.js?v=<%= assetVersion %>"></script>
+            <script defer src="/js/watchTogether.js?v=<%= assetVersion %>"></script>
+            <script defer src="/js/calling.js?v=<%= assetVersion %>"></script>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').then(function(reg) {
