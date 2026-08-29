@@ -549,7 +549,7 @@ const extraHeadTags = [
                 <div class="video-info-section">
                     <div class="video-title-wrap" id="videoTitleWrap" data-rename-url="/rename/${videoId}" data-csrf="${h(csrfToken)}">
                         <h1 class="video-title" id="videoTitleText">${h(video.title)}</h1>
-                        <button type="button" class="title-edit-btn" id="titleEditBtn" title="Rename video" aria-label="Rename video">
+                        <button type="button" class="title-edit-btn" id="titleEditBtn" title="Rename video" aria-label="Edit title">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -568,7 +568,7 @@ const extraHeadTags = [
                             <button type="button" class="title-save-btn" id="titleSaveBtn" title="Save" aria-label="Save title">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>
                             </button>
-                            <button type="button" class="title-cancel-btn" id="titleCancelBtn" title="Cancel" aria-label="Cancel title edit">
+                            <button type="button" class="title-cancel-btn" id="titleCancelBtn" title="Cancel" aria-label="Cancel editing title">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>
                         </div>
