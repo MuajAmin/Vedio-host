@@ -30,20 +30,74 @@
     // ------------------------------------------------------------
     //  2. WEBRTC CONFIGURATION & EDGE SIGNALING
     // ------------------------------------------------------------
+    // Fallback ICE configuration used only until /api/call/ice-servers responds.
+    // Trimmed to 2 STUN providers: the browser probes EVERY configured STUN
+    // server on each ICE gather, so a long list adds latency and battery cost
+    // on mobile without improving reachability.
     const RTC_CONFIG = {
         iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
-            { urls: 'stun:stun.cloudflare.com:3478' },
-            { urls: 'stun:global.stun.twilio.com:3478' }
+            { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }
         ],
-        iceCandidatePoolSize: 10,
+        iceCandidatePoolSize: 4,
         bundlePolicy: 'max-bundle',
         rtcpMuxPolicy: 'require'
     };
+
+    // ------------------------------------------------------------
+    //  2b. DYNAMIC ICE SERVER RESOLUTION (STUN + TURN)
+    // ------------------------------------------------------------
+    //  TURN credentials are short-lived and minted server-side, so they can
+    //  never be hardcoded here. Without TURN, calls fail on symmetric NAT /
+    //  CGNAT which is the default on most mobile carriers.
+    let _iceConfigPromise = null;
+    let _iceConfigExpiresAt = 0;
+    let _turnAvailable = false;
+
+    function fetchIceServers(force = false) {
+        const now = Date.now();
+        if (!force && _iceConfigPromise && _iceConfigExpiresAt > now) {
+            return _iceConfigPromise;
+        }
+
+        _iceConfigPromise = fetch('/api/call/ice-servers', { credentials: 'same-origin' })
+            .then(res => (res.ok ? res.json() : null))
+            .then(data => {
+                if (!data || !Array.isArray(data.iceServers) || !data.iceServers.length) {
+                    throw new Error('empty ice config');
+                }
+                _turnAvailable = Boolean(data.turnAvailable);
+                _iceConfigExpiresAt = Date.now() + ((data.refreshAfterSeconds || 300) * 1000);
+                callLog('ICE_CONFIG_LOADED', {
+                    servers: data.iceServers.length,
+                    turn: _turnAvailable
+                });
+                return {
+                    iceServers: data.iceServers,
+                    iceCandidatePoolSize: 4,
+                    bundlePolicy: 'max-bundle',
+                    rtcpMuxPolicy: 'require'
+                };
+            })
+            .catch(err => {
+                // Never block a call on ICE config failure — degrade to STUN-only.
+                callLog('ICE_CONFIG_FALLBACK', { error: err.message });
+                _iceConfigExpiresAt = Date.now() + 30000; // retry sooner
+                return RTC_CONFIG;
+            });
+
+        return _iceConfigPromise;
+    }
+
+    // Resolved config used when building a PeerConnection. Kept synchronous at
+    // the call site by prefetching during idle/ring time.
+    let _activeRtcConfig = RTC_CONFIG;
+
+    function primeIceConfig() {
+        return fetchIceServers().then(cfg => {
+            _activeRtcConfig = cfg;
+            return cfg;
+        });
+    }
 
     let edgeWs = null;
     let edgeWsReady = false;
@@ -738,7 +792,8 @@
             CallState.peerConnection = null;
         }
 
-        const pc = new RTCPeerConnection(RTC_CONFIG);
+        // Use the dynamically resolved config (includes TURN when available).
+        const pc = new RTCPeerConnection(_activeRtcConfig);
         CallState.peerConnection = pc;
         CallState.iceRestartAttempted = false;
 
@@ -934,7 +989,26 @@
         }
 
         try {
-            pc.restartIce();
+            if (CallState.isCaller) {
+                // Caller drives renegotiation: regather and push a fresh
+                // iceRestart offer so the peer pairs against new candidates.
+                pc.restartIce();
+                pc.createOffer({ iceRestart: true })
+                    .then(rawOffer => {
+                        const offer = { type: rawOffer.type, sdp: optimizeSdp(rawOffer.sdp) };
+                        return pc.setLocalDescription(offer).then(() => {
+                            callLog('ICE_RESTART_OFFER_SENT');
+                            sendSignalingMessage('offer', offer);
+                        });
+                    })
+                    .catch(e => callLog('ICE_RESTART_OFFER_ERROR', { error: e.message }));
+            } else {
+                // Answerer asks the caller to drive the restart. Without this
+                // signal the caller never regathers and recovery cannot happen.
+                pc.restartIce();
+                sendSignalingMessage('ice-restart', { reason: 'answerer_requested' });
+                callLog('ICE_RESTART_REQUESTED_FROM_PEER');
+            }
         } catch (e) {
             callLog('ICE_RESTART_ERROR', { error: e.message });
         }
@@ -994,8 +1068,14 @@
             CallState.durationSeconds = 0;
             CallState.iceCandidatesQueue = [];
 
-            // Acquire local media first
-            await acquireLocalMedia(callType === 'video');
+            // Acquire local media and resolve ICE/TURN config in parallel.
+            // Running these concurrently instead of sequentially removes the
+            // ICE config round trip from call setup latency entirely.
+            const [/* stream */, rtcCfg] = await Promise.all([
+                acquireLocalMedia(callType === 'video'),
+                primeIceConfig()
+            ]);
+            _activeRtcConfig = rtcCfg || _activeRtcConfig;
 
             // Check nonce hasn't changed (user may have cancelled during permission dialog)
             if (CallState.callNonce !== nonce) return;
@@ -1019,6 +1099,19 @@
 
             CallState.callId = data.callId;
             callLog('CALL_STARTED', { callId: data.callId, type: callType });
+
+            // --- Call-setup latency optimization -------------------------------
+            // Create the PeerConnection and begin ICE gathering NOW, while the
+            // remote side is still ringing, instead of after they accept.
+            // ICE gathering (STUN/TURN round trips) is the slowest part of call
+            // setup; overlapping it with ring time removes it from the critical
+            // path so media can flow almost immediately on answer.
+            try {
+                createPeerConnection();
+                callLog('ICE_PREWARM_STARTED', { callId: data.callId });
+            } catch (e) {
+                callLog('ICE_PREWARM_FAILED', { error: e.message });
+            }
 
             // Show active call screen with calling state
             showActiveCallModal();
@@ -1061,7 +1154,14 @@
             if (!transitionState('connecting')) return;
             CallState.isCaller = false;
 
-            await acquireLocalMedia(CallState.callType === 'video');
+            // Acquire media and resolve ICE/TURN config concurrently so the
+            // answerer is not serialized behind two round trips.
+            const [/* stream */, rtcCfg] = await Promise.all([
+                acquireLocalMedia(CallState.callType === 'video'),
+                primeIceConfig()
+            ]);
+            _activeRtcConfig = rtcCfg || _activeRtcConfig;
+
             if (CallState.callNonce !== nonce) return;
 
             // Create peer connection AFTER media acquired
@@ -1466,6 +1566,10 @@
 
         callLog('INCOMING_CALL', { callId: data.callId, type: data.callType, from: data.caller });
 
+        // Resolve ICE/TURN config while the phone is still ringing so tapping
+        // Accept does not pay the credential round trip.
+        primeIceConfig().catch(() => {});
+
         showIncomingCallModal(data);
     }
 
@@ -1512,9 +1616,24 @@
         if (!transitionState('connecting')) return;
         updateConnectionStatusUI('Connecting...');
 
-        // Caller initiates WebRTC offer
+        // Caller initiates WebRTC offer.
+        // Reuse the connection prewarmed during ring time when it is still
+        // healthy — its ICE candidates are already gathered, which removes the
+        // STUN/TURN round trips from the post-answer critical path.
         try {
-            const pc = createPeerConnection();
+            let pc = CallState.peerConnection;
+            const canReusePrewarmed = pc &&
+                pc.signalingState === 'stable' &&
+                !pc.currentRemoteDescription &&
+                pc.connectionState !== 'closed' &&
+                pc.connectionState !== 'failed';
+
+            if (canReusePrewarmed) {
+                callLog('ICE_PREWARM_REUSED');
+            } else {
+                pc = createPeerConnection();
+            }
+
             const rawOffer = await pc.createOffer({
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: CallState.callType === 'video'
@@ -1557,7 +1676,21 @@
 
         try {
             if (signal.type === 'offer') {
-                callLog('WEBRTC_OFFER_RECEIVED');
+                callLog('WEBRTC_OFFER_RECEIVED', { signalingState: pc.signalingState });
+
+                // Renegotiation (e.g. ICE restart) can deliver an offer while we
+                // already have a local offer pending. Roll back our local offer
+                // first so setRemoteDescription cannot throw InvalidStateError
+                // and kill an otherwise recoverable call.
+                if (pc.signalingState === 'have-local-offer') {
+                    try {
+                        await pc.setLocalDescription({ type: 'rollback' });
+                        callLog('WEBRTC_LOCAL_OFFER_ROLLED_BACK');
+                    } catch (e) {
+                        callLog('WEBRTC_ROLLBACK_FAILED', { error: e.message });
+                    }
+                }
+
                 await pc.setRemoteDescription(new RTCSessionDescription(signal.data));
 
                 // Process any queued ICE candidates
@@ -1596,7 +1729,33 @@
                 }
             } else if (signal.type === 'ice-restart') {
                 callLog('ICE_RESTART_SIGNAL_RECEIVED');
-                // Partner requested ICE restart — recreate offer/answer
+                // Partner's network changed and they restarted ICE on their side.
+                // Previously this branch was empty, so only the initiating peer
+                // restarted ICE — the other peer kept its stale candidates and
+                // the call died anyway. Mirror the restart locally so both
+                // sides regather and re-pair candidates.
+                if (CallState.isCaller) {
+                    // Glare guard: if we already have an outstanding local offer
+                    // (our own restart in flight), don't create a second one.
+                    if (pc.signalingState !== 'stable') {
+                        callLog('ICE_RESTART_SKIPPED_GLARE', { signalingState: pc.signalingState });
+                        return;
+                    }
+                    // Caller owns offer generation: create a fresh offer with
+                    // iceRestart so new candidates are advertised.
+                    const rawOffer = await pc.createOffer({ iceRestart: true });
+                    const offer = { type: rawOffer.type, sdp: optimizeSdp(rawOffer.sdp) };
+                    await pc.setLocalDescription(offer);
+                    callLog('ICE_RESTART_OFFER_SENT');
+                    sendSignalingMessage('offer', offer);
+                } else {
+                    // Answerer cannot initiate renegotiation; regather locally
+                    // and wait for the caller's restart offer.
+                    if (typeof pc.restartIce === 'function') {
+                        pc.restartIce();
+                        callLog('ICE_RESTART_LOCAL_REGATHER');
+                    }
+                }
             }
         } catch (err) {
             callLog('SIGNAL_HANDLING_ERROR', { type: signal.type, error: err.message });
@@ -1781,6 +1940,14 @@
 
         // Start Cloudflare Edge WebSocket signaling in background
         initEdgeSignaling();
+
+        // Prefetch ICE/TURN configuration during idle time so the first call
+        // does not pay the credential-minting round trip at setup.
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(() => primeIceConfig(), { timeout: 3000 });
+        } else {
+            setTimeout(() => primeIceConfig(), 1500);
+        }
     }
 
     function setupPipDraggable() {
