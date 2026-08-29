@@ -1468,14 +1468,7 @@ html[data-ui-mode="minimal"] .msg-emoji-label,
 html[data-ui-mode="minimal"] .msg-emoji-header,
 html[data-ui-mode="minimal"] .emoji-picker-label,
 html[data-ui-mode="minimal"] .emoji-picker-header,
-html[data-ui-mode="minimal"] .msg-composer-emoji-label,
-.msg-quick-emojis,
-.msg-quick-emoji-btn,
-.msg-emoji-label,
-.msg-emoji-header,
-.emoji-picker-label,
-.emoji-picker-header,
-.msg-composer-emoji-label {
+html[data-ui-mode="minimal"] .msg-composer-emoji-label {
     display: none !important;
     height: 0 !important;
     max-height: 0 !important;
@@ -1488,8 +1481,7 @@ html[data-ui-mode="minimal"] .msg-composer-emoji-label,
 }
 
 /* Full Page /messages — Viewport Lock */
-html[data-ui-mode="minimal"] body[data-page="messages"],
-html[data-ui-mode="minimal"] body:has(.msg-fullpage-container) {
+html[data-ui-mode="minimal"] body[data-page="messages"] {
     height: 100vh !important;
     height: 100dvh !important;
     height: 100svh !important;
@@ -1502,8 +1494,7 @@ html[data-ui-mode="minimal"] body:has(.msg-fullpage-container) {
     margin: 0 !important;
 }
 
-html[data-ui-mode="minimal"] body[data-page="messages"] .app-container,
-html[data-ui-mode="minimal"] body:has(.msg-fullpage-container) .app-container {
+html[data-ui-mode="minimal"] body[data-page="messages"] .app-container {
     height: 100% !important;
     height: 100dvh !important;
     height: 100svh !important;
@@ -1517,8 +1508,7 @@ html[data-ui-mode="minimal"] body:has(.msg-fullpage-container) .app-container {
     overflow: hidden !important;
 }
 
-html[data-ui-mode="minimal"] body[data-page="messages"] .navbar,
-html[data-ui-mode="minimal"] body:has(.msg-fullpage-container) .navbar {
+html[data-ui-mode="minimal"] body[data-page="messages"] .navbar {
     flex-shrink: 0 !important;
     height: var(--min-header-height) !important;
     min-height: var(--min-header-height) !important;
@@ -1538,8 +1528,8 @@ html[data-ui-mode="minimal"] .msg-fullpage-container {
     max-width: 100% !important;
     flex: 1 1 0% !important;
     min-height: 0 !important;
-    height: calc(100dvh - var(--min-header-height)) !important;
-    max-height: calc(100dvh - var(--min-header-height)) !important;
+    height: 100% !important;
+    max-height: 100% !important;
     display: grid !important;
     grid-template-columns: 320px 1fr !important;
     gap: 0 !important;
@@ -1553,7 +1543,6 @@ html[data-ui-mode="minimal"] .msg-fullpage-sidebar {
     height: 100% !important;
     min-height: 0 !important;
     overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
     overscroll-behavior-y: contain !important;
     border-radius: 0 !important;
     padding: 16px !important;
@@ -1654,7 +1643,6 @@ html[data-ui-mode="minimal"] .msg-body-container {
     overflow-y: auto !important;
     overflow-x: hidden !important;
     overscroll-behavior-y: contain !important;
-    -webkit-overflow-scrolling: touch !important;
     display: flex !important;
     flex-direction: column !important;
     box-sizing: border-box !important;
@@ -2036,15 +2024,17 @@ html[data-ui-mode="minimal"] .msg-composer-btn {
     border: 1px solid var(--min-border) !important;
     color: var(--min-text-secondary) !important;
     border-radius: var(--min-radius-md) !important;
-    width: 38px !important;
-    height: 38px !important;
-    min-width: 38px !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     flex-shrink: 0 !important;
     box-shadow: none !important;
     cursor: pointer !important;
+    touch-action: manipulation !important;
     will-change: transform;
     transition: background 0.15s ease, transform 0.1s ease, color 0.15s ease !important;
 }
@@ -2060,11 +2050,13 @@ html[data-ui-mode="minimal"] .msg-send-btn {
     color: #090a0f !important;
     border: none !important;
     border-radius: var(--min-radius-md) !important;
-    width: 38px !important;
-    height: 38px !important;
-    min-width: 38px !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
     display: none;
     align-items: center !important;
+    touch-action: manipulation !important;
     justify-content: center !important;
     flex-shrink: 0 !important;
     font-weight: 700 !important;
@@ -2083,6 +2075,81 @@ html[data-ui-mode="minimal"] .msg-send-btn svg {
     stroke: #090a0f !important;
     width: 18px !important;
     height: 18px !important;
+}
+
+/* Touch-target normalization — header, reply, search, and voice controls all
+   get a 44px+ hitbox plus manipulation touch-action (kills the Android 300ms
+   tap delay and double-tap-zoom on these controls). */
+html[data-ui-mode="minimal"] .msg-hdr-btn,
+html[data-ui-mode="minimal"] .msg-hdr-call-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    touch-action: manipulation !important;
+}
+
+html[data-ui-mode="minimal"] .msg-icon-button {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    touch-action: manipulation !important;
+}
+
+html[data-ui-mode="minimal"] .msg-reply-bar-cancel,
+html[data-ui-mode="minimal"] .msg-inchat-search-close {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    padding: 0 !important;
+    touch-action: manipulation !important;
+}
+
+/* Voice note play button (real markup class) + legacy alias */
+html[data-ui-mode="minimal"] .msg-voice-play-btn,
+html[data-ui-mode="minimal"] .msg-voice-control-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    flex-basis: 44px !important;
+    border-radius: var(--min-radius-full) !important;
+    background: var(--accent-gold) !important;
+    color: #090a0f !important;
+    border: none !important;
+    cursor: pointer !important;
+    touch-action: manipulation !important;
+}
+html[data-ui-mode="minimal"] .msg-voice-play-btn:active,
+html[data-ui-mode="minimal"] .msg-voice-control-btn:active {
+    transform: scale(0.9) !important;
+}
+
+/* Broad safety net — every messaging button is tap-delay free and hides the
+   tap highlight (so taps never render a grey flash that misses the hitbox). */
+html[data-ui-mode="minimal"] .msg-header button,
+html[data-ui-mode="minimal"] .msg-composer-wrap button,
+html[data-ui-mode="minimal"] .msg-input-row button,
+html[data-ui-mode="minimal"] .msg-body-container button,
+html[data-ui-mode="minimal"] .msg-mobile-actions-sheet button,
+html[data-ui-mode="minimal"] .msg-drawer-widget button {
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Keep overlays GPU-cheap on low-end Android (no backdrop blur) */
+html[data-ui-mode="minimal"] .msg-mobile-actions-backdrop,
+html[data-ui-mode="minimal"] .msg-details-backdrop {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Let vertical thread panning stay native while horizontal swipe-to-reply
+   events are delivered to the JS gesture handler. */
+html[data-ui-mode="minimal"] .msg-row {
+    touch-action: pan-y !important;
 }
 
 /* Chat Drawer Widget */
@@ -2128,10 +2195,16 @@ html[data-ui-mode="minimal"] .msg-floating-launcher {
 }
 
 html[data-ui-mode="minimal"] .msg-floating-toast {
+    top: auto !important;
     bottom: calc(var(--min-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 12px) !important;
     left: 10px !important;
     right: 10px !important;
     max-width: calc(100vw - 20px) !important;
+    transform: translateY(80px) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-floating-toast.is-visible {
+    transform: translateY(0) !important;
 }
 
 html[data-ui-mode="minimal"] .msg-floating-toast-card {
@@ -2710,10 +2783,16 @@ html[data-ui-mode="minimal"] .theme-modal {
     }
 
     html[data-ui-mode="minimal"] .msg-floating-toast {
+        top: auto !important;
         bottom: 20px !important;
         right: 20px !important;
         left: auto !important;
         max-width: 360px !important;
+        transform: translateY(80px) !important;
+    }
+
+    html[data-ui-mode="minimal"] .msg-floating-toast.is-visible {
+        transform: translateY(0) !important;
     }
 
     html[data-ui-mode="minimal"] .wt-global-invite-toast {
@@ -2742,8 +2821,11 @@ html[data-ui-mode="minimal"] .theme-modal {
         overflow: hidden !important;
     }
 
+    /* Keep the details panel mounted: the shared responsive rules turn it
+       into a fixed overlay, and hiding it here makes the details button a
+       dead control on Android. */
     html[data-ui-mode="minimal"] .msg-fullpage-sidebar {
-        display: none !important;
+        display: flex !important;
     }
 
     html[data-ui-mode="minimal"] .msg-fullpage-main {
