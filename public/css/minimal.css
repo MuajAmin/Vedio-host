@@ -1496,8 +1496,7 @@ html[data-ui-mode="minimal"] body[data-page="messages"] {
 
 html[data-ui-mode="minimal"] body[data-page="messages"] .app-container {
     height: 100% !important;
-    height: 100dvh !important;
-    height: 100svh !important;
+    max-height: 100% !important;
     max-width: 100% !important;
     width: 100% !important;
     margin: 0 !important;
@@ -1930,9 +1929,10 @@ html[data-ui-mode="minimal"] .msg-footer {
     border-top: 1px solid var(--min-border) !important;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)) 12px !important;
     box-shadow: 0 -1px 6px rgba(0, 0, 0, 0.4) !important;
+    flex: 0 0 auto !important;
     flex-shrink: 0 !important;
-    position: sticky !important;
-    bottom: 0 !important;
+    position: relative !important;
+    bottom: auto !important;
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
@@ -2816,8 +2816,10 @@ html[data-ui-mode="minimal"] .theme-modal {
         display: flex !important;
         flex-direction: column !important;
         grid-template-columns: unset !important;
-        height: calc(100dvh - var(--min-header-height)) !important;
-        max-height: calc(100dvh - var(--min-header-height)) !important;
+        flex: 1 1 0% !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        max-height: 100% !important;
         overflow: hidden !important;
     }
 
@@ -2828,6 +2830,9 @@ html[data-ui-mode="minimal"] .theme-modal {
         display: flex !important;
     }
 
+    /* The main column owns the full flex height below the app bar. Do not
+       subtract the header again; that leaves the composer floating above the
+       bottom edge on Android. */
     html[data-ui-mode="minimal"] .msg-fullpage-main {
         display: flex !important;
         flex-direction: column !important;
@@ -2837,6 +2842,13 @@ html[data-ui-mode="minimal"] .theme-modal {
         max-height: 100% !important;
         overflow: hidden !important;
         width: 100% !important;
+    }
+
+    /* Opening details should not dim the entire Minimal chat surface. The
+       sheet remains visually separated by its own border and shadow, while
+       the full-screen hit target still closes it when tapped. */
+    html[data-ui-mode="minimal"] .msg-details-backdrop {
+        background: rgba(0, 0, 0, 0.18) !important;
     }
 
     html[data-ui-mode="minimal"] .msg-drawer-widget {
