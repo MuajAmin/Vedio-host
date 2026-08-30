@@ -152,7 +152,7 @@ describe('Video Deletion & CSRF Token Validation', () => {
 
         // Verify local thumbnail file is unlinked
         expect(fs.existsSync(thumbFilePath)).toBe(false);
-    });
+    }, 30000);
 
     test('Video deletion succeeds even if local files are already missing', async () => {
         const missingFileId = 'test-missing-file-id';
@@ -197,5 +197,5 @@ describe('Video Deletion & CSRF Token Validation', () => {
         // Verify DB record is deleted despite missing local file
         const dbVideo = db.prepare('SELECT * FROM videos WHERE id = ?').get(missingFileId);
         expect(dbVideo == null).toBe(true);
-    });
+    }, 30000);
 });

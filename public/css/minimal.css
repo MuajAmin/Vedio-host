@@ -108,6 +108,56 @@ html[data-ui-mode="minimal"] body {
     text-shadow: none !important;
 }
 
+/* --------------------------------------------------------------------------
+   2b. GLOBAL ANDROID TOUCH FIX
+   Kills the 300ms tap delay, double-tap-zoom gesture conflict, and the grey
+   tap-highlight flash on EVERY interactive element. Without this, Android
+   Chrome / WebView swallows ~40% of taps on low-end devices.
+   -------------------------------------------------------------------------- */
+html[data-ui-mode="minimal"] a,
+html[data-ui-mode="minimal"] button,
+html[data-ui-mode="minimal"] input,
+html[data-ui-mode="minimal"] select,
+html[data-ui-mode="minimal"] textarea,
+html[data-ui-mode="minimal"] label,
+html[data-ui-mode="minimal"] [role="button"],
+html[data-ui-mode="minimal"] [onclick],
+html[data-ui-mode="minimal"] .btn,
+html[data-ui-mode="minimal"] .video-card,
+html[data-ui-mode="minimal"] .continue-card,
+html[data-ui-mode="minimal"] .suggestion-card,
+html[data-ui-mode="minimal"] .comment-item,
+html[data-ui-mode="minimal"] .bottom-nav-item,
+html[data-ui-mode="minimal"] .bottom-nav-upload,
+html[data-ui-mode="minimal"] .bottom-nav-form,
+html[data-ui-mode="minimal"] .nav-theme-toggle,
+html[data-ui-mode="minimal"] .user-badge,
+html[data-ui-mode="minimal"] .msg-floating-launcher,
+html[data-ui-mode="minimal"] .chip-btn,
+html[data-ui-mode="minimal"] .theme-card-option,
+html[data-ui-mode="minimal"] .ui-mode-card-option,
+html[data-ui-mode="minimal"] .upload-tab,
+html[data-ui-mode="minimal"] .admin-tab-btn,
+html[data-ui-mode="minimal"] .stat-tile,
+html[data-ui-mode="minimal"] .msg-reaction-badge,
+html[data-ui-mode="minimal"] .emoji-chip,
+html[data-ui-mode="minimal"] .call-btn-circle,
+html[data-ui-mode="minimal"] .call-control-btn,
+html[data-ui-mode="minimal"] .minimized-call-pill {
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Video cards rendered as <a> tags need cursor:pointer + remove containment
+   that causes Android touch event drops on some WebView versions. */
+html[data-ui-mode="minimal"] .video-card,
+html[data-ui-mode="minimal"] .continue-card,
+html[data-ui-mode="minimal"] .suggestion-card {
+    cursor: pointer !important;
+    contain: none !important;
+    -webkit-user-drag: none !important;
+}
+
 html[data-ui-mode="minimal"] .navbar,
 html[data-ui-mode="minimal"] .mobile-bottom-bar,
 html[data-ui-mode="minimal"] .btn,
@@ -330,6 +380,10 @@ html[data-ui-mode="minimal"] .bottom-nav-item {
     will-change: transform;
     background: transparent !important;
     border: none !important;
+    cursor: pointer !important;
+    text-decoration: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-form {
@@ -363,6 +417,7 @@ html[data-ui-mode="minimal"] .bottom-nav-icon-wrap {
     background: transparent !important;
     border: none !important;
     transition: background 0.18s ease, transform 0.18s ease !important;
+    pointer-events: none !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-icon-wrap svg {
@@ -410,6 +465,7 @@ html[data-ui-mode="minimal"] .nav-icon-filled {
     min-height: 22px !important;
     flex-shrink: 0 !important;
     transition: opacity 0.18s ease !important;
+    pointer-events: none !important;
 }
 
 html[data-ui-mode="minimal"] .bottom-nav-item.active .nav-icon-outline {
@@ -447,6 +503,7 @@ html[data-ui-mode="minimal"] .bottom-nav-label {
     font-weight: 600 !important;
     letter-spacing: 0.1px;
     margin-top: 2px;
+    pointer-events: none !important;
 }
 
 /* Upload Center Floating Action Button (Minimal Mode) */
