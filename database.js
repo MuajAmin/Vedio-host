@@ -268,7 +268,7 @@ try {
 function getUserAvatar(username) {
     if (!username) return null;
     try {
-        const row = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?').get(username);
+        const row = stmtGetUserAvatar.get(username);
         return row ? row.avatar : null;
     } catch {
         return null;
@@ -277,7 +277,7 @@ function getUserAvatar(username) {
 
 function getAllUserAvatars() {
     try {
-        const rows = db.prepare('SELECT username, avatar FROM user_profiles').all();
+        const rows = stmtGetAllUserAvatars.all();
         const map = {};
         rows.forEach(r => { if (r.avatar) map[r.username] = r.avatar; });
         return map;
@@ -310,7 +310,7 @@ function resetBlockedUsersCache() {
 
 function getBlockedUsersSet() {
     if (!blockedUsersCache) {
-        const rows = db.prepare('SELECT username FROM blocked_users').all();
+        const rows = stmtGetBlockedUsersSet.all();
         blockedUsersCache = new Set(rows.map(r => r.username));
     }
     return blockedUsersCache;
@@ -324,7 +324,7 @@ function isUserBlocked(username) {
     } catch {
         // Safe fallback if cache population throws (e.g. transient DB lock)
         try {
-            const row = db.prepare('SELECT username FROM blocked_users WHERE username = ?').get(username);
+            const row = stmtIsUserBlocked.get(username);
             return !!row;
         } catch {
             return false;
@@ -363,7 +363,7 @@ function unblockUser(username) {
 
 function getBlockedUsers() {
     try {
-        return db.prepare('SELECT username, reason, blocked_at FROM blocked_users').all();
+        return stmtGetBlockedUsers.all();
     } catch {
         return [];
     }
@@ -501,7 +501,7 @@ function destroyAllSessions(keepCurrentSid = null) {
 function countUserSessions(username) {
     if (!username) return 0;
     try {
-        const row = db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE json_extract(sess, '$.user') = ? AND expires_at > ?").get(username, Date.now());
+        const row = stmtCountUserSessions.get(username, Date.now());
         return row ? row.count : 0;
     } catch {
         return 0;
@@ -518,6 +518,15 @@ function getLocalDateString(d = new Date()) {
 // ============================================================
 //  Precompiled Statements for High-Speed DB Execution
 // ============================================================
+const stmtGetUserAvatar = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?');
+const stmtGetAllUserAvatars = db.prepare('SELECT username, avatar FROM user_profiles');
+const stmtGetBlockedUsersSet = db.prepare('SELECT username FROM blocked_users');
+const stmtIsUserBlocked = db.prepare('SELECT username FROM blocked_users WHERE username = ?');
+const stmtGetBlockedUsers = db.prepare('SELECT username, reason, blocked_at FROM blocked_users');
+const stmtCountUserSessions = db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE json_extract(sess, '$.user') = ? AND expires_at > ?");
+const stmtGetUserSettings = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?');
+const stmtGetVideoBySourceUrl = db.prepare('SELECT id, title, filename, thumbnail, duration, size, source_url, uploaded_by, uploaded_at FROM videos WHERE source_url = ? LIMIT 1');
+
 const stmtPresenceUpsert = db.prepare(`
     INSERT INTO user_presence (
         username, status, last_seen, current_page, current_video_id,
@@ -1312,7 +1321,7 @@ function getRecentCallLogs(user1, user2, limit = 30) {
 function getUserSettings(username) {
     if (!username) return { ui_mode: 'standard', theme: 'cinematic' };
     try {
-        const row = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?').get(username);
+        const row = stmtGetUserSettings.get(username);
         const defaultTheme = (username === 'hajera') ? 'sunset' : 'cinematic';
         if (!row) {
             return { ui_mode: 'standard', theme: defaultTheme };
@@ -1398,7 +1407,7 @@ db.getRecentCallLogs = getRecentCallLogs;
 function getVideoBySourceUrl(sourceUrl) {
     if (!sourceUrl) return null;
     try {
-        return db.prepare('SELECT id, title, filename, thumbnail, duration, size, source_url, uploaded_by, uploaded_at FROM videos WHERE source_url = ? LIMIT 1').get(sourceUrl) || null;
+        return stmtGetVideoBySourceUrl.get(sourceUrl) || null;
     } catch {
         return null;
     }

@@ -1,6 +1,34 @@
 const crypto = require('crypto');
 const ejs = require('ejs');
-const cookie = require('cookie');
+
+// Fast zero-dependency cookie header parser (avoids external module lookup on every request)
+function parseCookies(str) {
+    if (!str || typeof str !== 'string') return {};
+    const obj = {};
+    const len = str.length;
+    let pos = 0;
+    while (pos < len) {
+        let eq = str.indexOf('=', pos);
+        if (eq === -1) break;
+        let end = str.indexOf(';', eq);
+        if (end === -1) end = len;
+
+        let key = str.substring(pos, eq).trim();
+        if (key && !Object.prototype.hasOwnProperty.call(obj, key)) {
+            let val = str.substring(eq + 1, end).trim();
+            if (val.charCodeAt(0) === 0x22 && val.charCodeAt(val.length - 1) === 0x22) {
+                val = val.slice(1, -1);
+            }
+            try {
+                obj[key] = val.includes('%') ? decodeURIComponent(val) : val;
+            } catch {
+                obj[key] = val;
+            }
+        }
+        pos = end + 1;
+    }
+    return obj;
+}
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const VALID_THEMES = new Set(['cinematic', 'cyberpunk', 'emerald', 'sunset']);
@@ -109,7 +137,7 @@ function attachLocals(req, res, next) {
     let cookieScheme = null;
     try {
         if (req.headers.cookie) {
-            const parsedCookies = cookie.parse(req.headers.cookie);
+            const parsedCookies = parseCookies(req.headers.cookie);
             if (parsedCookies.videohosk_theme && VALID_THEMES.has(parsedCookies.videohosk_theme)) {
                 cookieTheme = parsedCookies.videohosk_theme;
             }
@@ -220,6 +248,7 @@ module.exports = {
     invalidateAvatarCache,
     invalidateUnreadCache,
     invalidateSettingsCache,
+    parseCookies,
     renderAvatar,
     requireCsrf,
     validateCsrf,

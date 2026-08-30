@@ -4,7 +4,7 @@ const session = require('express-session');
 const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
-const { attachLocals, requireCsrf, renderAvatar } = require('./utils/security');
+const { attachLocals, requireCsrf, renderAvatar, parseCookies } = require('./utils/security');
 const { ASSET_VERSION, buildEarlyHintsHeader } = require('./utils/assets');
 const { isAuthenticated } = require('./middleware/auth');
 const SQLiteSessionStore = require('./utils/sessionStore');
@@ -140,7 +140,6 @@ app.get('/health', (req, res) => {
 //   store.get() → JSON.parse() → store.touch() → JSON.stringify() → DB write
 // This fast-path validates the session cookie directly via an in-memory cached single DB read,
 // skipping session deserialization, touch, and write-back.
-const cookie = require('cookie');
 const signature = require('cookie-signature');
 const sessionSecret = process.env.SESSION_SECRET || (() => {
     const ephemeral = require('crypto').randomBytes(32).toString('hex');
@@ -155,7 +154,7 @@ const MEDIA_AUTH_CACHE_TTL_MS = 10000;
 
 function fastMediaAuth(req, res, next) {
     try {
-        const cookies = cookie.parse(req.headers.cookie || '');
+        const cookies = parseCookies(req.headers.cookie || '');
         const raw = cookies['videohost.sid'];
         if (!raw) return res.status(401).end('Unauthorized');
 

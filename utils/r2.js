@@ -1,6 +1,9 @@
 const { S3Client, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
-const { NodeHttpHandler } = require('@smithy/node-http-handler');
+let NodeHttpHandler;
+try {
+    NodeHttpHandler = require('@smithy/node-http-handler').NodeHttpHandler;
+} catch {}
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
