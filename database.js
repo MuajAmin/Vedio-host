@@ -265,10 +265,21 @@ try {
     console.error('[db] Migration check error:', err.message);
 }
 
+// --- Precompiled Avatar Queries for Fast Execution ---
+// Precompiling SQLite statements at module init avoids statement compilation overhead on every call.
+const stmtGetUserAvatar = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?');
+const stmtGetAllUserAvatars = db.prepare('SELECT username, avatar FROM user_profiles');
+const stmtSetUserAvatar = db.prepare(`
+    INSERT INTO user_profiles (username, avatar, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(username) DO UPDATE SET avatar = excluded.avatar, updated_at = CURRENT_TIMESTAMP
+`);
+const stmtDeleteUserAvatar = db.prepare('DELETE FROM user_profiles WHERE username = ?');
+
 function getUserAvatar(username) {
     if (!username) return null;
     try {
-        const row = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?').get(username);
+        const row = stmtGetUserAvatar.get(username);
         return row ? row.avatar : null;
     } catch {
         return null;
@@ -277,7 +288,7 @@ function getUserAvatar(username) {
 
 function getAllUserAvatars() {
     try {
-        const rows = db.prepare('SELECT username, avatar FROM user_profiles').all();
+        const rows = stmtGetAllUserAvatars.all();
         const map = {};
         rows.forEach(r => { if (r.avatar) map[r.username] = r.avatar; });
         return map;
@@ -287,15 +298,11 @@ function getAllUserAvatars() {
 }
 
 function setUserAvatar(username, avatarFilename) {
-    db.prepare(`
-        INSERT INTO user_profiles (username, avatar, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(username) DO UPDATE SET avatar = excluded.avatar, updated_at = CURRENT_TIMESTAMP
-    `).run(username, avatarFilename);
+    stmtSetUserAvatar.run(username, avatarFilename);
 }
 
 function deleteUserAvatar(username) {
-    db.prepare('DELETE FROM user_profiles WHERE username = ?').run(username);
+    stmtDeleteUserAvatar.run(username);
 }
 
 // --- In-memory cache for blocked users set ---
@@ -1309,10 +1316,23 @@ function getRecentCallLogs(user1, user2, limit = 30) {
     }
 }
 
+// --- Precompiled User Settings Queries ---
+const stmtGetUserSettings = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?');
+const stmtSetUserSettingsUiMode = db.prepare(`
+    INSERT INTO user_settings (username, ui_mode, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET ui_mode = excluded.ui_mode, updated_at = excluded.updated_at
+`);
+const stmtSetUserSettingsTheme = db.prepare(`
+    INSERT INTO user_settings (username, theme, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
+`);
+
 function getUserSettings(username) {
     if (!username) return { ui_mode: 'standard', theme: 'cinematic' };
     try {
-        const row = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?').get(username);
+        const row = stmtGetUserSettings.get(username);
         const defaultTheme = (username === 'hajera') ? 'sunset' : 'cinematic';
         if (!row) {
             return { ui_mode: 'standard', theme: defaultTheme };
@@ -1333,20 +1353,12 @@ function setUserSetting(username, key, value) {
         const now = new Date().toISOString();
         if (key === 'ui_mode') {
             const cleanVal = String(value);
-            db.prepare(`
-                INSERT INTO user_settings (username, ui_mode, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET ui_mode = excluded.ui_mode, updated_at = excluded.updated_at
-            `).run(username, cleanVal, now);
+            stmtSetUserSettingsUiMode.run(username, cleanVal, now);
             return true;
         }
         if (key === 'theme') {
             const cleanVal = String(value);
-            db.prepare(`
-                INSERT INTO user_settings (username, theme, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
-            `).run(username, cleanVal, now);
+            stmtSetUserSettingsTheme.run(username, cleanVal, now);
             return true;
         }
         return false;
@@ -1395,10 +1407,15 @@ db.updateCallLog = updateCallLog;
 db.getCallLog = getCallLog;
 db.getRecentCallLogs = getRecentCallLogs;
 
+// Precompiled video query by source URL
+const stmtGetVideoBySourceUrl = db.prepare(
+    'SELECT id, title, filename, thumbnail, duration, size, source_url, uploaded_by, uploaded_at FROM videos WHERE source_url = ? LIMIT 1'
+);
+
 function getVideoBySourceUrl(sourceUrl) {
     if (!sourceUrl) return null;
     try {
-        return db.prepare('SELECT id, title, filename, thumbnail, duration, size, source_url, uploaded_by, uploaded_at FROM videos WHERE source_url = ? LIMIT 1').get(sourceUrl) || null;
+        return stmtGetVideoBySourceUrl.get(sourceUrl) || null;
     } catch {
         return null;
     }
@@ -1410,21 +1427,28 @@ db.getVideoBySourceUrl = getVideoBySourceUrl;
 //  PUSH SUBSCRIPTION HELPERS
 // ============================================================
 
+// --- Precompiled Push Subscription Queries ---
+const stmtSavePushSubscription = db.prepare(`
+    INSERT INTO push_subscriptions (username, endpoint, keys_p256dh, keys_auth, user_agent, created_at, last_used_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET
+        username = excluded.username,
+        keys_p256dh = excluded.keys_p256dh,
+        keys_auth = excluded.keys_auth,
+        user_agent = COALESCE(excluded.user_agent, push_subscriptions.user_agent),
+        last_used_at = excluded.last_used_at
+`);
+const stmtGetPushSubscriptions = db.prepare('SELECT * FROM push_subscriptions WHERE username = ?');
+const stmtDeletePushSubscription = db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?');
+const stmtDeletePushSubscriptionsForUser = db.prepare('DELETE FROM push_subscriptions WHERE username = ?');
+const stmtTouchPushSubscription = db.prepare('UPDATE push_subscriptions SET last_used_at = ? WHERE endpoint = ?');
+
 function savePushSubscription(username, subscription, userAgent = null) {
     if (!username || !subscription || !subscription.endpoint) return null;
     try {
         const keys = subscription.keys || {};
         const nowIso = new Date().toISOString();
-        db.prepare(`
-            INSERT INTO push_subscriptions (username, endpoint, keys_p256dh, keys_auth, user_agent, created_at, last_used_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(endpoint) DO UPDATE SET
-                username = excluded.username,
-                keys_p256dh = excluded.keys_p256dh,
-                keys_auth = excluded.keys_auth,
-                user_agent = COALESCE(excluded.user_agent, push_subscriptions.user_agent),
-                last_used_at = excluded.last_used_at
-        `).run(username, subscription.endpoint, keys.p256dh || '', keys.auth || '', userAgent, nowIso, nowIso);
+        stmtSavePushSubscription.run(username, subscription.endpoint, keys.p256dh || '', keys.auth || '', userAgent, nowIso, nowIso);
         return true;
     } catch (err) {
         console.error('[db] Error saving push subscription:', err.message);
@@ -1435,7 +1459,7 @@ function savePushSubscription(username, subscription, userAgent = null) {
 function getPushSubscriptions(username) {
     if (!username) return [];
     try {
-        return db.prepare('SELECT * FROM push_subscriptions WHERE username = ?').all(username);
+        return stmtGetPushSubscriptions.all(username);
     } catch (err) {
         console.error('[db] Error getting push subscriptions:', err.message);
         return [];
@@ -1445,7 +1469,7 @@ function getPushSubscriptions(username) {
 function deletePushSubscription(endpoint) {
     if (!endpoint) return false;
     try {
-        db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(endpoint);
+        stmtDeletePushSubscription.run(endpoint);
         return true;
     } catch (err) {
         console.error('[db] Error deleting push subscription:', err.message);
@@ -1456,7 +1480,7 @@ function deletePushSubscription(endpoint) {
 function deletePushSubscriptionsForUser(username) {
     if (!username) return 0;
     try {
-        const result = db.prepare('DELETE FROM push_subscriptions WHERE username = ?').run(username);
+        const result = stmtDeletePushSubscriptionsForUser.run(username);
         return result.changes || 0;
     } catch (err) {
         console.error('[db] Error deleting user push subscriptions:', err.message);
@@ -1481,7 +1505,7 @@ function cleanupStalePushSubscriptions(maxAgeDays = 30) {
 function touchPushSubscription(endpoint) {
     if (!endpoint) return;
     try {
-        db.prepare('UPDATE push_subscriptions SET last_used_at = ? WHERE endpoint = ?').run(new Date().toISOString(), endpoint);
+        stmtTouchPushSubscription.run(new Date().toISOString(), endpoint);
     } catch {}
 }
 
