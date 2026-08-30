@@ -277,7 +277,6 @@ html[data-ui-mode="minimal"] .app-bar-back-btn {
     align-items: center !important;
     justify-content: center !important;
     transition: background 0.15s ease, border-color 0.15s ease;
-    will-change: transform;
 }
 
 html[data-ui-mode="minimal"] .nav-right .btn:active,
@@ -309,7 +308,6 @@ html[data-ui-mode="minimal"] .user-badge {
     box-shadow: none !important;
     cursor: pointer;
     transition: background 0.15s ease;
-    will-change: transform;
 }
 
 html[data-ui-mode="minimal"] .user-badge:active {
@@ -377,7 +375,6 @@ html[data-ui-mode="minimal"] .bottom-nav-item {
     color: var(--min-text-muted) !important;
     min-height: 48px !important;
     justify-content: center !important;
-    will-change: transform;
     background: transparent !important;
     border: none !important;
     cursor: pointer !important;
@@ -551,7 +548,6 @@ html[data-ui-mode="minimal"] .bottom-nav-upload .upload-btn-pill {
     justify-content: center !important;
     position: relative !important;
     overflow: hidden !important;
-    will-change: transform, box-shadow;
     transition: transform 0.15s ease,
                 box-shadow 0.15s ease,
                 border-color 0.15s ease !important;
@@ -791,7 +787,6 @@ html[data-ui-mode="minimal"] .continue-card {
     flex: 0 0 220px !important;
     min-width: 220px !important;
     scroll-snap-align: start !important;
-    will-change: transform;
     transition: transform 0.1s ease !important;
 }
 
@@ -814,7 +809,6 @@ html[data-ui-mode="minimal"] .video-card {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    will-change: transform;
     transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
@@ -1025,7 +1019,6 @@ html[data-ui-mode="minimal"] .vp-btn {
     align-items: center !important;
     justify-content: center !important;
     border-radius: var(--min-radius-sm) !important;
-    will-change: transform;
     transition: transform 0.1s ease, background 0.15s ease !important;
 }
 
@@ -1111,7 +1104,6 @@ html[data-ui-mode="minimal"] .video-action-buttons .btn {
     border: 1px solid var(--min-border) !important;
     font-size: 13px !important;
     box-shadow: none !important;
-    will-change: transform;
     transition: background 0.15s ease, transform 0.1s ease;
 }
 
@@ -1214,7 +1206,6 @@ html[data-ui-mode="minimal"] .suggestion-card {
     margin-bottom: 8px !important;
     overflow: hidden !important;
     position: relative !important;
-    will-change: transform;
     transition: background 0.15s ease, transform 0.1s ease;
 }
 
@@ -1497,7 +1488,6 @@ html[data-ui-mode="minimal"] .wt-chat-send-btn {
     cursor: pointer !important;
     font-weight: 700 !important;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
-    will-change: transform;
     transition: transform 0.1s ease !important;
 }
 
@@ -1995,7 +1985,6 @@ html[data-ui-mode="minimal"] .msg-video-card {
     display: flex !important;
     flex-direction: column !important;
     text-decoration: none !important;
-    will-change: transform;
     transition: transform 0.1s ease, border-color 0.15s ease !important;
 }
 
@@ -2075,7 +2064,6 @@ html[data-ui-mode="minimal"] .msg-voice-control-btn {
     border: none !important;
     cursor: pointer !important;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
-    will-change: transform;
     transition: transform 0.1s ease !important;
 }
 
@@ -2265,7 +2253,6 @@ html[data-ui-mode="minimal"] .msg-composer-btn {
     box-shadow: none !important;
     cursor: pointer !important;
     touch-action: manipulation !important;
-    will-change: transform;
     transition: background 0.15s ease, transform 0.1s ease, color 0.15s ease !important;
 }
 
@@ -2292,7 +2279,6 @@ html[data-ui-mode="minimal"] .msg-send-btn {
     font-weight: 700 !important;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
     cursor: pointer !important;
-    will-change: transform;
     transition: transform 0.1s ease, background 0.15s ease !important;
 }
 
@@ -2540,7 +2526,6 @@ html[data-ui-mode="minimal"] .call-btn-circle {
     height: 60px !important;
     border-radius: var(--min-radius-full) !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45) !important;
-    will-change: transform;
     transition: transform 0.1s ease;
 }
 
@@ -2581,7 +2566,6 @@ html[data-ui-mode="minimal"] .call-control-btn {
     background: var(--min-bg-surface-raised) !important;
     border: 1px solid var(--min-border-strong) !important;
     box-shadow: none !important;
-    will-change: transform;
     transition: transform 0.1s ease;
 }
 
@@ -2706,7 +2690,6 @@ html[data-ui-mode="minimal"] .stat-tile {
     border: 1px solid var(--min-border-subtle) !important;
     border-radius: var(--min-radius-sm) !important;
     box-shadow: none !important;
-    will-change: transform;
     transition: background 0.15s ease, transform 0.1s ease !important;
 }
 
@@ -2792,7 +2775,6 @@ html[data-ui-mode="minimal"] .login-btn {
     font-weight: 700 !important;
     border-radius: var(--min-radius-md) !important;
     box-shadow: none !important;
-    will-change: transform;
     transition: transform 0.1s ease;
 }
 
