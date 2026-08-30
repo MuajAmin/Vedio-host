@@ -102,12 +102,16 @@ app.use((req, res, next) => {
     // browser downloads the same file twice (once preloaded, once for real).
     if (req.method === 'GET' && req.accepts('html') && !req.path.startsWith('/api/') && !req.path.startsWith('/stream/')) {
         let minimalUi = false;
+        let authenticated = false;
         try {
             if (req.headers.cookie) {
                 minimalUi = /videohosk_uimode=minimal/.test(req.headers.cookie);
+                // Cheap hint only — the session middleware does the real check.
+                // Prevents preloading the realtime/emoji stack on the login page.
+                authenticated = /videohost\.sid=/.test(req.headers.cookie);
             }
         } catch {}
-        res.setHeader('Link', buildEarlyHintsHeader({ minimalUi }));
+        res.setHeader('Link', buildEarlyHintsHeader({ minimalUi, authenticated }));
     }
 
     next();

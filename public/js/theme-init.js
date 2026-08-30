@@ -10,11 +10,18 @@
 
         var validThemes = { 'cinematic': 1, 'cyberpunk': 1, 'emerald': 1, 'sunset': 1 };
         var validModes = { 'standard': 1, 'minimal': 1 };
+        var validSchemes = { 'dark': 1, 'light': 1 };
         var themeMetaColors = {
             cinematic: '#060609',
             cyberpunk: '#05050d',
             emerald: '#030806',
             sunset: '#0c040a'
+        };
+        var themeMetaColorsLight = {
+            cinematic: '#f3f4f9',
+            cyberpunk: '#eff6fb',
+            emerald: '#f0f7f3',
+            sunset: '#fdf3f5'
         };
 
         // 1. UI Mode Init (Standard vs Minimal)
@@ -78,20 +85,54 @@
         }
         doc.setAttribute('data-theme', resolvedTheme);
 
+        // 3. Color Scheme Init (Dark default / Light)
+        var serverScheme = doc.getAttribute('data-scheme');
+        var resolvedScheme = null;
+
+        if (user) {
+            var userSavedScheme = localStorage.getItem('videohosk_scheme_' + user);
+            if (userSavedScheme && validSchemes[userSavedScheme]) {
+                resolvedScheme = userSavedScheme;
+            }
+        }
+        if (!resolvedScheme && serverScheme && validSchemes[serverScheme]) {
+            resolvedScheme = serverScheme;
+        }
+        if (!resolvedScheme) {
+            var cookieScheme = getCookie('videohosk_scheme');
+            if (cookieScheme && validSchemes[cookieScheme]) {
+                resolvedScheme = cookieScheme;
+            }
+        }
+        if (!resolvedScheme) {
+            var globalSavedScheme = localStorage.getItem('videohosk_scheme');
+            if (globalSavedScheme && validSchemes[globalSavedScheme]) {
+                resolvedScheme = globalSavedScheme;
+            }
+        }
+        if (!resolvedScheme) {
+            resolvedScheme = 'dark';
+        }
+        doc.setAttribute('data-scheme', resolvedScheme);
+
         // Sync to storage & cookies immediately
         if (user) {
             localStorage.setItem('videohosk_theme_' + user, resolvedTheme);
             localStorage.setItem('videohosk_uimode_' + user, resolvedMode);
+            localStorage.setItem('videohosk_scheme_' + user, resolvedScheme);
         }
         localStorage.setItem('videohosk_theme', resolvedTheme);
         localStorage.setItem('videohosk_uimode', resolvedMode);
+        localStorage.setItem('videohosk_scheme', resolvedScheme);
         document.cookie = 'videohosk_theme=' + encodeURIComponent(resolvedTheme) + '; path=/; max-age=31536000; SameSite=Lax';
         document.cookie = 'videohosk_uimode=' + encodeURIComponent(resolvedMode) + '; path=/; max-age=31536000; SameSite=Lax';
+        document.cookie = 'videohosk_scheme=' + encodeURIComponent(resolvedScheme) + '; path=/; max-age=31536000; SameSite=Lax';
 
         // Sync meta theme-color if present
         var metaTheme = document.querySelector('meta[name="theme-color"]');
-        if (metaTheme && themeMetaColors[resolvedTheme]) {
-            metaTheme.setAttribute('content', themeMetaColors[resolvedTheme]);
+        var metaColorMap = resolvedScheme === 'light' ? themeMetaColorsLight : themeMetaColors;
+        if (metaTheme && metaColorMap[resolvedTheme]) {
+            metaTheme.setAttribute('content', metaColorMap[resolvedTheme]);
         }
     } catch (e) {}
 })();

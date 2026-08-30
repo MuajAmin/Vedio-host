@@ -5,26 +5,32 @@
 //  + Web Push Notification Handler for Messenger-style notifications
 // ============================================================
 
-const CACHE_NAME = 'videohost-v14.2';
+// NOTE: SW_VERSION must stay in sync with ASSET_VERSION in utils/assets.js.
+// When they drift the precache never matches the URLs pages actually request,
+// so every asset is downloaded twice (once precached, once for real).
+const SW_VERSION = '14.4';
+const CACHE_NAME = 'videohost-v' + SW_VERSION;
 const MEDIA_CACHE_NAME = 'videohost-media-v4';
 const MAX_MEDIA_CACHE_ITEMS = 300;
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
-    '/css/style.css?v=14.2',
-    '/css/minimal.css?v=14.2',
-    '/css/messages.css?v=14.2',
-    '/css/calling.css?v=14.2',
-    '/js/theme-init.js?v=14.2',
-    '/js/twemoji.min.js?v=14.2',
-    '/js/emoji-data.js?v=14.2',
-    '/js/whatsapp-emojis.js?v=14.2',
-    '/js/app.js?v=14.2',
-    '/js/messages.js?v=14.2',
-    '/js/watchTogether.js?v=14.2',
-    '/js/calling.js?v=14.2',
+    '/css/style.css?v=' + SW_VERSION,
+    '/css/design-system.css?v=' + SW_VERSION,
+    '/css/minimal.css?v=' + SW_VERSION,
+    '/css/messages.css?v=' + SW_VERSION,
+    '/css/calling.css?v=' + SW_VERSION,
+    '/js/theme-init.js?v=' + SW_VERSION,
+    '/js/twemoji.min.js?v=' + SW_VERSION,
+    '/js/emoji-data.js?v=' + SW_VERSION,
+    '/js/whatsapp-emojis.js?v=' + SW_VERSION,
+    '/js/app.js?v=' + SW_VERSION,
+    '/js/messages.js?v=' + SW_VERSION,
+    '/js/watchTogether.js?v=' + SW_VERSION,
+    '/js/calling.js?v=' + SW_VERSION,
     '/css/icon-192.png',
     '/css/icon-512.png',
+    '/favicon.ico',
     '/manifest.json'
 ];
 

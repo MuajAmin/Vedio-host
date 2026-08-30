@@ -5,6 +5,7 @@ const cookie = require('cookie');
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const VALID_THEMES = new Set(['cinematic', 'cyberpunk', 'emerald', 'sunset']);
 const VALID_MODES = new Set(['standard', 'minimal']);
+const VALID_SCHEMES = new Set(['dark', 'light']);
 
 // --- Avatar in-memory cache -------------------------------------------
 // getAllUserAvatars() was being called on every HTTP request (including
@@ -105,6 +106,7 @@ function attachLocals(req, res, next) {
     // Check request cookies as seamless fallback
     let cookieTheme = null;
     let cookieUiMode = null;
+    let cookieScheme = null;
     try {
         if (req.headers.cookie) {
             const parsedCookies = cookie.parse(req.headers.cookie);
@@ -113,6 +115,9 @@ function attachLocals(req, res, next) {
             }
             if (parsedCookies.videohosk_uimode && VALID_MODES.has(parsedCookies.videohosk_uimode)) {
                 cookieUiMode = parsedCookies.videohosk_uimode;
+            }
+            if (parsedCookies.videohosk_scheme && VALID_SCHEMES.has(parsedCookies.videohosk_scheme)) {
+                cookieScheme = parsedCookies.videohosk_scheme;
             }
         }
     } catch {}
@@ -153,6 +158,7 @@ function attachLocals(req, res, next) {
     res.locals.user = user;
     res.locals.uiMode = userSettings.ui_mode || defaultMode;
     res.locals.userTheme = userSettings.theme || defaultTheme;
+    res.locals.userScheme = cookieScheme || 'dark';
     res.locals.unreadCount = unreadCount;
     res.locals.csrfToken = req.session ? getCsrfToken(req) : '';
     res.locals.escapeHtml = escapeHtml;

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="bn" data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-ui-mode="<%= typeof uiMode !== 'undefined' && uiMode ? uiMode : 'standard' %>" data-theme="<%= typeof userTheme !== 'undefined' && userTheme ? userTheme : (typeof user !== 'undefined' && user === 'hajera' ? 'sunset' : 'cinematic') %>">
+<html lang="bn" data-user="<%= typeof user !== 'undefined' && user ? user : '' %>" data-ui-mode="<%= typeof uiMode !== 'undefined' && uiMode ? uiMode : 'standard' %>" data-theme="<%= typeof userTheme !== 'undefined' && userTheme ? userTheme : (typeof user !== 'undefined' && user === 'hajera' ? 'sunset' : 'cinematic') %>" data-scheme="<%= typeof userScheme !== 'undefined' && userScheme ? userScheme : 'dark' %>">
 
 <head>
     <meta charset="UTF-8">
@@ -11,17 +11,27 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/css/icon-192.png">
+    <% const isAuthed = typeof user !== 'undefined' && !!user; %>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <% if (isAuthed) { %>
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <% } %>
     <script src="/js/theme-init.js?v=<%= assetVersion %>"></script>
+    <% if (isAuthed) { %>
     <script defer src="/js/twemoji.min.js?v=<%= assetVersion %>"></script>
     <script defer src="/js/emoji-data.js?v=<%= assetVersion %>"></script>
     <script defer src="/js/whatsapp-emojis.js?v=<%= assetVersion %>"></script>
+    <% } %>
     <link rel="stylesheet" href="/css/style.css?v=<%= assetVersion %>">
+    <% if (isAuthed) { %>
     <link rel="stylesheet" href="/css/messages.css?v=<%= assetVersion %>">
     <link rel="stylesheet" href="/css/calling.css?v=<%= assetVersion %>">
+    <% } %>
     <link rel="stylesheet" href="/css/minimal.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/design-system.css?v=<%= assetVersion %>">
     <meta name="csrf-token" content="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
     <% if (typeof extraHead !== 'undefined' && extraHead) { %><%- extraHead %><% } %>
 </head>
@@ -369,6 +379,33 @@
                             </div>
                         </div>
 
+                        <!-- Color Scheme Section (Dark / Light) -->
+                        <div class="settings-section">
+                            <div class="settings-section-header">
+                                <span class="settings-section-badge">SCHEME</span>
+                                <h4 class="settings-section-title">Dark / Light Mode</h4>
+                                <p class="settings-section-desc">Applies instantly to every page and both UI modes</p>
+                            </div>
+                            <div class="scheme-options-row">
+                                <button type="button" class="scheme-card-option" data-set-scheme="dark" aria-label="Enable dark mode">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" aria-hidden="true">
+                                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                                    </svg>
+                                    <span>Dark</span>
+                                </button>
+                                <button type="button" class="scheme-card-option" data-set-scheme="light" aria-label="Enable light mode">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" aria-hidden="true">
+                                        <circle cx="12" cy="12" r="5"/>
+                                        <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                                        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                                    </svg>
+                                    <span>Light</span>
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Palette Theme Section -->
                         <div class="settings-section">
                             <div class="settings-section-header">
@@ -677,9 +714,11 @@
             <% } %>
 
             <script src="/js/app.js?v=<%= assetVersion %>"></script>
+            <% if (isAuthed) { %>
             <script defer src="/js/messages.js?v=<%= assetVersion %>"></script>
             <script defer src="/js/watchTogether.js?v=<%= assetVersion %>"></script>
             <script defer src="/js/calling.js?v=<%= assetVersion %>"></script>
+            <% } %>
             <script>
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js?v=<%= assetVersion %>').then(function(reg) {

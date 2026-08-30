@@ -8,18 +8,8 @@ const currentUnread = (typeof unreadCount !== 'undefined' && unreadCount > 0) ? 
 const unreadDisplay = currentUnread > 0 ? (currentUnread > 99 ? '99+' : currentUnread) : '0';
 const unreadStyle = currentUnread > 0 ? 'display:flex;' : 'display:none;';
 const videoCountText = videos.length > 0 ? videos.length + ' videos' : 'No videos yet';
-const avatars = (typeof userAvatars !== 'undefined' && userAvatars) ? userAvatars : ((typeof locals !== 'undefined' && locals.userAvatars) ? locals.userAvatars : {});
-function renderAvatar(uname, extraCls = '') {
-    const avatar = avatars[uname];
-    const cleanCls = h(extraCls || '');
-    const cleanUname = h(uname || '');
-    if (avatar) {
-        return `<img src="/avatars/${h(avatar)}" alt="${cleanUname}" class="avatar-img ${cleanCls}" loading="lazy" />`;
-    }
-    const letter = (uname === 'muaj') ? 'M' : 'H';
-    const roleClass = (uname === 'muaj') ? 'avatar-admin' : 'avatar-viewer';
-    return `<div class="avatar-letter ${roleClass} ${cleanCls}">${letter}</div>`;
-}
+// Shared avatar renderer from utils/security.js (attachLocals) — no local duplicate.
+const renderAvatar = (typeof locals !== 'undefined' && typeof locals.renderAvatar === 'function') ? locals.renderAvatar : (() => '');
 
 function formatDate(value) {
     if (!value) return '';
