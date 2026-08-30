@@ -641,24 +641,52 @@ router.get('/watch/:id', isAuthenticated, async (req, res) => {
     });
 });
 
-// POST /rename/:id — Rename video title (any authenticated user)
+// POST /rename/:id — Rename video title (uploader or admin only)
 router.post('/rename/:id', isAuthenticated, (req, res) => {
     const newTitle = String(req.body.title || '').trim().slice(0, 180);
     if (!newTitle) {
         return res.status(400).json({ error: 'Title cannot be empty.' });
     }
-    const result = db.prepare('UPDATE videos SET title = ? WHERE id = ?').run(newTitle, req.params.id);
-    if (result.changes === 0) {
+
+    // Security check: verify video exists and user is owner or admin
+    const video = db.prepare('SELECT uploaded_by FROM videos WHERE id = ?').get(req.params.id);
+    if (!video) {
         return res.status(404).json({ error: 'Video not found.' });
     }
+    if (req.session.user !== 'muaj' && video.uploaded_by !== req.session.user) {
+        return res.status(403).json({ error: 'Not permitted.' });
+    }
+
+    db.prepare('UPDATE videos SET title = ? WHERE id = ?').run(newTitle, req.params.id);
     res.json({ success: true, title: newTitle });
 });
 
-// POST /delete/:id — Delete video (any authenticated user)
+// POST /delete/:id — Delete video (uploader or admin only)
 router.post('/delete/:id', isAuthenticated, requireCsrf, async (req, res) => {
     const videoId = String(req.params.id || '').trim();
     if (!videoId) {
         return res.status(400).json({ error: 'Invalid video ID.' });
+    }
+
+    const video = db.prepare('SELECT * FROM videos WHERE id = ? OR filename = ?').get(videoId, videoId);
+    if (!video) {
+        const isAjax = req.xhr ||
+            (req.headers.accept && req.headers.accept.includes('application/json')) ||
+            (req.headers['content-type'] && req.headers['content-type'].includes('application/json'));
+        if (isAjax) return res.status(404).json({ error: 'Video not found.' });
+        return res.redirect('/dashboard');
+    }
+
+    // Security check: verify user is owner or admin before proceeding
+    if (req.session.user !== 'muaj' && video.uploaded_by !== req.session.user) {
+        const isAjax = req.xhr ||
+            (req.headers.accept && req.headers.accept.includes('application/json')) ||
+            (req.headers['content-type'] && req.headers['content-type'].includes('application/json'));
+        if (isAjax) return res.status(403).json({ error: 'Not permitted.' });
+        return res.status(403).render('forbidden', {
+            user: req.session ? req.session.user : null,
+            message: 'You do not have permission to delete this video.'
+        });
     }
 
     // Deduplicate concurrent deletion requests for the same video ID
@@ -674,9 +702,6 @@ router.post('/delete/:id', isAuthenticated, requireCsrf, async (req, res) => {
     activeDeletes.add(videoId);
 
     try {
-        const video = db.prepare('SELECT * FROM videos WHERE id = ? OR filename = ?').get(videoId, videoId);
-
-        if (video) {
             console.log(`[delete] Start: video=${video.id} file=${video.filename} by=${req.session.user}`);
 
             // Invalidate stream cache
@@ -748,7 +773,6 @@ router.post('/delete/:id', isAuthenticated, requireCsrf, async (req, res) => {
                 console.error(`[delete] DB deletion failed for ${video.id}:`, dbErr.message);
                 throw dbErr;
             }
-        }
 
         const isAjax = req.xhr || 
             (req.headers.accept && req.headers.accept.includes('application/json')) ||
