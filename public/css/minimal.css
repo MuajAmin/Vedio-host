@@ -2819,6 +2819,25 @@ html[data-ui-mode="minimal"] .error-content {
     overflow: hidden;
 }
 
+html[data-ui-mode="minimal"] .theme-modal-backdrop:not(.active) {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+}
+
+html[data-ui-mode="minimal"] .theme-modal-backdrop:not(.active) * {
+    pointer-events: none !important;
+}
+
+html[data-ui-mode="minimal"] .incoming-call-backdrop:not(.is-active),
+html[data-ui-mode="minimal"] .active-call-modal:not(.is-active) {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+}
+
 html[data-ui-mode="minimal"] .settings-modal-box,
 html[data-ui-mode="minimal"] .profile-modal-card,
 html[data-ui-mode="minimal"] .theme-modal {
@@ -3123,11 +3142,11 @@ html[data-ui-mode="minimal"] .theme-modal {
         padding: 12px 14px !important;
     }
 
-    /* Bottom Sheet Modals */
-    html[data-ui-mode="minimal"] .settings-modal-box,
-    html[data-ui-mode="minimal"] .theme-modal,
-    html[data-ui-mode="minimal"] .profile-modal-card,
-    html[data-ui-mode="minimal"] .msg-attach-video-modal {
+    /* Bottom Sheet Modals (Active state only) */
+    html[data-ui-mode="minimal"] .theme-modal-backdrop.active .settings-modal-box,
+    html[data-ui-mode="minimal"] .theme-modal-backdrop.active .theme-modal,
+    html[data-ui-mode="minimal"] .theme-modal-backdrop.active .profile-modal-card,
+    html[data-ui-mode="minimal"] .msg-attach-video-modal.is-open {
         position: fixed !important;
         bottom: 0 !important;
         left: 0 !important;
@@ -3142,6 +3161,7 @@ html[data-ui-mode="minimal"] .theme-modal {
         margin: 0 !important;
         box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.8) !important;
         box-sizing: border-box !important;
+        pointer-events: auto !important;
     }
 
     html[data-ui-mode="minimal"] .settings-modal-scroll-body {

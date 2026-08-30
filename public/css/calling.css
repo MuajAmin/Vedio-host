@@ -42,6 +42,7 @@
     padding: 24px 16px;
     opacity: 0;
     visibility: hidden;
+    pointer-events: none;
     transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.4s;
     overflow: hidden;
 }
@@ -49,6 +50,7 @@
 .incoming-call-backdrop.is-active {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
 }
 
 .incoming-call-ambient-glow {
@@ -304,6 +306,7 @@
     flex-direction: column;
     opacity: 0;
     visibility: hidden;
+    pointer-events: none;
     transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.4s;
     overflow: hidden;
     user-select: none;
@@ -312,6 +315,7 @@
 .active-call-modal.is-active {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
 }
 
 /* Ambient dynamic background */
