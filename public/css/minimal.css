@@ -2368,15 +2368,26 @@ html[data-ui-mode="minimal"] .msg-row {
     touch-action: pan-y !important;
 }
 
-/* Chat Drawer Widget */
+/* Chat Drawer Widget
+   IMPORTANT: do NOT set display:flex here unconditionally — the base
+   messages.css keeps this element display:none until JS adds .is-open.
+   Forcing display:flex on every page in minimal mode creates an invisible
+   full-screen overlay that swallows all touches on the lower half of every
+   page (confirmed via elementFromPoint hit-test). Style only when open. */
 html[data-ui-mode="minimal"] .msg-drawer-widget {
     background: var(--min-bg-surface) !important;
     border: 1px solid var(--min-border-strong) !important;
     border-radius: var(--min-radius-lg) !important;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.75) !important;
+    /* NO display:flex here — let messages.css control display */
+    overflow: hidden !important;
+    pointer-events: none !important; /* closed: never intercept touches */
+}
+
+html[data-ui-mode="minimal"] .msg-drawer-widget.is-open {
     display: flex !important;
     flex-direction: column !important;
-    overflow: hidden !important;
+    pointer-events: auto !important; /* open: receive touches normally */
 }
 
 html[data-ui-mode="minimal"] .msg-drawer-widget .msg-body-container {
