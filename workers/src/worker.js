@@ -103,11 +103,12 @@ const DELETE_BATCH_CONCURRENCY = 10;
 // If the Worker preloads a different ?v= than the page actually requests, the
 // browser downloads the same file twice and the preload is wasted. CI enforces
 // that these two values match.
-const ASSET_VERSION = '14.3';
+const ASSET_VERSION = '14.4';
 const v = (p) => `${p}?v=${ASSET_VERSION}`;
 
 const GLOBAL_EARLY_HINT_LINKS = [
   `<${v('/css/style.css')}>; rel=preload; as=style`,
+  `<${v('/css/design-system.css')}>; rel=preload; as=style`,
   `<${v('/js/theme-init.js')}>; rel=preload; as=script`,
   `<${v('/js/app.js')}>; rel=preload; as=script`,
   `<${v('/js/twemoji.min.js')}>; rel=preload; as=script`,

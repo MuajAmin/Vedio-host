@@ -1,0 +1,394 @@
+/* ============================================================================
+   VideoHost — Shared Design System Layer
+   ----------------------------------------------------------------------------
+   Loaded LAST so it can extend/override the theme layers below it:
+     style.css      → Standard UI + 4 accent palettes (dark base)
+     messages.css   → Messaging tokens (--msg-*, derive from app tokens)
+     calling.css    → Call tokens (--call-*)
+     minimal.css    → Minimal UI override layer (html[data-ui-mode="minimal"])
+
+   This file provides:
+     1. Shared scale tokens (spacing / typography / z-index / motion)
+     2. Light scheme (html[data-scheme="light"]) for every palette + both
+        UI modes — dark remains the default (html[data-scheme="dark"])
+     3. Accessibility: :focus-visible rings, reduced-motion kill switch,
+        minimum touch targets, tap highlight, scroll behavior
+     4. Global toast component (used by showToast() in app.js)
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   1. Shared scale tokens
+   --------------------------------------------------------------------------- */
+:root {
+    /* Spacing scale (4px base) */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+
+    /* Typography scale */
+    --text-xs: 0.72rem;
+    --text-sm: 0.84rem;
+    --text-base: 1rem;
+    --text-lg: 1.15rem;
+    --text-xl: 1.35rem;
+    --text-2xl: 1.7rem;
+
+    /* Z-index registry (keep every layer honest) */
+    --z-nav: 100;
+    --z-dock: 1000;
+    --z-drawer: 1200;
+    --z-modal: 2000;
+    --z-toast: 3000;
+    --z-call: 999999;
+
+    /* Motion */
+    --dur-fast: 120ms;
+    --dur-base: 200ms;
+    --dur-slow: 320ms;
+
+    /* Touch */
+    --touch-target: 44px;
+
+    /* Focus ring (uses the active palette accent) */
+    --focus-ring-color: var(--accent-gold, #e5b85a);
+}
+
+/* ---------------------------------------------------------------------------
+   2. Light scheme — base surface swap
+   Dark stays the default. html[data-scheme="light"] flips surfaces while the
+   accent palette (data-theme) keeps its identity with darkened accents that
+   satisfy contrast on light backgrounds.
+   --------------------------------------------------------------------------- */
+html[data-scheme="light"] {
+    color-scheme: light;
+
+    --bg-deep: #f3f4f9;
+    --bg-primary: #ffffff;
+    --bg-card: rgba(255, 255, 255, 0.92);
+    --bg-card-hover: #ffffff;
+    --bg-elevated: #ffffff;
+    --bg-input: #eef0f6;
+
+    --text-primary: #181c26;
+    --text-secondary: #495062;
+    --text-muted: #7d859c;
+
+    --border-subtle: rgba(18, 22, 36, 0.1);
+    --border-glass: rgba(18, 22, 36, 0.14);
+
+    --shadow-sm: 0 1px 4px rgba(24, 28, 44, 0.08);
+    --shadow-md: 0 6px 22px rgba(24, 28, 44, 0.12);
+    --shadow-lg: 0 14px 44px rgba(24, 28, 44, 0.16);
+    --shadow-glow: none;
+}
+
+html[data-scheme="dark"] {
+    color-scheme: dark;
+}
+
+/* Palette accents adjusted for contrast on light surfaces */
+html[data-scheme="light"][data-theme="cinematic"] {
+    --accent-gold: #9a6d10;
+    --accent-gold-bright: #b8860b;
+    --accent-gold-dim: #7c5a0e;
+    --accent-gold-glow: rgba(154, 109, 16, 0.14);
+    --accent-gold-glow-strong: rgba(154, 109, 16, 0.28);
+    --accent-warm: #a05f12;
+    --border-accent: rgba(154, 109, 16, 0.32);
+}
+
+html[data-scheme="light"][data-theme="cyberpunk"] {
+    --bg-deep: #eff6fb;
+    --accent-gold: #0e7490;
+    --accent-gold-bright: #0891b2;
+    --accent-gold-dim: #155e75;
+    --accent-gold-glow: rgba(14, 116, 144, 0.14);
+    --accent-gold-glow-strong: rgba(14, 116, 144, 0.3);
+    --accent-warm: #be185d;
+    --border-accent: rgba(14, 116, 144, 0.34);
+    --text-secondary: #3f4a5c;
+    --text-muted: #64748b;
+    --border-subtle: rgba(14, 116, 144, 0.14);
+}
+
+html[data-scheme="light"][data-theme="emerald"] {
+    --bg-deep: #f0f7f3;
+    --accent-gold: #047857;
+    --accent-gold-bright: #059669;
+    --accent-gold-dim: #065f46;
+    --accent-gold-glow: rgba(4, 120, 87, 0.13);
+    --accent-gold-glow-strong: rgba(4, 120, 87, 0.28);
+    --accent-warm: #b45309;
+    --border-accent: rgba(4, 120, 87, 0.32);
+    --text-secondary: #3d4f5c;
+    --border-subtle: rgba(4, 120, 87, 0.14);
+}
+
+html[data-scheme="light"][data-theme="sunset"] {
+    --bg-deep: #fdf3f5;
+    --accent-gold: #be123c;
+    --accent-gold-bright: #e11d48;
+    --accent-gold-dim: #9f1239;
+    --accent-gold-glow: rgba(190, 18, 60, 0.12);
+    --accent-gold-glow-strong: rgba(190, 18, 60, 0.26);
+    --accent-warm: #c2410c;
+    --border-accent: rgba(190, 18, 60, 0.3);
+    --text-primary: #27151b;
+    --text-secondary: #6b4552;
+    --text-muted: #9c7784;
+    --border-subtle: rgba(190, 18, 60, 0.12);
+}
+
+/* Neutralize the fixed dark ambient gradient in light scheme */
+html[data-scheme="light"][data-theme="sunset"] body {
+    background:
+        radial-gradient(ellipse 65% 42% at 85% 0%, rgba(244, 63, 94, 0.06) 0%, transparent 65%),
+        var(--bg-deep);
+    background-attachment: fixed;
+}
+
+/* ---------------------------------------------------------------------------
+   2b. Light scheme — component surface fixes (hardcoded dark values)
+   --------------------------------------------------------------------------- */
+html[data-scheme="light"] .navbar {
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 2px 18px rgba(24, 28, 44, 0.08), inset 0 -1px 0 rgba(18, 22, 36, 0.05);
+}
+
+html[data-scheme="light"] {
+    /* Mobile liquid-glass dock */
+    --nav-dock-bg: rgba(255, 255, 255, 0.9);
+    --nav-dock-border: rgba(18, 22, 36, 0.1);
+    --nav-dock-shadow: 0 16px 40px -12px rgba(24, 28, 44, 0.28);
+    --nav-item-idle: rgba(73, 80, 98, 0.62);
+}
+
+/* Ambient decor orbs are tuned for dark surfaces — soften them a lot */
+html[data-scheme="light"] .ambient-orb,
+html[data-scheme="light"] .glow,
+html[data-scheme="light"] .film-grain {
+    opacity: 0.25;
+}
+
+/* Messaging layer: tokens derive from app tokens, but pin the elevations
+   and on-primary for readability on light surfaces */
+html[data-scheme="light"] {
+    --msg-on-primary: #ffffff;
+    --msg-e1: 0 1px 3px rgba(24, 28, 44, 0.1);
+    --msg-e2: 0 3px 8px rgba(24, 28, 44, 0.12);
+    --msg-e3: 0 6px 16px rgba(24, 28, 44, 0.14);
+    --msg-e4: 0 12px 32px rgba(24, 28, 44, 0.18);
+}
+
+/* Call system: fully hardcoded dark tokens → light equivalents.
+   The immersive call stage intentionally stays dim (video legibility),
+   only the chrome brightens. */
+html[data-scheme="light"] {
+    --call-card-bg: rgba(248, 250, 253, 0.92);
+    --call-card-border: rgba(18, 22, 36, 0.12);
+    --call-dock-bg: rgba(255, 255, 255, 0.92);
+    --call-text-primary: #181c26;
+    --call-text-muted: #49506e;
+    --call-text-subtle: #7d859c;
+}
+
+/* Minimal UI mode under light scheme */
+html[data-scheme="light"][data-ui-mode="minimal"] {
+    --min-bg-root: #f3f4f9;
+    --min-bg-surface: #ffffff;
+    --min-bg-surface-raised: #f4f5fa;
+    --min-bg-surface-active: #e9ebf3;
+    --min-bg-input: #eef0f6;
+    --min-bg-overlay: rgba(243, 244, 249, 0.95);
+
+    --min-border: rgba(18, 22, 36, 0.1);
+    --min-border-strong: rgba(18, 22, 36, 0.18);
+    --min-border-subtle: rgba(18, 22, 36, 0.05);
+
+    --min-text-primary: #181c26;
+    --min-text-secondary: #495062;
+    --min-text-muted: #7d859c;
+
+    --bg-deep: var(--min-bg-root);
+    --bg-primary: var(--min-bg-surface);
+    --bg-card: var(--min-bg-surface);
+    --bg-card-hover: var(--min-bg-surface-raised);
+    --bg-elevated: var(--min-bg-surface-raised);
+    --bg-input: var(--min-bg-input);
+
+    --border-subtle: var(--min-border);
+    --border-glass: var(--min-border);
+
+    --shadow-sm: 0 1px 3px rgba(24, 28, 44, 0.1);
+    --shadow-md: 0 4px 12px rgba(24, 28, 44, 0.12);
+    --shadow-lg: 0 8px 24px rgba(24, 28, 44, 0.16);
+}
+
+/* ---------------------------------------------------------------------------
+   3. Accessibility
+   --------------------------------------------------------------------------- */
+
+/* Visible focus for keyboard / switch-access users (never on mouse click) */
+:focus-visible {
+    outline: 2px solid var(--focus-ring-color);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Remove default focus outline only when :focus-visible is supported */
+:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* Global reduced-motion kill switch */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Minimum comfortable touch targets on touch devices */
+@media (pointer: coarse) {
+    button,
+    [role="button"],
+    .btn,
+    .bottom-nav-item,
+    .msg-composer-btn,
+    .msg-hdr-btn,
+    .call-control-btn {
+        min-width: var(--touch-target);
+        min-height: var(--touch-target);
+    }
+
+    /* Inline / compact controls that would break layout keep their size but
+       gain an extended hit area */
+    .theme-close-btn,
+    .msg-reply-bar-cancel,
+    .msg-floating-toast-close-btn {
+        position: relative;
+    }
+    .theme-close-btn::after,
+    .msg-reply-bar-cancel::after,
+    .msg-floating-toast-close-btn::after {
+        content: '';
+        position: absolute;
+        inset: -10px;
+    }
+}
+
+/* Calmer tap feedback + momentum scrolling on Android/iOS */
+html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+}
+
+body {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: none;
+    text-rendering: optimizeLegibility;
+}
+
+/* ---------------------------------------------------------------------------
+   4. Global toast (showToast in app.js)
+   --------------------------------------------------------------------------- */
+.vh-toast-region {
+    position: fixed;
+    left: 50%;
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: var(--z-toast);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    width: min(92vw, 420px);
+}
+
+.vh-toast {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: var(--bg-elevated, #151522);
+    color: var(--text-primary, #f0ecf6);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.07));
+    box-shadow: var(--shadow-md, 0 8px 30px rgba(0, 0, 0, 0.5));
+    font-size: var(--text-sm);
+    font-weight: 600;
+    line-height: 1.35;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity var(--dur-base) ease, transform var(--dur-base) cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vh-toast.vh-toast-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+@media (min-width: 900px) {
+    .vh-toast-region {
+        bottom: 32px;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   5. Settings modal — scheme (Dark / Light) selector
+   --------------------------------------------------------------------------- */
+.scheme-options-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.scheme-card-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: var(--touch-target);
+    padding: 12px 14px;
+    border-radius: var(--radius-md, 14px);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color var(--dur-base) ease, color var(--dur-base) ease, background var(--dur-base) ease;
+}
+
+.scheme-card-option:hover {
+    color: var(--text-primary);
+    border-color: var(--border-accent, var(--border-subtle));
+}
+
+.scheme-card-option.is-active-scheme {
+    color: var(--accent-gold);
+    border-color: var(--accent-gold);
+    background: var(--accent-gold-glow, rgba(229, 184, 90, 0.12));
+}
+
+/* Smooth cross-scheme transition on the biggest surfaces only (cheap) */
+body,
+.navbar,
+.video-card,
+.theme-modal {
+    transition: background-color var(--dur-slow) ease, color var(--dur-slow) ease, border-color var(--dur-slow) ease;
+}

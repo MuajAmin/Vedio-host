@@ -18,7 +18,7 @@
 //  workflow enforces that they match.
 // ============================================================
 
-const ASSET_VERSION = '14.3';
+const ASSET_VERSION = '14.4';
 
 /**
  * Build a cache-busted asset URL.
@@ -29,11 +29,16 @@ function asset(p) {
     return `${p}?v=${ASSET_VERSION}`;
 }
 
-// Assets required by every authenticated page.
+// Assets required by every page (authenticated or not).
 const GLOBAL_PRELOAD = [
     { path: '/css/style.css', as: 'style' },
+    { path: '/css/design-system.css', as: 'style' },
     { path: '/js/theme-init.js', as: 'script' },
-    { path: '/js/app.js', as: 'script' },
+    { path: '/js/app.js', as: 'script' }
+];
+
+// Assets only loaded on authenticated pages (emoji rendering for chat).
+const AUTH_PRELOAD = [
     { path: '/js/twemoji.min.js', as: 'script' },
     { path: '/js/whatsapp-emojis.js', as: 'script' }
 ];
@@ -56,11 +61,16 @@ const PRECONNECT = [
 
 /**
  * Build the Link header value for 103 Early Hints / preload.
- * @param {{ minimalUi?: boolean }} [opts]
+ * @param {{ minimalUi?: boolean, authenticated?: boolean }} [opts]
  * @returns {string}
  */
 function buildEarlyHintsHeader(opts = {}) {
-    const entries = [...GLOBAL_PRELOAD, ...REALTIME_PRELOAD];
+    // Logged-out pages (login) don't load the realtime stack or emoji assets,
+    // so preloading them would waste the visitor's bandwidth entirely.
+    const authenticated = opts.authenticated !== false;
+    const entries = authenticated
+        ? [...GLOBAL_PRELOAD, ...AUTH_PRELOAD, ...REALTIME_PRELOAD]
+        : [...GLOBAL_PRELOAD];
 
     // minimal.css is ~97KB and only applies under html[data-ui-mode="minimal"].
     // Only preload it for users actually in minimal mode.

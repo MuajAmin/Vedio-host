@@ -34,6 +34,35 @@
         return originalFetch.call(this, input, init);
     };
 })();
+// ---- Global toast (accessible, single region, auto-dismiss) ----
+// Referenced by UI mode / theme / scheme switchers. Defined globally so any
+// module (messages.js, calling.js) can reuse it.
+window.showToast = function showToast(message, duration) {
+    try {
+        let region = document.getElementById('vhToastRegion');
+        if (!region) {
+            region = document.createElement('div');
+            region.id = 'vhToastRegion';
+            region.className = 'vh-toast-region';
+            region.setAttribute('role', 'status');
+            region.setAttribute('aria-live', 'polite');
+            document.body.appendChild(region);
+        }
+        const toast = document.createElement('div');
+        toast.className = 'vh-toast';
+        toast.textContent = String(message || '');
+        region.appendChild(toast);
+        // Keep at most 2 toasts on screen
+        while (region.children.length > 2) region.removeChild(region.firstChild);
+        requestAnimationFrame(() => toast.classList.add('vh-toast-visible'));
+        const ttl = typeof duration === 'number' ? duration : 2600;
+        setTimeout(() => {
+            toast.classList.remove('vh-toast-visible');
+            setTimeout(() => toast.remove(), 350);
+        }, ttl);
+    } catch (e) {}
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     const storage = (() => {
         try {
@@ -217,16 +246,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newPage = doc.body.getAttribute('data-page') || '';
                 document.body.setAttribute('data-page', newPage);
 
-                // Update theme & UI mode if changed
+                // Update theme, scheme & UI mode if changed.
+                // The client is the source of truth for scheme (cookie synced),
+                // so keep the current attribute when the fetched doc lacks one.
+                const newScheme = doc.documentElement.getAttribute('data-scheme');
+                if (newScheme === 'dark' || newScheme === 'light') {
+                    document.documentElement.setAttribute('data-scheme', newScheme);
+                }
                 const newTheme = doc.documentElement.getAttribute('data-theme');
                 if (newTheme) {
                     document.documentElement.setAttribute('data-theme', newTheme);
-                    const themeMetaColors = {
-                        cinematic: '#060609',
-                        cyberpunk: '#05050d',
-                        emerald: '#030806',
-                        sunset: '#0c040a'
-                    };
+                    const activeScheme = document.documentElement.getAttribute('data-scheme');
+                    const themeMetaColors = activeScheme === 'light'
+                        ? { cinematic: '#f3f4f9', cyberpunk: '#eff6fb', emerald: '#f0f7f3', sunset: '#fdf3f5' }
+                        : { cinematic: '#060609', cyberpunk: '#05050d', emerald: '#030806', sunset: '#0c040a' };
                     const metaTheme = document.querySelector('meta[name="theme-color"]');
                     if (metaTheme && themeMetaColors[newTheme]) {
                         metaTheme.setAttribute('content', themeMetaColors[newTheme]);
@@ -2484,13 +2517,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const profileAvatarBig = document.getElementById('profileAvatarBig');
     let originalAvatarBigHtml = profileAvatarBig ? profileAvatarBig.innerHTML : '';
 
+    // Bug fix: closeProfileModal was block-scoped inside this `if`, so the
+    // settings-modal opener (which checks `typeof closeProfileModal`) could
+    // never see it and the profile modal stayed stuck open behind Settings.
+    let closeProfileModal = null;
     if (profileModal) {
         const openProfileModal = () => {
             syncActiveUiModeOption();
             profileModal.style.display = 'flex';
             requestAnimationFrame(() => profileModal.classList.add('active'));
         };
-        const closeProfileModal = () => {
+        closeProfileModal = () => {
             profileModal.classList.remove('active');
             setTimeout(() => {
                 if (!profileModal.classList.contains('active')) {
@@ -2960,14 +2997,25 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Immediately sync UI Mode and Theme options on page init
+    function syncActiveSchemeOption() {
+        const currentScheme = document.documentElement.getAttribute('data-scheme') || 'dark';
+        document.querySelectorAll('[data-set-scheme]').forEach(btn => {
+            const isMatch = btn.getAttribute('data-set-scheme') === currentScheme;
+            btn.classList.toggle('is-active-scheme', isMatch);
+            btn.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+        });
+    }
+
+    // Immediately sync UI Mode, Theme and Scheme options on page init
     syncActiveUiModeOption();
     syncActiveThemeOption();
+    syncActiveSchemeOption();
 
     function openThemeModal() {
         if (!themeModal) return;
         syncActiveUiModeOption();
         syncActiveThemeOption();
+        syncActiveSchemeOption();
         themeModal.classList.add('active');
     }
 
@@ -3027,6 +3075,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            // Scheme Option Clicked (Dark / Light)
+            const schemeBtn = e.target.closest('[data-set-scheme]');
+            if (schemeBtn) {
+                e.preventDefault();
+                const scheme = schemeBtn.getAttribute('data-set-scheme');
+                if (scheme === 'dark' || scheme === 'light') {
+                    document.documentElement.setAttribute('data-scheme', scheme);
+                    storage.setItem('videohosk_scheme', scheme);
+                    document.cookie = 'videohosk_scheme=' + encodeURIComponent(scheme) + '; path=/; max-age=31536000; SameSite=Lax';
+                    const user = (document.body && document.body.getAttribute('data-user')) ||
+                                 document.documentElement.getAttribute('data-user');
+                    if (user) {
+                        storage.setItem('videohosk_scheme_' + user, scheme);
+                    }
+                    // Sync PWA theme-color to the new scheme
+                    const currentTheme = document.documentElement.getAttribute('data-theme') || 'cinematic';
+                    const darkColors = { cinematic: '#060609', cyberpunk: '#05050d', emerald: '#030806', sunset: '#0c040a' };
+                    const lightColors = { cinematic: '#f3f4f9', cyberpunk: '#eff6fb', emerald: '#f0f7f3', sunset: '#fdf3f5' };
+                    const metaTheme = document.querySelector('meta[name="theme-color"]');
+                    if (metaTheme) {
+                        metaTheme.setAttribute('content', (scheme === 'light' ? lightColors : darkColors)[currentTheme] || (scheme === 'light' ? '#f3f4f9' : '#060609'));
+                    }
+                    syncActiveSchemeOption();
+                    if (typeof showToast === 'function') {
+                        showToast(scheme === 'light' ? '☀️ Light mode enabled' : '🌙 Dark mode enabled');
+                    }
+                }
+                return;
+            }
+
             // Theme Option Clicked
             const themeBtnOption = e.target.closest('[data-set-theme]');
             if (themeBtnOption) {
@@ -3041,15 +3119,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (user) {
                         storage.setItem('videohosk_theme_' + user, theme);
                     }
-                    const themeMetaColors = {
-                        cinematic: '#060609',
-                        cyberpunk: '#05050d',
-                        emerald: '#030806',
-                        sunset: '#0c040a'
-                    };
+                    const isLightScheme = document.documentElement.getAttribute('data-scheme') === 'light';
+                    const themeMetaColors = isLightScheme
+                        ? { cinematic: '#f3f4f9', cyberpunk: '#eff6fb', emerald: '#f0f7f3', sunset: '#fdf3f5' }
+                        : { cinematic: '#060609', cyberpunk: '#05050d', emerald: '#030806', sunset: '#0c040a' };
                     const metaTheme = document.querySelector('meta[name="theme-color"]');
                     if (metaTheme) {
-                        metaTheme.setAttribute('content', themeMetaColors[theme] || '#060609');
+                        metaTheme.setAttribute('content', themeMetaColors[theme] || (isLightScheme ? '#f3f4f9' : '#060609'));
                     }
                     syncActiveThemeOption();
 
