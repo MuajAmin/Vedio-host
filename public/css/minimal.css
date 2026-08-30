@@ -1652,8 +1652,8 @@ html[data-ui-mode="minimal"] .msg-header {
     background: var(--min-bg-surface) !important;
     border-bottom: 1px solid var(--min-border) !important;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
-    padding: 8px 14px !important;
-    min-height: 52px !important;
+    padding: max(env(safe-area-inset-top, 0px), 6px) 10px 6px 10px !important;
+    min-height: calc(52px + env(safe-area-inset-top, 0px)) !important;
     height: auto !important;
     flex-shrink: 0 !important;
     display: flex !important;
@@ -1662,16 +1662,172 @@ html[data-ui-mode="minimal"] .msg-header {
     gap: 8px !important;
     z-index: 15 !important;
     box-sizing: border-box !important;
+    width: 100% !important;
+    overflow: hidden !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-back {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    flex: 0 0 36px !important;
+    padding: 0 !important;
+    color: var(--min-text-secondary) !important;
+    border-radius: var(--min-radius-full) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-back svg {
+    width: 20px !important;
+    height: 20px !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-user-group {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-decoration: none !important;
+    color: inherit !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-avatar-wrap {
+    position: relative !important;
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    height: 36px !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-avatar {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 50% !important;
+    object-fit: cover !important;
+    display: block !important;
+    border: 1px solid var(--min-border) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-avatar-wrap .msg-status-dot {
+    width: 10px !important;
+    height: 10px !important;
+    border: 2px solid var(--min-bg-surface) !important;
+    bottom: 0 !important;
+    right: 0 !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-details {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    overflow: hidden !important;
+    gap: 2px !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-name-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
 }
 
 html[data-ui-mode="minimal"] .msg-header-name {
+    margin: 0 !important;
     font-size: 15px !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
+    color: var(--min-text-primary) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    min-width: 0 !important;
+    flex: 0 1 auto !important;
+    line-height: 1.2 !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-details .msg-role-tag {
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    padding: 1px 5px !important;
+    border-radius: var(--min-radius-xs) !important;
+    background: var(--min-bg-surface-active) !important;
+    border: 1px solid var(--min-border) !important;
+    color: var(--accent-gold) !important;
+    flex-shrink: 0 !important;
+    line-height: 1.2 !important;
+    text-transform: uppercase;
 }
 
 html[data-ui-mode="minimal"] .msg-header-presence-sub {
     font-size: 11px !important;
     color: var(--min-text-secondary) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    display: block !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-presence-sub * {
+    white-space: nowrap !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-presence-sub .watching-highlight {
+    color: var(--accent-gold) !important;
+    font-weight: 600 !important;
+}
+
+html[data-ui-mode="minimal"] .msg-header-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 3px !important;
+    flex-shrink: 0 !important;
+    margin-left: auto !important;
+}
+
+html[data-ui-mode="minimal"] .msg-hdr-btn,
+html[data-ui-mode="minimal"] .msg-hdr-call-btn {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: var(--min-bg-surface-raised) !important;
+    border: 1px solid var(--min-border) !important;
+    border-radius: var(--min-radius-md) !important;
+    color: var(--min-text-secondary) !important;
+    transition: background 0.15s ease, transform 0.1s ease !important;
+    touch-action: manipulation !important;
+    flex-shrink: 0 !important;
+}
+
+html[data-ui-mode="minimal"] .msg-hdr-call-btn {
+    color: var(--accent-gold) !important;
+    background: var(--min-accent-muted) !important;
+    border-color: rgba(229, 184, 90, 0.25) !important;
+}
+
+html[data-ui-mode="minimal"] .msg-hdr-btn svg,
+html[data-ui-mode="minimal"] .msg-hdr-call-btn svg {
+    width: 17px !important;
+    height: 17px !important;
+    stroke-width: 2.2px !important;
+    flex-shrink: 0 !important;
+    pointer-events: none !important;
 }
 
 /* In-Chat Search */
@@ -1799,17 +1955,34 @@ html[data-ui-mode="minimal"] .msg-quote-card {
     border-left: 3px solid var(--accent-gold) !important;
     border-radius: var(--min-radius-sm) !important;
     padding: 6px 10px !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
 }
 
-html[data-ui-mode="minimal"] .msg-reply-bar-name {
+html[data-ui-mode="minimal"] .msg-reply-bar-details,
+html[data-ui-mode="minimal"] .msg-quote-content {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    flex: 1 1 auto !important;
+}
+
+html[data-ui-mode="minimal"] .msg-reply-bar-name,
+html[data-ui-mode="minimal"] .msg-quote-author {
     color: var(--accent-gold) !important;
     font-size: 11px !important;
     font-weight: 700 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
 }
 
-html[data-ui-mode="minimal"] .msg-reply-bar-snippet {
+html[data-ui-mode="minimal"] .msg-reply-bar-snippet,
+html[data-ui-mode="minimal"] .msg-quote-snippet {
     color: var(--min-text-secondary) !important;
     font-size: 12px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
 }
 
 /* Chat Media: Shared Videos */
@@ -3095,13 +3268,15 @@ html[data-ui-mode="minimal"] .r2-android-video-card.is-pending {
    Keep the chat surface compact and consistent without shrinking touch targets.
    -------------------------------------------------------------------------- */
 html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header {
-    min-height: 52px !important;
-    padding: 4px 8px !important;
-    gap: 4px !important;
+    min-height: calc(52px + env(safe-area-inset-top, 0px)) !important;
+    padding: max(env(safe-area-inset-top, 0px), 6px) 8px 6px 8px !important;
+    gap: 6px !important;
 }
 
 html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-user-group {
     gap: 8px !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
 }
 
 html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-avatar {
@@ -3110,7 +3285,7 @@ html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-avatar {
 }
 
 html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-actions {
-    gap: 0 !important;
+    gap: 3px !important;
 }
 
 html[data-ui-mode="minimal"] body[data-page="messages"] .msg-body-container {
@@ -3159,6 +3334,45 @@ html[data-ui-mode="minimal"] body[data-page="messages"] .msg-recording-bar {
 }
 
 @media (max-width: 600px) {
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header {
+        padding: max(env(safe-area-inset-top, 0px), 5px) 6px 5px 6px !important;
+        gap: 4px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-back {
+        width: 32px !important;
+        height: 32px !important;
+        min-width: 32px !important;
+        min-height: 32px !important;
+        flex-basis: 32px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-avatar-wrap {
+        width: 34px !important;
+        height: 34px !important;
+        flex-basis: 34px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-avatar {
+        width: 34px !important;
+        height: 34px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-hdr-btn,
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-hdr-call-btn {
+        width: 34px !important;
+        height: 34px !important;
+        min-width: 34px !important;
+        min-height: 34px !important;
+        border-radius: var(--min-radius-sm) !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-hdr-btn svg,
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-hdr-call-btn svg {
+        width: 16px !important;
+        height: 16px !important;
+    }
+
     html[data-ui-mode="minimal"] body[data-page="messages"] .msg-body-container {
         padding-left: 8px !important;
         padding-right: 8px !important;
@@ -3170,6 +3384,64 @@ html[data-ui-mode="minimal"] body[data-page="messages"] .msg-recording-bar {
 
     html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-name {
         font-size: 14px !important;
+    }
+}
+
+@media (max-width: 380px) {
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header {
+        padding-left: 4px !important;
+        padding-right: 4px !important;
+        gap: 3px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-user-group {
+        gap: 5px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-back {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        min-height: 28px !important;
+        flex-basis: 28px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-back svg {
+        width: 18px !important;
+        height: 18px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-avatar-wrap {
+        width: 30px !important;
+        height: 30px !important;
+        flex-basis: 30px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-avatar {
+        width: 30px !important;
+        height: 30px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-hdr-btn,
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-hdr-call-btn {
+        width: 30px !important;
+        height: 30px !important;
+        min-width: 30px !important;
+        min-height: 30px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-hdr-btn svg,
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-hdr-call-btn svg {
+        width: 14px !important;
+        height: 14px !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-details .msg-role-tag {
+        display: none !important;
+    }
+
+    html[data-ui-mode="minimal"] body[data-page="messages"] .msg-header-name {
+        font-size: 13px !important;
     }
 }
 
