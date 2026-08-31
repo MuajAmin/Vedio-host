@@ -1,5 +1,6 @@
 const { describe, test, expect } = require('bun:test');
 const { validateCsrf, handleCsrfError } = require('../utils/security');
+const { isValidImportUrl } = require('../routes/import');
 
 describe('Security CSRF Protection & Error Handling', () => {
     test('validateCsrf should allow safe HTTP methods (GET, HEAD, OPTIONS)', () => {
@@ -87,5 +88,30 @@ describe('Security CSRF Protection & Error Handling', () => {
         expect(renderView).toBe('forbidden');
         expect(renderData.user).toBe('hajera');
         expect(renderData.message).toBe('Invalid request token. Please refresh the page and try again.');
+    });
+});
+
+describe('SSRF Import URL Validation', () => {
+    test('isValidImportUrl should reject private/loopback IPv4 and IPv6 literals', async () => {
+        expect(await isValidImportUrl('http://127.0.0.1:3000/admin')).toBe(false);
+        expect(await isValidImportUrl('http://localhost/')).toBe(false);
+        expect(await isValidImportUrl('http://[::1]/')).toBe(false);
+        expect(await isValidImportUrl('http://169.254.169.254/latest/meta-data/')).toBe(false);
+    });
+
+    test('isValidImportUrl should reject IPv4-mapped and IPv4-compatible IPv6 literals', async () => {
+        // Dotted quad and canonical hex forms for loopback (127.0.0.1)
+        expect(await isValidImportUrl('http://[::ffff:127.0.0.1]/')).toBe(false);
+        expect(await isValidImportUrl('http://[::ffff:7f00:1]/')).toBe(false);
+        expect(await isValidImportUrl('http://[0:0:0:0:0:ffff:127.0.0.1]/')).toBe(false);
+
+        // Dotted quad and canonical hex forms for cloud metadata (169.254.169.254)
+        expect(await isValidImportUrl('http://[::ffff:169.254.169.254]/')).toBe(false);
+        expect(await isValidImportUrl('http://[::ffff:a9fe:a9fe]/')).toBe(false);
+    });
+
+    test('isValidImportUrl should allow public IP literals and valid public URLs', async () => {
+        expect(await isValidImportUrl('http://[::ffff:8.8.8.8]/')).toBe(true);
+        expect(await isValidImportUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe(true);
     });
 });
