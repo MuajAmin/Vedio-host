@@ -1903,6 +1903,18 @@ html[data-ui-mode="minimal"] .msg-row-outgoing .msg-bubble {
     border-bottom-right-radius: 4px !important;
 }
 
+html[data-ui-mode="minimal"] .msg-bubble.is-emoji-only-bubble,
+html[data-ui-mode="minimal"] .msg-row-incoming .msg-bubble.is-emoji-only-bubble,
+html[data-ui-mode="minimal"] .msg-row-outgoing .msg-bubble.is-emoji-only-bubble {
+    background: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 2px 4px !important;
+    min-width: 0 !important;
+    width: fit-content !important;
+}
+
 html[data-ui-mode="minimal"] .msg-text-content {
     word-break: break-word !important;
     overflow-wrap: break-word !important;

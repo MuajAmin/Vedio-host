@@ -252,19 +252,19 @@
 
     function detectAndApplyJumbo(msgTextEl) {
         if (!msgTextEl) return;
-        msgTextEl.classList.remove('msg-jumbo-1', 'msg-jumbo-2', 'msg-jumbo-3');
+        msgTextEl.classList.remove('msg-jumbo-1', 'msg-jumbo-2', 'msg-jumbo-3', 'msg-jumbo-4');
         const childNodes = Array.from(msgTextEl.childNodes);
         let emojiCount = 0;
         let hasOtherContent = false;
 
         for (const node of childNodes) {
             if (node.nodeType === Node.TEXT_NODE) {
-                if (node.textContent.trim().length > 0) {
+                if (node.textContent.replace(/[\s\r\n\u200B\uFEFF\u200D\uFE0E\uFE0F]+/g, '').length > 0) {
                     hasOtherContent = true;
                     break;
                 }
             } else if (node.nodeType === Node.ELEMENT_NODE) {
-                if (node.classList.contains('wa-emoji') || node.classList.contains('emoji')) {
+                if (node.classList.contains('wa-emoji') || node.classList.contains('emoji') || node.tagName === 'IMG') {
                     emojiCount++;
                 } else if (node.tagName === 'BR') {
                     // allow line breaks
@@ -276,8 +276,9 @@
         }
 
         const bubble = msgTextEl.closest('.msg-bubble');
-        if (!hasOtherContent && emojiCount >= 1 && emojiCount <= 3) {
-            msgTextEl.classList.add(`msg-jumbo-${emojiCount}`);
+        if (!hasOtherContent && emojiCount >= 1 && emojiCount <= 8) {
+            const jSize = Math.min(emojiCount, 4);
+            msgTextEl.classList.add(`msg-jumbo-${jSize}`);
             if (bubble && !bubble.querySelector('.msg-video-card, .msg-voice-player, .msg-quote-card, .msg-call-event-card')) {
                 bubble.classList.add('is-emoji-only-bubble');
             }
@@ -297,11 +298,11 @@
         
         const clone = temp.cloneNode(true);
         clone.querySelectorAll('.wa-emoji, img.emoji').forEach(img => img.remove());
-        const otherText = clone.textContent.replace(/[\s\r\n]+/g, '').trim();
+        const otherText = clone.textContent.replace(/[\s\r\n\u200B\uFEFF\u200D\uFE0E\uFE0F]+/g, '').trim();
 
         let jumboClass = '';
-        if (otherText.length === 0 && emojiImgs.length >= 1 && emojiImgs.length <= 3) {
-            jumboClass = ` msg-jumbo-${emojiImgs.length}`;
+        if (otherText.length === 0 && emojiImgs.length >= 1 && emojiImgs.length <= 8) {
+            jumboClass = ` msg-jumbo-${Math.min(emojiImgs.length, 4)}`;
         }
 
         return `<div class="msg-text-content${jumboClass}">${emojiFormatted}</div>`;

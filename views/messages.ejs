@@ -85,6 +85,22 @@ function formatDateHeader(isoStr) {
     }
 }
 
+function getEmojiStats(rawText) {
+    if (!rawText || typeof rawText !== 'string') return { isEmojiOnly: false, count: 0 };
+    const trimmed = rawText.trim();
+    if (!trimmed) return { isEmojiOnly: false, count: 0 };
+    const emojiRegex = /(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Emoji}\uFE0F|[\u{1F1E6}-\u{1F1FF}]|[\u{1F3FB}-\u{1F3FF}])/gu;
+    const cleanTextWithoutEmoji = trimmed.replace(emojiRegex, '').replace(/[\s\r\n\u200D\uFE0E\uFE0F\u200B\uFEFF]/g, '');
+    if (cleanTextWithoutEmoji.length > 0) {
+        return { isEmojiOnly: false, count: 0 };
+    }
+    const matches = trimmed.match(emojiRegex) || [];
+    return {
+        isEmojiOnly: matches.length > 0 && matches.length <= 8,
+        count: matches.length
+    };
+}
+
 function renderReactionsHtml(reactions, currentU) {
     if (!reactions || !Array.isArray(reactions) || reactions.length === 0) return '';
     const grouped = {};
@@ -365,18 +381,21 @@ function renderCallEventHtml(rawText, isOut, timeStr) {
 }
 
         const isCallEvent = !!(msg.text && msg.text.startsWith('__CALL_EVENT__:'));
+        const emojiStats = (!msg.video && !msg.voiceUrl && !msg.replyTo && !isCallEvent && msg.text) ? getEmojiStats(msg.text) : { isEmojiOnly: false, count: 0 };
         let textContentHtml = '';
         if (msg.text) {
             if (isCallEvent) {
                 textContentHtml = renderCallEventHtml(msg.text, isOut, timeStr);
             } else {
-                textContentHtml = `<div class="msg-text-content">${h(msg.text).replace(/\n/g, '<br>')}</div>`;
+                const jumboClass = emojiStats.isEmojiOnly ? ` msg-jumbo-${Math.min(emojiStats.count, 4)}` : '';
+                textContentHtml = `<div class="msg-text-content${jumboClass}">${h(msg.text).replace(/\n/g, '<br>')}</div>`;
             }
         }
 
         const reactionsHtml = renderReactionsHtml(msg.reactions, currentUser);
         const canDelete = isOut || currentUser === 'muaj';
         const finalRowClass = `${rowClass} ${isCallEvent ? 'msg-row-call-event' : ''}`;
+        const bubbleClass = `msg-bubble ${emojiStats.isEmojiOnly ? 'is-emoji-only-bubble' : ''}`;
 
         return `
             ${dateDivider}
@@ -401,7 +420,7 @@ function renderCallEventHtml(rawText, isOut, timeStr) {
                     </button>` : ''}
                 </div>
                 <div class="msg-bubble-wrap">
-                    <div class="msg-bubble">
+                    <div class="${bubbleClass}">
                         ${renderReplyQuoteHtml(msg.replyTo, currentUser)}
                         ${videoCardHtml}
                         ${voicePlayerHtml}
