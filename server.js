@@ -71,6 +71,8 @@ app.use(compression({
         if (req.path.startsWith('/watch-together/stream/')) return false;
         // Direct Messages SSE stream — don't buffer
         if (req.path.startsWith('/messages/stream')) return false;
+        // Session Replay SSE stream — don't buffer
+        if (req.path.startsWith('/admin/replay/stream')) return false;
         // Don't compress video streams — they're already binary and chunked
         if (req.path.startsWith('/stream/')) return false;
         return compression.filter(req, res);
@@ -93,7 +95,7 @@ app.use((req, res, next) => {
         : "img-src 'self' data: blob: https://*.r2.dev https://cdn.jsdelivr.net https://unpkg.com";
     res.setHeader(
         'Content-Security-Policy',
-        `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com data:; ${mediaSrc}; ${imgSrc}; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'`
+        `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com data:; ${mediaSrc}; ${imgSrc}; connect-src 'self' wss: https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'`
     );
 
     // 103 Early Hints Link header for HTML navigation requests.
@@ -344,6 +346,10 @@ app.use((req, res, next) => {
         return next();
     }
     if (req.path === '/profile/avatar' && req.method === 'POST') {
+        return next();
+    }
+    // rrweb replay events — high-frequency POST from recorded browser, authenticated by session
+    if (req.path === '/api/replay/events' && req.method === 'POST') {
         return next();
     }
     return requireCsrf(req, res, next);

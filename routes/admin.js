@@ -1197,4 +1197,119 @@ router.get('/admin/api/presence-live', isMuaj, async (req, res) => {
     });
 });
 
+// ─── Session Replay — rrweb Live DOM Recording & Playback ─────────────────────
+const replayRelay = require('../utils/replayRelay');
+const { getConnectedUsers } = require('../utils/realtime');
+
+// GET /admin/replay/sessions — List online users available for replay
+router.get('/admin/replay/sessions', isMuaj, (req, res) => {
+    const connectedUsers = getConnectedUsers().filter(u => u !== 'muaj');
+    const activeSessions = replayRelay.getActiveSessions();
+    res.json({
+        success: true,
+        onlineUsers: connectedUsers,
+        activeSessions,
+        timestamp: Date.now()
+    });
+});
+
+// POST /admin/replay/start — Start recording a target user's session
+router.post('/admin/replay/start', isMuaj, (req, res) => {
+    const targetUser = (req.body.targetUser || '').trim().toLowerCase();
+    if (!targetUser) {
+        return res.status(400).json({ success: false, error: 'Missing targetUser' });
+    }
+    const result = replayRelay.startReplay(targetUser, 'muaj');
+    if (!result.success) {
+        return res.status(400).json(result);
+    }
+    res.json({ success: true, targetUser, message: `Started recording ${targetUser}` });
+});
+
+// POST /admin/replay/stop — Stop recording a target user's session
+router.post('/admin/replay/stop', isMuaj, (req, res) => {
+    const targetUser = (req.body.targetUser || '').trim().toLowerCase();
+    if (!targetUser) {
+        return res.status(400).json({ success: false, error: 'Missing targetUser' });
+    }
+    const result = replayRelay.stopReplay(targetUser);
+    res.json({ success: true, targetUser, ...result });
+});
+
+// GET /admin/replay/stream — Dedicated SSE stream for receiving replay events in admin browser
+router.get('/admin/replay/stream', isMuaj, (req, res) => {
+    const targetUser = (req.query.targetUser || '').trim().toLowerCase();
+    if (!targetUser) {
+        return res.status(400).json({ success: false, error: 'Missing targetUser query param' });
+    }
+
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
+    });
+    if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+    }
+
+    // Send initial connected event
+    res.write(`event: replay-connected\ndata: ${JSON.stringify({
+        targetUser,
+        timestamp: Date.now()
+    })}\n\n`);
+
+    const added = replayRelay.addAdminReplayClient(targetUser, res);
+    if (!added) {
+        res.write(`event: replay-error\ndata: ${JSON.stringify({
+            error: 'No active replay session for this user'
+        })}\n\n`);
+        return res.end();
+    }
+
+    // Keepalive ping every 15 seconds
+    const keepalive = setInterval(() => {
+        try {
+            res.write(': keepalive\n\n');
+            if (typeof res.flush === 'function') res.flush();
+        } catch {
+            clearInterval(keepalive);
+        }
+    }, 15000);
+
+    res.on('close', () => clearInterval(keepalive));
+});
+
+// POST /api/replay/events — Receive batched rrweb events from recorded user, forward to admin
+// Rate-limited: max 100 events per batch, simple time-gating for abuse prevention
+const { isAuthenticated } = require('../middleware/auth');
+const _replayEventTimestamps = new Map(); // username -> lastBatchTime
+
+router.post('/api/replay/events', isAuthenticated, (req, res) => {
+    const user = req.session.user;
+
+    // Only forward if this user is actually being recorded
+    if (!replayRelay.isBeingRecorded(user)) {
+        return res.status(403).json({ success: false, error: 'Not being recorded' });
+    }
+
+    // Rate limit: max 2 batches/sec per user
+    const now = Date.now();
+    const lastBatch = _replayEventTimestamps.get(user) || 0;
+    if (now - lastBatch < 200) { // 200ms = ~5 batches/sec max
+        return res.status(429).json({ success: false, error: 'Too fast' });
+    }
+    _replayEventTimestamps.set(user, now);
+
+    const events = req.body.events;
+    if (!Array.isArray(events) || events.length === 0) {
+        return res.status(400).json({ success: false, error: 'No events' });
+    }
+
+    // Cap at 100 events per batch
+    const capped = events.slice(0, 100);
+    const result = replayRelay.forwardReplayEvents(user, capped);
+    res.json({ success: true, forwarded: result.forwarded, accepted: capped.length });
+});
+
 module.exports = router;

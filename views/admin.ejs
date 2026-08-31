@@ -4,7 +4,7 @@ const safeStats = (typeof stats !== 'undefined' && stats) ? stats : {};
 const currentUnread = (typeof unreadCount !== 'undefined' && unreadCount > 0) ? unreadCount : 0;
 const unreadDisplay = currentUnread > 0 ? (currentUnread > 99 ? '99+' : currentUnread) : '0';
 const unreadStyle = currentUnread > 0 ? 'display:flex;' : 'display:none;';
-// Shared avatar renderer from utils/security.js (attachLocals) — no local duplicate.
+// Shared avatar renderer from utils/security.js (attachLocals)
 const renderAvatar = (typeof locals !== 'undefined' && typeof locals.renderAvatar === 'function') ? locals.renderAvatar : (() => '');
 
 function formatBytes(value) {
@@ -92,9 +92,14 @@ const cfSavings = (safeStats && safeStats.cloudflareSavings) ? safeStats.cloudfl
 };
 const activeJobs = importJobs.filter(job => ['queued', 'starting', 'downloading'].includes(job.status));
 const failedJobs = importJobs.filter(job => ['error', 'canceled'].includes(job.status)).slice(0, 8);
-const recentVideos = videoList.slice(0, 12);
 const hajeraStats = (safeStats && safeStats.hajeraStats) ? safeStats.hajeraStats : { totalWatched: 0, completedCount: 0, inProgressCount: 0, openedCount: 0, recentActivity: [] };
 const hajeraActivityList = hajeraStats.recentActivity || [];
+
+// Create a lookup map for Hajera's progress per video ID
+const hajeraProgressMap = new Map();
+hajeraActivityList.forEach(item => {
+    if (item && item.video_id) hajeraProgressMap.set(item.video_id, item);
+});
 
 const totalVideos = hajeraStats.totalLibrary || videoList.length || 0;
 const watchedCount = hajeraStats.totalWatched || 0;
@@ -240,7 +245,7 @@ if (detailedSessions.length === 0) {
             <td>${userBadge}</td>
             <td>
                 <div class="session-device-cell">
-                    <span class="device-icon">${s.device && s.device.toLowerCase().includes('android') ? '📱' : (s.device && s.device.toLowerCase().includes('iphone') ? '📱' : '💻')}</span>
+                    <span class="device-icon">${s.device && (s.device.toLowerCase().includes('android') || s.device.toLowerCase().includes('iphone')) ? '📱' : '💻'}</span>
                     <div class="device-meta">
                         <span class="device-name">${h(s.device || 'Web Browser')}</span>
                         <span class="device-sid" title="Session ID: ${h(s.sid)}">${h(shortSid)}</span>
@@ -286,7 +291,7 @@ if (detailedSessions.length === 0) {
                 <form action="/admin/sessions/destroy/${encodeURIComponent(s.sid)}" method="POST" data-confirm="${s.isCurrent ? '⚠️ এটি আপনার বর্তমান সেশন! আপনি লগআউট হয়ে যাবেন।' : 'এই ডিভাইসটির সেশন বন্ধ করতে চান?'}">
                     <input type="hidden" name="_csrf" value="${h(csrfToken)}">
                     <button type="submit" class="btn-terminate-session btn-sm ${s.isCurrent ? 'btn-terminate-self' : ''}" title="Terminate Session">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="13" width="13" height="13">
                             <line x1="18" y1="6" x2="6" y2="18"/>
                             <line x1="6" y1="6" x2="18" y2="18"/>
                         </svg>
@@ -343,7 +348,7 @@ if (sys) {
         <div class="vps-monitor-header">
             <div class="vps-header-left">
                 <div class="vps-icon-wrap">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                         <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
                         <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
                         <line x1="6" y1="6" x2="6.01" y2="6"/>
@@ -356,8 +361,8 @@ if (sys) {
                         <span class="vps-badge-tag">🖥️ VPS Telemetry</span>
                         <span class="vps-live-pill"><span class="vps-live-dot"></span> Live 3s</span>
                     </div>
-                    <h2 class="vps-main-heading">Server Load &amp; Resource Health</h2>
-                    <p class="vps-subtext" id="vpsHostSpec">${h(sys.os.hostname)} • ${h(sys.os.type)} ${h(sys.os.release)} (${h(sys.os.arch)}) • Uptime: <strong id="vpsServerUptime">${h(sys.os.uptimeFormatted)}</strong></p>
+                    <h2 class="vps-main-heading">Server Load &amp; Health</h2>
+                    <p class="vps-subtext" id="vpsHostSpec">${h(sys.os.hostname)} • ${h(sys.os.type)} ${h(sys.os.release)} • Uptime: <strong id="vpsServerUptime">${h(sys.os.uptimeFormatted)}</strong></p>
                 </div>
             </div>
             <div class="vps-header-right">
@@ -368,29 +373,25 @@ if (sys) {
             </div>
         </div>
 
-        <!-- 4-Column VPS Resource Gauges Grid -->
+        <!-- VPS Resource Gauges Grid -->
         <div class="vps-metrics-grid">
-            <!-- 1. CPU Load Card -->
+            <!-- CPU Load Card -->
             <div class="vps-metric-box metric-cpu ${cpuHealthCls}">
                 <div class="metric-top-row">
                     <div class="metric-icon-title">
                         <div class="metric-badge-icon badge-cpu">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                 <rect x="4" y="4" width="16" height="16" rx="2"/>
                                 <rect x="9" y="9" width="6" height="6"/>
                                 <line x1="9" y1="1" x2="9" y2="4"/>
                                 <line x1="15" y1="1" x2="15" y2="4"/>
                                 <line x1="9" y1="20" x2="9" y2="23"/>
                                 <line x1="15" y1="20" x2="15" y2="23"/>
-                                <line x1="20" y1="9" x2="23" y2="9"/>
-                                <line x1="20" y1="14" x2="23" y2="14"/>
-                                <line x1="1" y1="9" x2="4" y2="9"/>
-                                <line x1="1" y1="14" x2="4" y2="14"/>
                             </svg>
                         </div>
                         <div>
                             <span class="metric-name">CPU Load</span>
-                            <span class="metric-sub" id="vpsCpuModel">${h(sys.cpu.count)} Cores • ${h(sys.cpu.model)}</span>
+                            <span class="metric-sub" id="vpsCpuModel">${h(sys.cpu.count)} Cores</span>
                         </div>
                     </div>
                     <div class="metric-val-wrap">
@@ -401,27 +402,24 @@ if (sys) {
                     <div class="metric-bar-fill fill-cpu" id="vpsCpuBar" ${`style="width:${h(cpuPct)}%"`}></div>
                 </div>
                 <div class="metric-bottom-info">
-                    <span>Load Avg (1m, 5m, 15m)</span>
+                    <span>Load Avg</span>
                     <strong id="vpsLoadAvg">${h(Array.isArray(sys.cpu.loadAvg) ? sys.cpu.loadAvg.join(' • ') : '—')}</strong>
                 </div>
             </div>
 
-            <!-- 2. RAM / Memory Card -->
+            <!-- RAM Card -->
             <div class="vps-metric-box metric-ram ${ramHealthCls}">
                 <div class="metric-top-row">
                     <div class="metric-icon-title">
                         <div class="metric-badge-icon badge-ram">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-                                <path d="M6 19v-3"/>
-                                <path d="M10 19v-3"/>
-                                <path d="M14 19v-3"/>
-                                <path d="M18 19v-3"/>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/>
                                 <rect x="2" y="5" width="20" height="10" rx="2"/>
                             </svg>
                         </div>
                         <div>
-                            <span class="metric-name">System RAM</span>
-                            <span class="metric-sub" id="vpsRamFree">${h(sys.ram.freeFormatted)} Free of ${h(sys.ram.totalFormatted)}</span>
+                            <span class="metric-name">RAM</span>
+                            <span class="metric-sub" id="vpsRamFree">${h(sys.ram.freeFormatted)} Free</span>
                         </div>
                     </div>
                     <div class="metric-val-wrap">
@@ -433,24 +431,24 @@ if (sys) {
                 </div>
                 <div class="metric-bottom-info">
                     <span>Used: <strong id="vpsRamUsed">${h(sys.ram.usedFormatted)}</strong></span>
-                    <span>Process RSS: <strong id="vpsNodeRss">${h(sys.process.rssMb)} MB</strong></span>
+                    <span>RSS: <strong id="vpsNodeRss">${h(sys.process.rssMb)} MB</strong></span>
                 </div>
             </div>
 
-            <!-- 3. Disk Storage Card -->
+            <!-- Disk Storage Card -->
             <div class="vps-metric-box metric-disk ${diskHealthCls}">
                 <div class="metric-top-row">
                     <div class="metric-icon-title">
                         <div class="metric-badge-icon badge-disk">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                 <ellipse cx="12" cy="5" rx="9" ry="3"/>
                                 <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
                                 <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
                             </svg>
                         </div>
                         <div>
-                            <span class="metric-name">VPS Disk Drive</span>
-                            <span class="metric-sub" id="vpsDiskFree">${h(sys.disk.freeFormatted)} Free of ${h(sys.disk.totalFormatted)}</span>
+                            <span class="metric-name">Disk Drive</span>
+                            <span class="metric-sub" id="vpsDiskFree">${h(sys.disk.freeFormatted)} Free</span>
                         </div>
                     </div>
                     <div class="metric-val-wrap">
@@ -466,20 +464,19 @@ if (sys) {
                 </div>
             </div>
 
-            <!-- 4. Internet & VPS Bandwidth Usage Card -->
+            <!-- Network Traffic Card -->
             <div class="vps-metric-box metric-network">
                 <div class="metric-top-row">
                     <div class="metric-icon-title">
                         <div class="metric-badge-icon badge-network">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                 <circle cx="12" cy="12" r="10"/>
                                 <line x1="2" y1="12" x2="22" y2="12"/>
-                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
                             </svg>
                         </div>
                         <div>
-                            <span class="metric-name">Internet Traffic</span>
-                            <span class="metric-sub" id="vpsNetQuota">Quota: 1,000 GB (1 TB)</span>
+                            <span class="metric-name">Bandwidth</span>
+                            <span class="metric-sub" id="vpsNetQuota">Quota: 1 TB</span>
                         </div>
                     </div>
                     <div class="metric-val-wrap">
@@ -490,17 +487,17 @@ if (sys) {
                     <div class="metric-bar-fill fill-network" id="vpsNetBar" ${`style="width:${h(sys.network ? Math.max(2, sys.network.usagePercent) : 2)}%"`}></div>
                 </div>
                 <div class="metric-bottom-info">
-                    <span>📤 Sent: <strong id="vpsNetTx">${h(sys.network ? sys.network.txFormatted : '0 GB')}</strong></span>
-                    <span>📥 Recv: <strong id="vpsNetRx">${h(sys.network ? sys.network.rxFormatted : '0 GB')}</strong></span>
+                    <span>📤 <strong id="vpsNetTx">${h(sys.network ? sys.network.txFormatted : '0 GB')}</strong></span>
+                    <span>📥 <strong id="vpsNetRx">${h(sys.network ? sys.network.rxFormatted : '0 GB')}</strong></span>
                 </div>
             </div>
 
-            <!-- 5. Bun & Runtime Card -->
+            <!-- Runtime Card -->
             <div class="vps-metric-box metric-node">
                 <div class="metric-top-row">
                     <div class="metric-icon-title">
                         <div class="metric-badge-icon badge-node">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                 <polygon points="12 2 2 7 12 12 22 7 12 2"/>
                                 <polyline points="2 17 12 22 22 17"/>
                                 <polyline points="2 12 12 17 22 12"/>
@@ -508,75 +505,63 @@ if (sys) {
                         </div>
                         <div>
                             <span class="metric-name" id="vpsRuntimeName">${h(sys.process.runtimeName || 'Bun Runtime')}</span>
-                            <span class="metric-sub">Version <strong id="vpsNodeVer">${h(sys.process.nodeVersion)}</strong></span>
+                            <span class="metric-sub">v<strong id="vpsNodeVer">${h(sys.process.nodeVersion)}</strong></span>
                         </div>
                     </div>
                     <div class="metric-val-wrap">
-                        <span class="metric-badge-pill" id="vpsAppUptime">App Up: ${h(sys.process.uptimeFormatted)}</span>
+                        <span class="metric-badge-pill" id="vpsAppUptime">Up: ${h(sys.process.uptimeFormatted)}</span>
                     </div>
                 </div>
                 <div class="metric-runtime-details">
                     <div class="runtime-chip">
-                        <span class="chip-k">Heap Used</span>
+                        <span class="chip-k">Heap</span>
                         <strong class="chip-v" id="vpsHeapUsed">${h(sys.process.heapUsedMb)} MB</strong>
                     </div>
                     <div class="runtime-chip">
-                        <span class="chip-k">Heap Total</span>
+                        <span class="chip-k">Total Heap</span>
                         <strong class="chip-v" id="vpsHeapTotal">${h(sys.process.heapTotalMb)} MB</strong>
                     </div>
                     <div class="runtime-chip">
-                        <span class="chip-k">DB Sessions</span>
+                        <span class="chip-k">Sessions</span>
                         <strong class="chip-v">${h(safeStats.sessionCount || 0)}</strong>
                     </div>
                 </div>
             </div>
 
-            <!-- 6. Cloudflare Edge Offload & Performance Savings Card -->
+            <!-- Cloudflare Edge Offload Card -->
             <div class="vps-metric-box metric-cf-savings" style="border-left: 3px solid #f38020;">
                 <div class="metric-top-row">
                     <div class="metric-icon-title">
                         <div class="metric-badge-icon" style="background: rgba(243, 128, 32, 0.15); color: #f38020;">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                 <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
                                 <path d="M12 13v6"/><path d="m9 16 3-3 3 3"/>
                             </svg>
                         </div>
                         <div>
                             <span class="metric-name">Cloudflare Offload</span>
-                            <span class="metric-sub">${cfSavings.workerUrl ? 'Worker R2 CDN Active' : 'Edge Video CDN'}</span>
+                            <span class="metric-sub">${cfSavings.workerUrl ? 'Worker R2 CDN' : 'Edge CDN'}</span>
                         </div>
                     </div>
                     <div class="metric-val-wrap">
-                        <span class="metric-badge-pill" style="background: ${cfSavings.edgeOffloadEfficiency >= 100 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)'}; color: ${cfSavings.edgeOffloadEfficiency >= 100 ? '#22c55e' : '#eab308'}; font-weight: 700;">${h(cfSavings.edgeOffloadEfficiency)}% Edge Served</span>
+                        <span class="metric-badge-pill" style="background: ${cfSavings.edgeOffloadEfficiency >= 100 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)'}; color: ${cfSavings.edgeOffloadEfficiency >= 100 ? '#22c55e' : '#eab308'}; font-weight: 700;">${h(cfSavings.edgeOffloadEfficiency)}% Edge</span>
                     </div>
                 </div>
                 <div class="metric-runtime-details">
                     <div class="runtime-chip">
-                        <span class="chip-k">R2 Transferred</span>
+                        <span class="chip-k">Transferred</span>
                         <strong class="chip-v" style="color:#f38020;" id="r2TransferredText">${h(cfSavings.totalTransferredFormatted || '0 B')}</strong>
                     </div>
                     <div class="runtime-chip">
-                        <span class="chip-k">Stored on R2</span>
+                        <span class="chip-k">Stored R2</span>
                         <strong class="chip-v" style="color:#f38020;">${h(cfSavings.totalOffloadedFormatted)}</strong>
                     </div>
                     <div class="runtime-chip">
-                        <span class="chip-k">Transfers</span>
-                        <strong class="chip-v">${h(cfSavings.transferCount || 0)}${cfSavings.transferFailureCount ? ` (${h(cfSavings.transferFailureCount)} failed)` : ''}</strong>
-                    </div>
-                    <div class="runtime-chip">
-                        <span class="chip-k">Avg Upload Speed</span>
-                        <strong class="chip-v" style="color:#22c55e;">${h(cfSavings.avgTransferSpeed || '—')}</strong>
-                    </div>
-                    <div class="runtime-chip">
-                        <span class="chip-k">Peak Upload Speed</span>
-                        <strong class="chip-v" style="color:#22c55e;">${h(cfSavings.peakTransferSpeed || '—')}</strong>
-                    </div>
-                    <div class="runtime-chip">
-                        <span class="chip-k">VPS Quota Preserved</span>
+                        <span class="chip-k">Quota Saved</span>
                         <strong class="chip-v" style="color:#22c55e;">${h(cfSavings.vpsQuotaPreservedPercent)}%</strong>
                     </div>
                     <div class="runtime-chip">
-                        <span class="chip-k">Total Watched</span>
+                        <span class="chip-k">Watched</span>
                         <strong class="chip-v">${h(cfSavings.totalWatchFormatted)}</strong>
                     </div>
                 </div>
@@ -597,183 +582,70 @@ const r2Stats = (safeStats && safeStats.r2Stats) ? safeStats.r2Stats : {
     unsyncedVideos: []
 };
 
-const r2HubHtml = `
-<section class="admin-section-card r2-storage-hub-section" id="r2StorageHub">
-    <div class="section-card-header">
-        <div class="card-title-group">
-            <div class="icon-bubble icon-cyan">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-                    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
-                    <path d="M12 13v6"/><path d="m9 16 3-3 3 3"/>
-                </svg>
-            </div>
-            <div>
-                <h2>Cloudflare R2 &amp; VPS Storage Tracker</h2>
-                <p style="margin: 4px 0 0; font-size: 0.85rem; color: #888;">Real-time edge CDN sync status &amp; video distribution</p>
-            </div>
-        </div>
-        <div class="r2-hub-actions" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <!-- 1-Click Purge Edge Cache Button -->
-            <button type="button" class="btn btn-secondary btn-sm" id="btnCfPurgeCache" onclick="purgeEdgeCache(this)" title="Purge Cloudflare global edge cache on demand" style="border: 1px solid rgba(243, 128, 32, 0.3); color: #f38020;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                    <path d="M3 3v5h5"/>
-                </svg>
-                <span>Purge Edge Cache</span>
-            </button>
+const unsyncedVideos = videoList.filter(v => !v.onR2);
 
-            <!-- Scan R2 Bucket Button -->
-            <button type="button" class="btn btn-secondary btn-sm" id="btnR2ScanBucket" onclick="scanR2Bucket(this)" title="Scan live R2 bucket inventory and detect orphan files">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                    <circle cx="11" cy="11" r="8"/>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-                <span>Scan R2 Bucket</span>
-            </button>
+// Compact R2 unsynced video queue (or all-synced indicator)
+const r2UnsyncedListHtml = unsyncedVideos.length === 0
+    ? `<div class="r2-all-synced-card">
+        <div class="r2-synced-hero-icon">⚡</div>
+        <h4 class="r2-synced-hero-title">All Videos Synced to Cloudflare R2</h4>
+        <p class="r2-synced-hero-desc">100% of library videos are distributed across the Cloudflare global edge CDN with zero VPS bandwidth.</p>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="switchAdminTab('videos')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            <span>Manage All Videos in Library</span>
+        </button>
+       </div>`
+    : unsyncedVideos.map(v => {
+        const isOnR2 = !!v.onR2;
+        const isOnDisk = v.onDisk !== false;
+        const safeId = encodeURIComponent(v.id);
+        const safeFn = h(v.filename || '');
+        const safeSize = Number(v.size || 0);
+        const microThumb = v.thumbnail
+            ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="" class="admin-micro-thumb" loading="lazy" />`
+            : '<div class="admin-micro-thumb-fallback">🎬</div>';
 
-            ${r2Stats.unsyncedCount > 0 ? `
-                <button type="button" class="btn btn-primary btn-sm btn-r2-sync-all" id="btnR2SyncAll" onclick="syncAllR2(this)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="17 8 12 3 7 8"/>
-                        <line x1="12" y1="3" x2="12" y2="15"/>
-                    </svg>
-                    <span>Sync All (${h(r2Stats.unsyncedCount)}) to R2</span>
-                </button>
-            ` : `
-                <span class="r2-all-synced-badge">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span>100% Synced to Edge CDN</span>
-                </span>
-            `}
-        </div>
-    </div>
-
-    <!-- Live R2 Bucket Scan Results & Orphan Scanner Box (Dynamic) -->
-    <div id="r2ScanResultsBox" style="display:none; margin-bottom:16px; padding:14px 18px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);"></div>
-
-    <!-- 3-Pillar Storage Summary Tiles -->
-    <div class="r2-storage-tiles-grid">
-        <!-- 1. Cloudflare R2 Edge CDN -->
-        <div class="r2-tile tile-r2-cdn">
-            <div class="r2-tile-header">
-                <span class="r2-tile-badge badge-cdn">Cloudflare R2 CDN</span>
-                <span class="r2-tile-pct">${h(r2Stats.r2Percent)}% Synced</span>
-            </div>
-            <div class="r2-tile-main">
-                <strong class="r2-tile-count" id="r2VideoCountText">${h(r2Stats.r2Count)} / ${h(r2Stats.totalVideos)}</strong>
-                <span class="r2-tile-sub">Videos in Cloudflare R2</span>
-            </div>
-            <div class="progress-bar">
-                <div class="r2-progress-fill" ${`style="width:${h(r2Stats.r2Percent)}%"`}></div>
-            </div>
-            <div class="r2-tile-footer">
-                <span>CDN Size: <strong id="r2CdnSizeText">${h(formatBytes(r2Stats.r2TotalBytes))}</strong></span>
-                <span>Bandwidth: <strong style="color:#22c55e;">Zero VPS Cost</strong></span>
-            </div>
-            <div class="r2-tile-footer" style="font-size:0.72rem; opacity:0.7;">
-                ${r2Stats.inventoryAvailable === false
-                    ? `<span style="color:#eab308;">⚠️ Live bucket listing unavailable — showing last known status</span>`
-                    : `<span>Source: <strong>${h(r2Stats.inventorySource || 'n/a')}</strong>${r2Stats.bucketObjectCount !== null && r2Stats.bucketObjectCount !== undefined ? ` · ${h(r2Stats.bucketObjectCount)} object(s) in bucket` : ''}</span>`}
-            </div>
-        </div>
-
-        <!-- 2. VPS Local Storage -->
-        <div class="r2-tile tile-vps-disk">
-            <div class="r2-tile-header">
-                <span class="r2-tile-badge badge-vps">VPS Local Disk</span>
-                <span class="r2-tile-pct">100% on Disk</span>
-            </div>
-            <div class="r2-tile-main">
-                <strong class="r2-tile-count">${h(r2Stats.vpsCount)} / ${h(r2Stats.totalVideos)}</strong>
-                <span class="r2-tile-sub">Videos on VPS Storage</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: 100%;"></div>
-            </div>
-            <div class="r2-tile-footer">
-                <span>Disk Size: <strong>${h(formatBytes(r2Stats.vpsTotalBytes))}</strong></span>
-                <span>Role: <strong>Master Copy &amp; Backup</strong></span>
-            </div>
-        </div>
-
-        <!-- 3. Sync Status & Health -->
-        <div class="r2-tile tile-sync-health">
-            <div class="r2-tile-header">
-                <span class="r2-tile-badge ${r2Stats.unsyncedCount === 0 ? 'badge-ok' : 'badge-warn'}">
-                    ${r2Stats.unsyncedCount === 0 ? '✓ Fully Synced' : '⚠️ Sync Pending'}
-                </span>
-            </div>
-            <div class="r2-tile-main">
-                <strong class="r2-tile-count ${r2Stats.unsyncedCount > 0 ? 'color-warn' : 'color-ok'}">${h(r2Stats.unsyncedCount)}</strong>
-                <span class="r2-tile-sub">Videos Missing from R2</span>
-            </div>
-            <div class="r2-tile-desc">
-                ${r2Stats.unsyncedCount === 0
-                    ? 'All videos are served via Cloudflare edge CDN with zero VPS bandwidth.'
-                    : `${h(r2Stats.unsyncedCount)} video(s) are streaming directly from VPS disk. Click Sync to transfer to R2.`}
-            </div>
-        </div>
-    </div>
-
-    <!-- Video-by-Video Android Native Card List -->
-    <div class="r2-android-card-list">
-        ${videoList.map(v => {
-            const isOnR2 = !!v.onR2;
-            const isOnDisk = v.onDisk !== false;
-            const safeId = encodeURIComponent(v.id);
-            const safeFn = h(v.filename || '');
-            const safeSize = Number(v.size || 0);
-            const thumbImg = v.thumbnail
-                ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="${h(v.title)}" class="r2-card-thumb-img" loading="lazy" />`
-                : '<div class="r2-card-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><polygon points="6,4 20,12 6,20"/></svg></div>';
-            return `
-                <div class="r2-android-video-card ${isOnR2 ? 'is-synced' : 'is-pending'}" id="r2Row_${safeId}" data-video-id="${safeId}" data-filename="${safeFn}" data-size="${safeSize}">
-                    <div class="r2-card-main-row">
-                        <div class="r2-card-thumb-box">
-                            ${thumbImg}
-                            ${v.duration ? `<span class="r2-card-duration">${h(v.duration)}</span>` : ''}
-                        </div>
-                        <div class="r2-card-details">
-                            <a href="/watch/${safeId}" class="r2-card-title-link" target="_blank">${h(v.title || v.original_name || 'Untitled Video')}</a>
-                            <div class="r2-card-chips-row">
-                                <span class="r2-mini-chip chip-size">${formatBytes(safeSize)}</span>
-                                <span class="r2-mini-chip ${isOnDisk ? 'chip-disk' : 'chip-missing'}">${isOnDisk ? '✓ Disk' : '✗ Missing'}</span>
-                                <span class="r2-mini-chip ${isOnR2 ? 'chip-r2' : 'chip-vps-only'}" id="r2Pill_${safeId}">
-                                    ${isOnR2 ? '⚡ Cloudflare R2' : '⚠️ VPS Only'}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="r2-card-action-bar" id="r2Action_${safeId}">
-                        ${isOnR2 ? `
-                            <div class="r2-synced-pill glow-emerald">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
-                                <span>Synced on Cloudflare Edge CDN</span>
-                            </div>
-                        ` : `
-                            <button type="button" class="btn-android-sync-r2" data-video-id="${safeId}" data-filename="${safeFn}" data-size="${safeSize}" onclick="syncSingleVideo(this.dataset.videoId, this.dataset.filename, Number(this.dataset.size), this)">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                    <polyline points="17 8 12 3 7 8"/>
-                                    <line x1="12" y1="3" x2="12" y2="15"/>
-                                </svg>
-                                <span>⚡ Sync to Cloudflare R2</span>
-                            </button>
-                        `}
+        return `
+        <div class="admin-compact-data-row ${isOnR2 ? 'is-synced' : 'is-pending'}" id="r2Row_${safeId}" data-video-id="${safeId}" data-filename="${safeFn}" data-size="${safeSize}">
+            <div class="compact-data-left">
+                <div class="compact-thumb-wrap">
+                    ${microThumb}
+                    ${v.duration ? `<span class="compact-micro-dur">${h(v.duration)}</span>` : ''}
+                </div>
+                <div class="compact-text-wrap">
+                    <a href="/watch/${safeId}" class="compact-row-title" target="_blank">${h(v.title || v.original_name || 'Untitled Video')}</a>
+                    <div class="compact-chips-line">
+                        <span class="compact-chip chip-size">${formatBytes(safeSize)}</span>
+                        <span class="compact-chip ${isOnDisk ? 'chip-disk' : 'chip-missing'}">${isOnDisk ? '✓ Disk' : '✗ Missing'}</span>
+                        <span class="compact-chip ${isOnR2 ? 'chip-r2' : 'chip-vps-only'}" id="r2Pill_${safeId}">
+                            ${isOnR2 ? '⚡ Cloudflare R2' : '⚠️ VPS Only'}
+                        </span>
                     </div>
                 </div>
-            `;
-        }).join('')}
-    </div>
-</section>
-`;
+            </div>
+            <div class="compact-data-right" id="r2Action_${safeId}">
+                ${isOnR2 ? `
+                    <div class="r2-synced-pill glow-emerald">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span>Edge Synced</span>
+                    </div>
+                ` : `
+                    <button type="button" class="btn-android-sync-r2 btn-compact-sync" data-video-id="${safeId}" data-filename="${safeFn}" data-size="${safeSize}" onclick="syncSingleVideo(this.dataset.videoId, this.dataset.filename, Number(this.dataset.size), this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <span>Sync to R2</span>
+                    </button>
+                `}
+            </div>
+        </div>
+    `;}).join('');
 
 const hajeraCardsHtml = hajeraActivityList.length === 0
     ? `<div class="hajera-empty-card" id="hajeraEmptyState">
-        <div class="hajera-empty-icon-wrap">
-            <div class="hajera-empty-icon">💖</div>
-        </div>
+        <div class="hajera-empty-icon-wrap"><div class="hajera-empty-icon">💖</div></div>
         <h3 class="hajera-empty-title">No Videos in Library</h3>
         <p class="hajera-empty-desc">Upload or import videos to track Hajera's real-time viewing activity.</p>
        </div>`
@@ -789,29 +661,23 @@ const hajeraCardsHtml = hajeraActivityList.length === 0
         
         let statusKey = 'unwatched';
         let statusBadge = '';
-        let statusIconCorner = '';
-        
         if (!isWatched) {
             statusKey = 'unwatched';
-            statusBadge = '<span class="activity-badge badge-unwatched"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Unwatched</span>';
-            statusIconCorner = '<span class="card-thumb-status-dot dot-unwatched" title="Not seen yet"></span>';
+            statusBadge = '<span class="activity-badge badge-unwatched">Unwatched</span>';
         } else if (isCompleted) {
             statusKey = 'completed';
-            statusBadge = '<span class="activity-badge badge-completed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11"><polyline points="20 6 9 17 4 12"/></svg> Completed</span>';
-            statusIconCorner = '<span class="card-thumb-status-dot dot-completed" title="Completed"></span>';
+            statusBadge = '<span class="activity-badge badge-completed">✓ Completed</span>';
         } else if (isInProgress) {
             statusKey = 'watching';
-            statusBadge = `<span class="activity-badge badge-progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Watching (${percent}%)</span>`;
-            statusIconCorner = '<span class="card-thumb-status-dot dot-watching" title="Currently watching"></span>';
+            statusBadge = `<span class="activity-badge badge-progress">⏱️ ${percent}%</span>`;
         } else {
             statusKey = 'opened';
-            statusBadge = '<span class="activity-badge badge-opened"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Opened</span>';
-            statusIconCorner = '<span class="card-thumb-status-dot dot-opened" title="Opened"></span>';
+            statusBadge = '<span class="activity-badge badge-opened">👁️ Opened</span>';
         }
 
-        const thumbImg = item.thumbnail
-            ? `<img src="/thumbnails/${h(item.thumbnail)}" alt="${h(item.title)}" class="hajera-card-thumb-img" loading="lazy" />`
-            : '<div class="hajera-card-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><polygon points="6,4 20,12 6,20"/></svg></div>';
+        const microThumb = item.thumbnail
+            ? `<img src="/thumbnails/${h(item.thumbnail)}" alt="" class="admin-micro-thumb" loading="lazy" />`
+            : '<div class="admin-micro-thumb-fallback">🎬</div>';
 
         const safeTitle = String(item.title || '');
         const durationText = item.formatted_duration || formatSeconds(dur);
@@ -821,10 +687,9 @@ const hajeraCardsHtml = hajeraActivityList.length === 0
             class="hajera-android-card status-${statusKey} ${isWatched ? 'is-watched' : 'is-unwatched'}" 
             data-status="${statusKey}" 
             data-title="${h(safeTitle.toLowerCase())}">
-            <div class="hajera-card-thumb-box">
-                ${thumbImg}
-                ${statusIconCorner}
-                <span class="hajera-thumb-duration">${h(durationText)}</span>
+            <div class="compact-thumb-wrap">
+                ${microThumb}
+                <span class="compact-micro-dur">${h(durationText)}</span>
             </div>
             <div class="hajera-card-content">
                 <div class="hajera-card-top-row">
@@ -852,33 +717,32 @@ const hajeraRows = hajeraActivityList.length === 0
         const percent = (isWatched && dur > 0) ? Math.min(100, Math.round((pos / dur) * 100)) : (isWatched && pos > 0 ? 100 : 0);
         const isCompleted = isWatched && dur > 0 && pos >= dur - 15;
         const isInProgress = isWatched && pos >= 10 && !isCompleted;
-        const isOpened = isWatched && pos < 10 && !isCompleted;
         
         let statusKey = 'unwatched';
         let statusBadge = '';
         if (!isWatched) {
             statusKey = 'unwatched';
-            statusBadge = '<span class="activity-badge badge-unwatched"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Unwatched</span>';
+            statusBadge = '<span class="activity-badge badge-unwatched">Unwatched</span>';
         } else if (isCompleted) {
             statusKey = 'completed';
-            statusBadge = '<span class="activity-badge badge-completed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg> Completed</span>';
+            statusBadge = '<span class="activity-badge badge-completed">Completed</span>';
         } else if (isInProgress) {
             statusKey = 'watching';
-            statusBadge = `<span class="activity-badge badge-progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Watching (${percent}%)</span>`;
+            statusBadge = `<span class="activity-badge badge-progress">Watching (${percent}%)</span>`;
         } else {
             statusKey = 'opened';
-            statusBadge = '<span class="activity-badge badge-opened"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Opened</span>';
+            statusBadge = '<span class="activity-badge badge-opened">Opened</span>';
         }
 
-        const thumbHtml = item.thumbnail
-            ? `<img src="/thumbnails/${h(item.thumbnail)}" alt="${h(item.title)}" class="admin-table-thumb-img" loading="lazy" />`
-            : '<div class="admin-table-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><polygon points="6,4 20,12 6,20"/></svg></div>';
+        const microThumb = item.thumbnail
+            ? `<img src="/thumbnails/${h(item.thumbnail)}" alt="" class="admin-micro-thumb" loading="lazy" />`
+            : '<div class="admin-micro-thumb-fallback">🎬</div>';
 
         return `
         <tr class="${isWatched ? 'row-watched' : 'row-unwatched'}" data-status="${statusKey}" data-title="${h(String(item.title || '').toLowerCase())}">
-            <td class="cell-video-thumb">
+            <td class="cell-video-thumb" style="width: 44px; padding: 6px 8px;">
                 <a href="/watch/${encodeURIComponent(item.video_id)}" class="admin-table-thumb-link">
-                    ${thumbHtml}
+                    ${microThumb}
                 </a>
             </td>
             <td class="cell-video-title">
@@ -897,9 +761,7 @@ const hajeraRows = hajeraActivityList.length === 0
             <td class="cell-duration">
                 <span class="activity-time-text">${isWatched ? `${h(formatSeconds(pos))} / ${h(item.formatted_duration || formatSeconds(dur))}` : (item.formatted_duration || '-')}</span>
             </td>
-            <td class="cell-status">
-                ${statusBadge}
-            </td>
+            <td class="cell-status">${statusBadge}</td>
             <td class="cell-last-watched">
                 <span class="activity-relative-time" title="${isWatched ? h(formatDate(watchedTime)) : 'Not watched yet'}">${isWatched ? h(timeAgo(watchedTime)) : '<span class="text-dim">Never</span>'}</span>
             </td>
@@ -907,7 +769,7 @@ const hajeraRows = hajeraActivityList.length === 0
     `;}).join('');
 
 const jobRows = activeJobs.length === 0
-    ? '<div class="admin-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="20 6 9 17 4 12"/></svg><span>No active import jobs running.</span></div>'
+    ? '<div class="admin-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="20 6 9 17 4 12"/></svg><span>No active import jobs running.</span></div>'
     : activeJobs.map(job => `
         <div class="admin-job-row">
             <div class="admin-job-top">
@@ -915,7 +777,7 @@ const jobRows = activeJobs.length === 0
                     <span class="job-status-pill status-${h(job.status)}">${h(job.status)}</span>
                     <strong>${h(job.title || 'Import job')}</strong>
                 </div>
-                ${job.queuePosition ? `<span class="job-queue-tag">#${h(job.queuePosition)} in queue</span>` : ''}
+                ${job.queuePosition ? `<span class="job-queue-tag">#${h(job.queuePosition)}</span>` : ''}
             </div>
             <div class="admin-job-progress">
                 <div class="admin-mini-bar"><span ${`style="width:${h(job.progress || 0)}%"`}></span></div>
@@ -925,7 +787,7 @@ const jobRows = activeJobs.length === 0
     `).join('');
 
 const failedRows = failedJobs.length === 0
-    ? '<div class="admin-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span>No failed imports in record.</span></div>'
+    ? '<div class="admin-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="22 4 12 14.01 9 11.01"/></svg><span>No failed imports.</span></div>'
     : failedJobs.map(job => `
         <div class="admin-job-row failed">
             <div class="admin-job-top">
@@ -937,61 +799,144 @@ const failedRows = failedJobs.length === 0
         </div>
     `).join('');
 
-const videoCardsHtml = recentVideos.length === 0
-    ? '<div class="admin-empty"><span>No videos uploaded yet.</span></div>'
-    : recentVideos.map(video => {
-        const uploader = video.uploaded_by || 'muaj';
-        const uploaderName = uploader === 'hajera' ? 'Hajera' : (uploader === 'muaj' ? 'Muaj' : uploader);
-        const thumbHtml = video.thumbnail
-            ? `<img src="/thumbnails/${h(video.thumbnail)}" alt="${h(video.title)}" class="admin-video-card-thumb-img" loading="lazy" />`
-            : '<div class="admin-video-card-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><polygon points="6,4 20,12 6,20"/></svg></div>';
-        return `
-        <a href="/watch/${encodeURIComponent(video.id)}" class="admin-video-android-card">
-            <div class="admin-video-thumb-wrap">
-                ${thumbHtml}
-                <span class="admin-video-dur-pill">${h(video.duration || '-')}</span>
-            </div>
-            <div class="admin-video-body">
-                <h4 class="admin-video-title">${h(video.title)}</h4>
-                <div class="admin-video-meta-tags">
-                    <div class="admin-user-cell">
-                        <div class="badge-avatar">${renderAvatar(uploader, 'admin-row-avatar')}</div>
-                        <span>${h(uploaderName)}</span>
-                    </div>
-                    <span class="admin-video-tag">${h(formatBytes(video.size))}</span>
-                    <span class="admin-video-tag quality-tag">${h(video.import_quality || 'HD')}</span>
-                    <span class="admin-video-time-tag">${h(timeAgo(video.uploaded_at))}</span>
-                </div>
-            </div>
-        </a>
-    `;}).join('');
-
-const videoRows = recentVideos.length === 0
+// Unified Master Video Rows (Single Source of Truth)
+const masterVideoRows = videoList.length === 0
     ? '<tr><td colspan="7" class="admin-empty-table">No videos in library yet.</td></tr>'
-    : recentVideos.map(video => {
-        const uploader = video.uploaded_by || 'muaj';
+    : videoList.map(v => {
+        const safeId = encodeURIComponent(v.id);
+        const safeFn = h(v.filename || '');
+        const safeSize = Number(v.size || 0);
+        const isOnR2 = !!v.onR2;
+        const uploader = v.uploaded_by || 'muaj';
         const uploaderName = uploader === 'hajera' ? 'Hajera' : (uploader === 'muaj' ? 'Muaj' : uploader);
+        
+        // Lookup Hajera watch status
+        const hj = hajeraProgressMap.get(v.id);
+        let hjStatusBadge = '<span class="activity-badge badge-unwatched">Unseen</span>';
+        if (hj && hj.hajera_watched_at) {
+            const hPos = Number(hj.position_seconds || 0);
+            const hDur = Number(hj.duration_seconds || 0);
+            const hPct = hDur > 0 ? Math.min(100, Math.round((hPos / hDur) * 100)) : 100;
+            if (hDur > 0 && hPos >= hDur - 15) {
+                hjStatusBadge = '<span class="activity-badge badge-completed">✓ Done</span>';
+            } else if (hPos >= 10) {
+                hjStatusBadge = `<span class="activity-badge badge-progress">⏱️ ${hPct}%</span>`;
+            } else {
+                hjStatusBadge = '<span class="activity-badge badge-opened">👁️ Opened</span>';
+            }
+        }
+
+        const microThumb = v.thumbnail
+            ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="" class="admin-micro-thumb" loading="lazy" />`
+            : '<div class="admin-micro-thumb-fallback">🎬</div>';
+
         return `
-        <tr>
-            <td><a href="/watch/${encodeURIComponent(video.id)}" class="admin-table-video-title"><strong>${h(video.title)}</strong></a></td>
-            <td><div class="admin-user-cell"><div class="badge-avatar">${renderAvatar(uploader, 'admin-row-avatar')}</div><span>${h(uploaderName)}</span></div></td>
-            <td><span class="admin-table-pill">${h(formatBytes(video.size))}</span></td>
-            <td><span class="admin-table-dur">${h(video.duration || '-')}</span></td>
-            <td><span class="admin-table-quality">${h(video.import_quality || 'Upload')}</span></td>
-            <td><span class="activity-relative-time" title="${h(formatDate(video.uploaded_at))}">${h(timeAgo(video.uploaded_at))}</span></td>
+        <tr data-title="${h(String(v.title || '').toLowerCase())}">
+            <td style="width: 44px; padding: 6px 8px;">
+                <a href="/watch/${safeId}" target="_blank" class="admin-table-thumb-link">${microThumb}</a>
+            </td>
             <td>
-                <form action="/delete/${encodeURIComponent(video.id)}" method="POST" data-confirm="Delete '${h(video.title)}'? This cannot be undone." style="margin: 0;">
-                    <input type="hidden" name="_csrf" value="${h(csrfToken)}">
-                    <button type="submit" class="btn btn-danger btn-xs" title="Delete video" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                <a href="/watch/${safeId}" target="_blank" class="admin-table-video-title">
+                    <strong>${h(v.title)}</strong>
+                </a>
+                <div class="video-meta-inline">
+                    <span class="meta-tag-mini">${h(v.duration || '-')}</span>
+                    <span class="meta-tag-mini">${h(v.import_quality || 'HD')}</span>
+                    <span class="meta-tag-mini">${timeAgo(v.uploaded_at)}</span>
+                </div>
+            </td>
+            <td>
+                <div class="admin-user-cell">
+                    <div class="badge-avatar">${renderAvatar(uploader, 'admin-row-avatar')}</div>
+                    <span>${h(uploaderName)}</span>
+                </div>
+            </td>
+            <td><span class="admin-table-pill">${formatBytes(safeSize)}</span></td>
+            <td>
+                ${isOnR2 
+                    ? '<span class="compact-chip chip-r2">⚡ R2 Edge</span>' 
+                    : `<button type="button" class="btn-android-sync-r2 btn-xs" onclick="syncSingleVideo('${safeId}', '${safeFn}', ${safeSize}, this)">⚡ Sync R2</button>`}
+            </td>
+            <td>${hjStatusBadge}</td>
+            <td style="text-align: right;">
+                <div class="admin-row-actions">
+                    <a href="/watch/${safeId}" target="_blank" class="btn btn-ghost btn-xs" title="Watch Video">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
                         </svg>
-                        <span>Delete</span>
-                    </button>
-                </form>
+                    </a>
+                    <form action="/delete/${safeId}" method="POST" data-confirm="Delete '${h(v.title)}'? This cannot be undone." style="display:inline; margin:0;">
+                        <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                        <button type="submit" class="btn btn-danger btn-xs" title="Delete video">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
             </td>
         </tr>
+    `;}).join('');
+
+const masterVideoCardsHtml = videoList.length === 0
+    ? '<div class="admin-empty"><span>No videos uploaded yet.</span></div>'
+    : videoList.map(v => {
+        const safeId = encodeURIComponent(v.id);
+        const safeFn = h(v.filename || '');
+        const safeSize = Number(v.size || 0);
+        const isOnR2 = !!v.onR2;
+        const uploader = v.uploaded_by || 'muaj';
+        const uploaderName = uploader === 'hajera' ? 'Hajera' : (uploader === 'muaj' ? 'Muaj' : uploader);
+
+        const hj = hajeraProgressMap.get(v.id);
+        let hjStatusBadge = '<span class="activity-badge badge-unwatched">Unseen</span>';
+        if (hj && hj.hajera_watched_at) {
+            const hPos = Number(hj.position_seconds || 0);
+            const hDur = Number(hj.duration_seconds || 0);
+            const hPct = hDur > 0 ? Math.min(100, Math.round((hPos / hDur) * 100)) : 100;
+            if (hDur > 0 && hPos >= hDur - 15) {
+                hjStatusBadge = '<span class="activity-badge badge-completed">✓ Done</span>';
+            } else if (hPos >= 10) {
+                hjStatusBadge = `<span class="activity-badge badge-progress">⏱️ ${hPct}%</span>`;
+            } else {
+                hjStatusBadge = '<span class="activity-badge badge-opened">👁️ Opened</span>';
+            }
+        }
+
+        const microThumb = v.thumbnail
+            ? `<img src="/thumbnails/${h(v.thumbnail)}" alt="" class="admin-micro-thumb" loading="lazy" />`
+            : '<div class="admin-micro-thumb-fallback">🎬</div>';
+
+        return `
+        <div class="admin-master-video-card" data-title="${h(String(v.title || '').toLowerCase())}">
+            <div class="master-card-top">
+                <div class="compact-thumb-wrap">
+                    ${microThumb}
+                    <span class="compact-micro-dur">${h(v.duration || '-')}</span>
+                </div>
+                <div class="master-card-info">
+                    <a href="/watch/${safeId}" class="master-card-title" target="_blank">${h(v.title)}</a>
+                    <div class="master-card-meta">
+                        <span>${h(uploaderName)}</span> • <span>${formatBytes(safeSize)}</span> • <span>${timeAgo(v.uploaded_at)}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="master-card-bottom">
+                <div class="master-card-badges">
+                    ${hjStatusBadge}
+                    ${isOnR2 ? '<span class="compact-chip chip-r2">⚡ R2</span>' : '<span class="compact-chip chip-vps-only">⚠️ VPS</span>'}
+                </div>
+                <div class="master-card-actions">
+                    ${!isOnR2 ? `<button type="button" class="btn-android-sync-r2 btn-xs" onclick="syncSingleVideo('${safeId}', '${safeFn}', ${safeSize}, this)">Sync</button>` : ''}
+                    <a href="/watch/${safeId}" class="btn btn-ghost btn-xs" target="_blank">Watch</a>
+                    <form action="/delete/${safeId}" method="POST" data-confirm="Delete '${h(v.title)}'?" style="margin:0;">
+                        <input type="hidden" name="_csrf" value="${h(csrfToken)}">
+                        <button type="submit" class="btn btn-danger btn-xs">Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
     `;}).join('');
 %>
 <%- include('layout', { pageTitle: 'Admin Control Center', body: `
@@ -1001,7 +946,7 @@ const videoRows = recentVideos.length === 0
         <div class="ambient-orb orb-2"></div>
     </div>
 
-    <!-- Android Native App Bar -->
+    <!-- Android App Bar Header -->
     <header class="android-app-bar" id="mainNavbar">
         <div class="app-bar-left">
             <a href="/dashboard" class="app-bar-back-btn" title="Back to Library">
@@ -1062,16 +1007,16 @@ const videoRows = recentVideos.length === 0
     </header>
 
     <main class="main-content admin-main-content">
-        <!-- Status & Cleanup Toolbar Banner -->
+        <!-- Quick Status & Cleanup Toolbar Banner -->
         <div class="admin-quick-toolbar">
             <div class="quick-toolbar-info">
                 <span class="live-dot-indicator"></span>
-                <span><strong>${h(videoList.length)}</strong> Videos stored • <strong>${h(formatBytes(safeStats.storageBytes || 0))}</strong> Total</span>
+                <span><strong>${h(videoList.length)}</strong> Videos • <strong>${h(formatBytes(safeStats.storageBytes || 0))}</strong> Storage • <strong>${h(detailedSessions.length)}</strong> Sessions</span>
             </div>
             <form action="/admin/cleanup" method="POST" data-confirm="Clean up orphan upload files that are not referenced in the database?">
                 <input type="hidden" name="_csrf" value="${h(csrfToken)}">
                 <button type="submit" class="btn-cleanup-compact" title="Remove unreferenced files">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                         <path d="M3 6h18"/>
                         <path d="M8 6V4h8v2"/>
                         <path d="M19 6l-1 14H6L5 6"/>
@@ -1083,97 +1028,178 @@ const videoRows = recentVideos.length === 0
 
         ${cleanupHtml}
         ${accessMsgHtml}
-        ${vpsMonitorHtml}
-        ${r2HubHtml}
 
-        <!-- 6-Tile Android Stat Grid -->
-        <section class="admin-stat-tiles-grid">
-            <div class="stat-tile tile-videos">
-                <div class="stat-tile-icon icon-cyan">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-                        <polygon points="23 7 16 12 23 17 23 7"/>
-                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                    </svg>
-                </div>
-                <div class="stat-tile-info">
-                    <span class="stat-tile-label">Videos</span>
-                    <strong class="stat-tile-val">${h(videoList.length)}</strong>
-                </div>
-            </div>
+        <!-- Modern Segmented Admin Tab Navigation -->
+        <nav class="admin-nav-tabs" id="adminNavTabs" role="tablist">
+            <button type="button" class="admin-tab-btn active" data-tab="overview" role="tab" aria-selected="true" id="tabBtn-overview">
+                <span class="tab-icon">📊</span>
+                <span class="tab-label">Overview</span>
+            </button>
+            <button type="button" class="admin-tab-btn" data-tab="hajera" role="tab" aria-selected="false" id="tabBtn-hajera">
+                <span class="tab-icon">💖</span>
+                <span class="tab-label">Hajera Tracker</span>
+                ${(presence.isWatching || presence.isOnline) ? '<span class="tab-badge-live">LIVE</span>' : ''}
+            </button>
+            <button type="button" class="admin-tab-btn" data-tab="storage" role="tab" aria-selected="false" id="tabBtn-storage">
+                <span class="tab-icon">☁️</span>
+                <span class="tab-label">R2 Storage</span>
+                ${r2Stats.unsyncedCount > 0 ? `<span class="tab-badge-warn">${r2Stats.unsyncedCount}</span>` : ''}
+            </button>
+            <button type="button" class="admin-tab-btn" data-tab="sessions" role="tab" aria-selected="false" id="tabBtn-sessions">
+                <span class="tab-icon">🛡️</span>
+                <span class="tab-label">Sessions</span>
+                <span class="tab-badge-count" id="tabSessionCountBadge">${detailedSessions.length}</span>
+            </button>
+            <button type="button" class="admin-tab-btn" data-tab="videos" role="tab" aria-selected="false" id="tabBtn-videos">
+                <span class="tab-icon">📁</span>
+                <span class="tab-label">Videos</span>
+                <span class="tab-badge-count">${videoList.length}</span>
+            </button>
+        </nav>
 
-            <div class="stat-tile tile-storage">
-                <div class="stat-tile-icon icon-amber">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-                        <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                    </svg>
-                </div>
-                <div class="stat-tile-info">
-                    <span class="stat-tile-label">Storage</span>
-                    <strong class="stat-tile-val">${h(formatBytes(stats.storageBytes || 0))}</strong>
-                </div>
-            </div>
+        <!-- ================================================================= -->
+        <!-- TAB 1: OVERVIEW & TELEMETRY                                       -->
+        <!-- ================================================================= -->
+        <div class="admin-tab-pane active" id="tab-overview" role="tabpanel">
+            ${vpsMonitorHtml}
 
-            <div class="stat-tile tile-comments">
-                <div class="stat-tile-icon icon-emerald">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
+            <!-- rrweb Session Replay — Live DOM Recording & Playback -->
+            <section class="replay-section-card" id="replaySection">
+                <div class="replay-section-header">
+                    <div class="replay-header-left">
+                        <div class="replay-icon-wrap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                                <circle cx="12" cy="12" r="10"/>
+                                <circle cx="12" cy="12" r="3"/>
+                                <line x1="12" y1="2" x2="12" y2="6"/>
+                                <line x1="12" y1="18" x2="12" y2="22"/>
+                            </svg>
+                            <span class="replay-icon-glow"></span>
+                        </div>
+                        <div class="replay-title-group">
+                            <div class="replay-badge-row">
+                                <span class="replay-feature-badge">👁️ Session Replay</span>
+                                <span class="replay-live-pill"><span class="replay-live-dot"></span> rrweb</span>
+                            </div>
+                            <h2>Live Screen Replay</h2>
+                            <p class="replay-title-sub">Watch Hajera's live browser session in real-time — DOM replay via rrweb</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="stat-tile-info">
-                    <span class="stat-tile-label">Comments</span>
-                    <strong class="stat-tile-val">${h(stats.commentsCount || 0)}</strong>
-                </div>
-            </div>
+                <div class="replay-section-body">
+                    <!-- Online Users List -->
+                    <div id="replayOnlineUsers">
+                        <div class="replay-empty-state">
+                            <div class="replay-empty-icon">📡</div>
+                            <p>Checking online users...</p>
+                        </div>
+                    </div>
 
-            <div class="stat-tile tile-sessions">
-                <div class="stat-tile-icon icon-violet">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                        <circle cx="9" cy="7" r="4"/>
-                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </svg>
+                    <!-- Replay Viewer (hidden until watching) -->
+                    <div class="replay-viewer-container" id="replayViewerContainer">
+                        <div class="replay-viewer-header">
+                            <div class="replay-viewer-title-wrap">
+                                <h3 id="replayViewerTitle">Live Session</h3>
+                                <div class="replay-connection-badge" id="replayConnectionBadge"></div>
+                            </div>
+                            <div class="replay-viewer-controls">
+                                <div class="replay-latency-indicator" id="replayLatencyIndicator"></div>
+                                <button type="button" class="btn-replay-close" onclick="window._replayViewer && window._replayViewer.stopWatching()">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+                                    <span>Stop Watching</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="replay-player-wrap" id="replayPlayerWrap"></div>
+                    </div>
                 </div>
-                <div class="stat-tile-info">
-                    <span class="stat-tile-label">Sessions</span>
-                    <strong class="stat-tile-val">${h(stats.sessionCount || 0)}</strong>
-                </div>
-            </div>
+            </section>
 
-            <div class="stat-tile tile-progress">
-                <div class="stat-tile-icon icon-rose">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-                        <circle cx="12" cy="12" r="10"/>
-                        <polyline points="12 6 12 12 16 14"/>
-                    </svg>
+            <!-- 6-Tile Key Stats Grid -->
+            <section class="admin-stat-tiles-grid">
+                <div class="stat-tile tile-videos">
+                    <div class="stat-tile-icon icon-cyan">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <polygon points="23 7 16 12 23 17 23 7"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                    </div>
+                    <div class="stat-tile-info">
+                        <span class="stat-tile-label">Videos</span>
+                        <strong class="stat-tile-val">${h(videoList.length)}</strong>
+                    </div>
                 </div>
-                <div class="stat-tile-info">
-                    <span class="stat-tile-label">Watch Events</span>
-                    <strong class="stat-tile-val">${h(stats.progressCount || 0)}</strong>
-                </div>
-            </div>
 
-            <div class="stat-tile tile-orphans">
-                <div class="stat-tile-icon icon-coral">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-                        <path d="M3 6h18"/>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                    </svg>
+                <div class="stat-tile tile-storage">
+                    <div class="stat-tile-icon icon-amber">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                        </svg>
+                    </div>
+                    <div class="stat-tile-info">
+                        <span class="stat-tile-label">Storage</span>
+                        <strong class="stat-tile-val">${h(formatBytes(stats.storageBytes || 0))}</strong>
+                    </div>
                 </div>
-                <div class="stat-tile-info">
-                    <span class="stat-tile-label">Orphan Files</span>
-                    <strong class="stat-tile-val">${h((stats.orphanVideos ? stats.orphanVideos.length : 0) + (stats.orphanThumbnails ? stats.orphanThumbnails.length : 0))}</strong>
-                </div>
-            </div>
-        </section>
 
-        <!-- HAJERA'S WATCH ACTIVITY SHOWCASE SECTION -->
-        <section class="admin-section-card hajera-tracker-section">
-            <!-- Hajera Hero Engagement Banner -->
-            <div class="hajera-hero-widget">
-                <div class="hajera-hero-bg-glow"></div>
+                <div class="stat-tile tile-comments">
+                    <div class="stat-tile-icon icon-emerald">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </div>
+                    <div class="stat-tile-info">
+                        <span class="stat-tile-label">Comments</span>
+                        <strong class="stat-tile-val">${h(stats.commentsCount || 0)}</strong>
+                    </div>
+                </div>
+
+                <div class="stat-tile tile-sessions">
+                    <div class="stat-tile-icon icon-violet">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                    </div>
+                    <div class="stat-tile-info">
+                        <span class="stat-tile-label">Sessions</span>
+                        <strong class="stat-tile-val">${h(stats.sessionCount || 0)}</strong>
+                    </div>
+                </div>
+
+                <div class="stat-tile tile-progress">
+                    <div class="stat-tile-icon icon-rose">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </div>
+                    <div class="stat-tile-info">
+                        <span class="stat-tile-label">Watch Events</span>
+                        <strong class="stat-tile-val">${h(stats.progressCount || 0)}</strong>
+                    </div>
+                </div>
+
+                <div class="stat-tile tile-orphans">
+                    <div class="stat-tile-icon icon-coral">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <path d="M3 6h18"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                    </div>
+                    <div class="stat-tile-info">
+                        <span class="stat-tile-label">Orphan Files</span>
+                        <strong class="stat-tile-val">${h((stats.orphanVideos ? stats.orphanVideos.length : 0) + (stats.orphanThumbnails ? stats.orphanThumbnails.length : 0))}</strong>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Live Hajera Presence Widget -->
+            <section class="admin-section-card hajera-overview-widget">
                 <div class="hajera-hero-main">
                     <div class="hajera-hero-avatar-wrap">
                         <div class="hajera-hero-avatar">
@@ -1184,61 +1210,345 @@ const videoRows = recentVideos.length === 0
                     <div class="hajera-hero-info">
                         <div class="hajera-hero-tag">
                             <span class="heart-pulse">💖</span>
-                            <span class="tag-title">Hajera's Watch Tracker</span>
+                            <span class="tag-title">Hajera Presence</span>
                             ${presenceBadge}
-                            <span class="hero-last-active" id="hajeraLastActiveText" title="Last Active Timestamp">⏱️ ${h(lastActiveText)}</span>
-                            <span class="live-sync-indicator" title="Live Auto-Sync Active"><span class="sync-dot"></span> Live 4s</span>
+                            <span class="hero-last-active" id="hajeraLastActiveText">⏱️ ${h(lastActiveText)}</span>
                         </div>
-                        <h2 class="hajera-hero-title">Viewing Habits & Live Presence</h2>
-                        <p class="hajera-hero-desc" id="hajeraHeroDesc">${h(watchedCount)} of ${h(totalVideos)} library videos explored (${h(overallPercent)}%) ${presence.deviceInfo ? '• ' + h(presence.deviceInfo) : ''}</p>
+                        <h3 class="hajera-hero-title" style="font-size:1.05rem; margin:2px 0;">Viewing Activity &amp; Live Status</h3>
+                        <p class="hajera-hero-desc" id="hajeraHeroDesc">${h(watchedCount)} of ${h(totalVideos)} videos (${h(overallPercent)}%) ${presence.deviceInfo ? '• ' + h(presence.deviceInfo) : ''}</p>
                     </div>
                 </div>
-
-                <!-- Live Playing Card (Active video playback) -->
                 ${liveVideoPlayingHtml}
+            </section>
 
-                <div class="hajera-hero-metrics">
-                    <div class="hero-progress-block">
-                        <div class="hero-progress-labels">
-                            <span>Total Library Engagement</span>
-                            <strong>${h(overallPercent)}%</strong>
+            <!-- Import Queue & Failed Imports -->
+            <section class="admin-jobs-grid">
+                <div class="admin-section-card">
+                    <div class="section-card-header">
+                        <div class="card-title-group">
+                            <div class="icon-bubble icon-cyan">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                            </div>
+                            <h2>Import Queue</h2>
                         </div>
-                        <div class="hero-progress-track">
-                            <div class="hero-progress-fill" ${`style="width:${h(overallPercent)}%"`}></div>
+                        <span class="count-pill">${h(activeJobs.length)} active</span>
+                    </div>
+                    <div class="jobs-list">${jobRows}</div>
+                </div>
+
+                <div class="admin-section-card">
+                    <div class="section-card-header">
+                        <div class="card-title-group">
+                            <div class="icon-bubble icon-coral">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="15" y1="9" x2="9" y2="15"/>
+                                    <line x1="9" y1="9" x2="15" y2="15"/>
+                                </svg>
+                            </div>
+                            <h2>Failed Imports</h2>
+                        </div>
+                        <span class="count-pill error-pill">${h(failedJobs.length)} recent</span>
+                    </div>
+                    <div class="jobs-list">${failedRows}</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- TAB 2: HAJERA'S WATCH ACTIVITY TRACKER                             -->
+        <!-- ================================================================= -->
+        <div class="admin-tab-pane" id="tab-hajera" role="tabpanel">
+            <section class="admin-section-card hajera-tracker-section">
+                <!-- Hajera Hero Engagement Banner -->
+                <div class="hajera-hero-widget">
+                    <div class="hajera-hero-bg-glow"></div>
+                    <div class="hajera-hero-main">
+                        <div class="hajera-hero-avatar-wrap">
+                            <div class="hajera-hero-avatar">
+                                ${renderAvatar('hajera', 'hajera-avatar-hero')}
+                            </div>
+                            <div class="hajera-hero-online-dot ${presenceDotClass}" id="hajeraHeroOnlineDot2" title="${h(presence.status)}"></div>
+                        </div>
+                        <div class="hajera-hero-info">
+                            <div class="hajera-hero-tag">
+                                <span class="heart-pulse">💖</span>
+                                <span class="tag-title">Hajera's Watch Tracker</span>
+                                <span class="live-sync-indicator" title="Live Auto-Sync Active"><span class="sync-dot"></span> Live 4s</span>
+                            </div>
+                            <h2 class="hajera-hero-title">Viewing Habits &amp; Activity</h2>
+                            <p class="hajera-hero-desc">${h(watchedCount)} of ${h(totalVideos)} library videos explored (${h(overallPercent)}%)</p>
                         </div>
                     </div>
-                    <div class="hero-mini-stats hero-stats-6">
-                        <div class="hero-mini-stat stat-watchtime" title="Total real watch time">
-                            <span class="mini-num" id="hajeraTotalWatchTime">${h(watchStats.totalFormatted)}</span>
-                            <span class="mini-label">Total Time</span>
+
+                    <div class="hajera-hero-metrics">
+                        <div class="hero-progress-block">
+                            <div class="hero-progress-labels">
+                                <span>Library Engagement</span>
+                                <strong>${h(overallPercent)}%</strong>
+                            </div>
+                            <div class="hero-progress-track">
+                                <div class="hero-progress-fill" ${`style="width:${h(overallPercent)}%"`}></div>
+                            </div>
                         </div>
-                        <div class="hero-mini-stat stat-todaytime" title="Watch time today">
-                            <span class="mini-num" id="hajeraTodayWatchTime">${h(watchStats.todayFormatted)}</span>
-                            <span class="mini-label">Today</span>
-                        </div>
-                        <div class="hero-mini-stat stat-complete">
-                            <span class="mini-num">${h(completedCount)}</span>
-                            <span class="mini-label">Completed</span>
-                        </div>
-                        <div class="hero-mini-stat stat-watching">
-                            <span class="mini-num">${h(inProgressCount)}</span>
-                            <span class="mini-label">Watching</span>
-                        </div>
-                        <div class="hero-mini-stat stat-opened">
-                            <span class="mini-num">${h(openedCount)}</span>
-                            <span class="mini-label">Opened</span>
-                        </div>
-                        <div class="hero-mini-stat stat-unwatched">
-                            <span class="mini-num">${h(unwatchedCount)}</span>
-                            <span class="mini-label">Unwatched</span>
+                        <div class="hero-mini-stats hero-stats-6">
+                            <div class="hero-mini-stat stat-watchtime" title="Total real watch time">
+                                <span class="mini-num" id="hajeraTotalWatchTime">${h(watchStats.totalFormatted)}</span>
+                                <span class="mini-label">Total Time</span>
+                            </div>
+                            <div class="hero-mini-stat stat-todaytime" title="Watch time today">
+                                <span class="mini-num" id="hajeraTodayWatchTime">${h(watchStats.todayFormatted)}</span>
+                                <span class="mini-label">Today</span>
+                            </div>
+                            <div class="hero-mini-stat stat-complete">
+                                <span class="mini-num">${h(completedCount)}</span>
+                                <span class="mini-label">Completed</span>
+                            </div>
+                            <div class="hero-mini-stat stat-watching">
+                                <span class="mini-num">${h(inProgressCount)}</span>
+                                <span class="mini-label">Watching</span>
+                            </div>
+                            <div class="hero-mini-stat stat-opened">
+                                <span class="mini-num">${h(openedCount)}</span>
+                                <span class="mini-label">Opened</span>
+                            </div>
+                            <div class="hero-mini-stat stat-unwatched">
+                                <span class="mini-num">${h(unwatchedCount)}</span>
+                                <span class="mini-label">Unwatched</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- ========================================================
-                 SESSION & ACCESS MANAGEMENT CENTER (MUAJ & HAJERA)
-                 ======================================================== -->
+                <!-- Interactive Android Filter Chips Carousel -->
+                <div class="hajera-filter-carousel">
+                    <div class="hajera-chips-track" id="hajeraFilterChips">
+                        <button type="button" class="hajera-chip active" data-filter="all">
+                            <span class="chip-label">All</span>
+                            <span class="chip-count">${h(totalVideos)}</span>
+                        </button>
+                        <button type="button" class="hajera-chip chip-watching" data-filter="watching">
+                            <span class="chip-dot dot-watching"></span>
+                            <span class="chip-label">Watching</span>
+                            <span class="chip-count">${h(inProgressCount)}</span>
+                        </button>
+                        <button type="button" class="hajera-chip chip-completed" data-filter="completed">
+                            <span class="chip-dot dot-completed"></span>
+                            <span class="chip-label">Completed</span>
+                            <span class="chip-count">${h(completedCount)}</span>
+                        </button>
+                        <button type="button" class="hajera-chip chip-opened" data-filter="opened">
+                            <span class="chip-dot dot-opened"></span>
+                            <span class="chip-label">Opened</span>
+                            <span class="chip-count">${h(openedCount)}</span>
+                        </button>
+                        <button type="button" class="hajera-chip chip-unwatched" data-filter="unwatched">
+                            <span class="chip-dot dot-unwatched"></span>
+                            <span class="chip-label">Unwatched</span>
+                            <span class="chip-count">${h(unwatchedCount)}</span>
+                        </button>
+                        <button type="button" class="hajera-chip chip-timeline" data-filter="timeline">
+                            <span class="chip-label">📜 Activity Timeline</span>
+                            <span class="chip-count" id="hajeraTimelineCount">${h(activityTimeline.length)}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Search / Quick Filter Bar -->
+                <div class="hajera-search-bar" id="hajeraSearchBarWrap">
+                    <div class="hajera-search-input-wrap">
+                        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <circle cx="11" cy="11" r="8"/>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                        <input type="text" id="hajeraSearchInput" class="hajera-search-input" placeholder="Search Hajera's video logs..." aria-label="Search Hajera's video logs" autocomplete="off" />
+                        <button type="button" class="search-clear-btn" id="hajeraSearchClear" style="display:none;" title="Clear search" aria-label="Clear search">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="hajera-search-status" id="hajeraFilterCount">Showing <strong>${h(hajeraActivityList.length)}</strong> of ${h(hajeraActivityList.length)}</div>
+                </div>
+
+                <!-- Activity Timeline Feed View -->
+                <div class="hajera-timeline-feed" id="hajeraTimelineFeed" style="display: none;">
+                    <div class="timeline-feed-header">
+                        <h4>Real-time Activity &amp; Session History</h4>
+                        <span class="timeline-feed-sub">Live audit trail of playback, logins, comments &amp; presence</span>
+                    </div>
+                    <div class="timeline-list" id="hajeraTimelineList">
+                        ${timelineHtml}
+                    </div>
+                </div>
+
+                <!-- Mobile Android Compact Cards View -->
+                <div class="hajera-android-cards-list" id="hajeraCardsList">
+                    ${hajeraCardsHtml}
+                </div>
+
+                <div class="hajera-filtered-empty" id="hajeraFilteredEmpty" style="display:none;">
+                    <div class="filtered-empty-icon">🔍</div>
+                    <h4>No matching videos found</h4>
+                    <p>Try switching filters or changing your search terms.</p>
+                    <button type="button" class="btn btn-ghost btn-sm" id="hajeraResetFilterBtn">Reset Filter</button>
+                </div>
+
+                <!-- Desktop High-Density Table -->
+                <div class="admin-table-wrap hajera-desktop-table">
+                    <table class="admin-table hajera-activity-table" id="hajeraDesktopTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 44px;">Preview</th>
+                                <th>Video Title</th>
+                                <th style="width: 140px;">Progress</th>
+                                <th style="width: 130px;">Time Spent</th>
+                                <th style="width: 110px;">Status</th>
+                                <th style="width: 110px;">Last Active</th>
+                            </tr>
+                        </thead>
+                        <tbody>${hajeraRows}</tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- TAB 3: CLOUDFLARE R2 & VPS STORAGE TRACKER                        -->
+        <!-- ================================================================= -->
+        <div class="admin-tab-pane" id="tab-storage" role="tabpanel">
+            <section class="admin-section-card r2-storage-hub-section" id="r2StorageHub">
+                <div class="section-card-header">
+                    <div class="card-title-group">
+                        <div class="icon-bubble icon-cyan">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+                                <path d="M12 13v6"/><path d="m9 16 3-3 3 3"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2>Cloudflare R2 &amp; VPS Storage Tracker</h2>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; color: #888;">Real-time edge CDN sync status &amp; video distribution</p>
+                        </div>
+                    </div>
+                    <div class="r2-hub-actions" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnCfPurgeCache" onclick="purgeEdgeCache(this)" title="Purge Cloudflare global edge cache on demand" style="border: 1px solid rgba(243, 128, 32, 0.3); color: #f38020;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                <path d="M3 3v5h5"/>
+                            </svg>
+                            <span>Purge Cache</span>
+                        </button>
+
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnR2ScanBucket" onclick="scanR2Bucket(this)" title="Scan live R2 bucket inventory and detect orphan files">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                <circle cx="11" cy="11" r="8"/>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                            </svg>
+                            <span>Scan Bucket</span>
+                        </button>
+
+                        ${r2Stats.unsyncedCount > 0 ? `
+                            <button type="button" class="btn btn-primary btn-sm btn-r2-sync-all" id="btnR2SyncAll" onclick="syncAllR2(this)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                <span>Sync All (${h(r2Stats.unsyncedCount)})</span>
+                            </button>
+                        ` : `
+                            <span class="r2-all-synced-badge">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                                <span>100% Synced</span>
+                            </span>
+                        `}
+                    </div>
+                </div>
+
+                <!-- Live R2 Bucket Scan Results Box -->
+                <div id="r2ScanResultsBox" style="display:none; margin-bottom:16px; padding:14px 18px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);"></div>
+
+                <!-- 3-Pillar Storage Summary Tiles -->
+                <div class="r2-storage-tiles-grid">
+                    <div class="r2-tile tile-r2-cdn">
+                        <div class="r2-tile-header">
+                            <span class="r2-tile-badge badge-cdn">Cloudflare R2 CDN</span>
+                            <span class="r2-tile-pct">${h(r2Stats.r2Percent)}% Synced</span>
+                        </div>
+                        <div class="r2-tile-main">
+                            <strong class="r2-tile-count" id="r2VideoCountText">${h(r2Stats.r2Count)} / ${h(r2Stats.totalVideos)}</strong>
+                            <span class="r2-tile-sub">Videos on R2</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="r2-progress-fill" ${`style="width:${h(r2Stats.r2Percent)}%"`}></div>
+                        </div>
+                        <div class="r2-tile-footer">
+                            <span>CDN Size: <strong id="r2CdnSizeText">${h(formatBytes(r2Stats.r2TotalBytes))}</strong></span>
+                            <span>Bandwidth: <strong style="color:#22c55e;">Zero VPS Cost</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="r2-tile tile-vps-disk">
+                        <div class="r2-tile-header">
+                            <span class="r2-tile-badge badge-vps">VPS Local Disk</span>
+                            <span class="r2-tile-pct">100% on Disk</span>
+                        </div>
+                        <div class="r2-tile-main">
+                            <strong class="r2-tile-count">${h(r2Stats.vpsCount)} / ${h(r2Stats.totalVideos)}</strong>
+                            <span class="r2-tile-sub">Videos on VPS</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 100%;"></div>
+                        </div>
+                        <div class="r2-tile-footer">
+                            <span>Disk Size: <strong>${h(formatBytes(r2Stats.vpsTotalBytes))}</strong></span>
+                            <span>Role: <strong>Master Copy</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="r2-tile tile-sync-health">
+                        <div class="r2-tile-header">
+                            <span class="r2-tile-badge ${r2Stats.unsyncedCount === 0 ? 'badge-ok' : 'badge-warn'}">
+                                ${r2Stats.unsyncedCount === 0 ? '✓ Fully Synced' : '⚠️ Sync Pending'}
+                            </span>
+                        </div>
+                        <div class="r2-tile-main">
+                            <strong class="r2-tile-count ${r2Stats.unsyncedCount > 0 ? 'color-warn' : 'color-ok'}">${h(r2Stats.unsyncedCount)}</strong>
+                            <span class="r2-tile-sub">Videos Missing from R2</span>
+                        </div>
+                        <div class="r2-tile-desc">
+                            ${r2Stats.unsyncedCount === 0
+                                ? 'All videos are served via Cloudflare edge CDN with zero VPS bandwidth.'
+                                : `${h(r2Stats.unsyncedCount)} video(s) streaming directly from VPS disk.`}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Compact R2 Video Distribution List -->
+                <div class="r2-android-card-list">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding: 6px 0 10px 0;">
+                        <span style="font-size:0.78rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">
+                            ${unsyncedVideos.length > 0 ? `⚡ Unsynced Queue (${unsyncedVideos.length})` : '⚡ Edge Distribution Status'}
+                        </span>
+                        <button type="button" class="btn btn-ghost btn-xs" onclick="switchAdminTab('videos')">
+                            <span>Open Master Video Manager →</span>
+                        </button>
+                    </div>
+                    ${r2UnsyncedListHtml}
+                </div>
+            </section>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- TAB 4: SESSIONS & SECURITY MANAGEMENT                             -->
+        <!-- ================================================================= -->
+        <div class="admin-tab-pane" id="tab-sessions" role="tabpanel">
             <div class="access-control-card ${hajeraBlocked ? 'is-blocked' : ''}" id="sessionsManagementSection">
                 <div class="access-control-header">
                     <div class="access-control-title-group">
@@ -1280,7 +1590,7 @@ const videoRows = recentVideos.length === 0
                                 </div>
                                 <span class="access-box-pill ${hajeraBlocked ? 'pill-blocked' : 'pill-active'}">${hajeraBlocked ? 'Blocked' : 'Allowed'}</span>
                             </div>
-                            <p class="access-box-desc">Hajera-র সমস্ত active session ধ্বংস করুন অথবা ওয়েবসাইটের অ্যাক্সেস সাময়িকভাবে রেস্ট্রিক্ট করুন।</p>
+                            <p class="access-box-desc">Hajera-র সমস্ত active session ধ্বংস করুন অথবা সাময়িকভাবে এক্সেস রেস্ট্রিক্ট করুন।</p>
                             
                             <div class="access-box-btns">
                                 <form action="/admin/hajera/logout-sessions" method="POST" data-confirm="Hajera-র সব active sessions এখনই logout করতে চান?">
@@ -1331,7 +1641,7 @@ const videoRows = recentVideos.length === 0
                                 </div>
                                 <span class="access-box-pill pill-muaj">Admin</span>
                             </div>
-                            <p class="access-box-desc">অন্যান্য ডিভাইস (মোবাইল/অন্যান্য ব্রাউজার) থেকে Muaj-এর সেশন বন্ধ করুন অথবা জরুরি ফোর্স লগআউট করুন।</p>
+                            <p class="access-box-desc">অন্যান্য ডিভাইস থেকে Muaj-এর সেশন বন্ধ করুন অথবা জরুরি ফোর্স লগআউট করুন।</p>
                             
                             <div class="access-box-btns">
                                 <form action="/admin/muaj/logout-other-sessions" method="POST" data-confirm="Muaj-এর অন্যান্য সব ডিভাইস থেকে সেশন লগআউট করতে চান? আপনার বর্তমান ডিভাইসটি সচল থাকবে।">
@@ -1374,7 +1684,7 @@ const videoRows = recentVideos.length === 0
                                 </div>
                                 <div>
                                     <h4 class="detailed-sessions-heading">Connected Device Sessions</h4>
-                                    <span class="detailed-sessions-sub" id="detailedSessionsSub">Total <strong id="detailedSessionsCount">${h(detailedSessions.length)}</strong> active session${detailedSessions.length !== 1 ? 's' : ''} currently authenticated</span>
+                                    <span class="detailed-sessions-sub" id="detailedSessionsSub">Total <strong id="detailedSessionsCount">${h(detailedSessions.length)}</strong> active session${detailedSessions.length !== 1 ? 's' : ''}</span>
                                 </div>
                             </div>
                         </div>
@@ -1384,13 +1694,13 @@ const videoRows = recentVideos.length === 0
                             <table class="admin-table sessions-table" id="sessionsDesktopTable">
                                 <thead>
                                     <tr>
-                                        <th style="width: 150px;">User</th>
+                                        <th style="width: 140px;">User</th>
                                         <th>Device / Browser</th>
-                                        <th style="width: 140px;">IP Address</th>
-                                        <th style="width: 150px;">Login Time</th>
-                                        <th style="width: 130px;">Last Active</th>
-                                        <th style="width: 150px;">Status</th>
-                                        <th style="width: 120px; text-align: right;">Action</th>
+                                        <th style="width: 130px;">IP Address</th>
+                                        <th style="width: 140px;">Login Time</th>
+                                        <th style="width: 120px;">Last Active</th>
+                                        <th style="width: 140px;">Status</th>
+                                        <th style="width: 110px; text-align: right;">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="sessionsTableBody">
@@ -1406,181 +1716,64 @@ const videoRows = recentVideos.length === 0
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Interactive Android Filter Chips Carousel -->
-            <div class="hajera-filter-carousel">
-                <div class="hajera-chips-track" id="hajeraFilterChips">
-                    <button type="button" class="hajera-chip active" data-filter="all">
-                        <span class="chip-label">All</span>
-                        <span class="chip-count">${h(totalVideos)}</span>
-                    </button>
-                    <button type="button" class="hajera-chip chip-watching" data-filter="watching">
-                        <span class="chip-dot dot-watching"></span>
-                        <span class="chip-label">Watching</span>
-                        <span class="chip-count">${h(inProgressCount)}</span>
-                    </button>
-                    <button type="button" class="hajera-chip chip-completed" data-filter="completed">
-                        <span class="chip-dot dot-completed"></span>
-                        <span class="chip-label">Completed</span>
-                        <span class="chip-count">${h(completedCount)}</span>
-                    </button>
-                    <button type="button" class="hajera-chip chip-opened" data-filter="opened">
-                        <span class="chip-dot dot-opened"></span>
-                        <span class="chip-label">Opened</span>
-                        <span class="chip-count">${h(openedCount)}</span>
-                    </button>
-                    <button type="button" class="hajera-chip chip-unwatched" data-filter="unwatched">
-                        <span class="chip-dot dot-unwatched"></span>
-                        <span class="chip-label">Unwatched</span>
-                        <span class="chip-count">${h(unwatchedCount)}</span>
-                    </button>
-                    <button type="button" class="hajera-chip chip-timeline" data-filter="timeline">
-                        <span class="chip-label">📜 Activity Timeline</span>
-                        <span class="chip-count" id="hajeraTimelineCount">${h(activityTimeline.length)}</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Live Search / Quick Filter Bar -->
-            <div class="hajera-search-bar" id="hajeraSearchBarWrap">
-                <div class="hajera-search-input-wrap">
-                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                        <circle cx="11" cy="11" r="8"/>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                    <input type="text" id="hajeraSearchInput" class="hajera-search-input" placeholder="Search Hajera's video logs..." aria-label="Search Hajera's video logs" autocomplete="off" />
-                    <button type="button" class="search-clear-btn" id="hajeraSearchClear" style="display:none;" title="Clear search" aria-label="Clear search">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                            <line x1="18" y1="6" x2="6" y2="18"/>
-                            <line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="hajera-search-status" id="hajeraFilterCount">Showing <strong>${h(hajeraActivityList.length)}</strong> of ${h(hajeraActivityList.length)}</div>
-            </div>
-
-            <!-- Activity Timeline Feed View (Shown when Timeline chip is selected) -->
-            <div class="hajera-timeline-feed" id="hajeraTimelineFeed" style="display: none;">
-                <div class="timeline-feed-header">
-                    <h4>Real-time Activity & Session History</h4>
-                    <span class="timeline-feed-sub">Live audit trail of playback, logins, comments & presence</span>
-                </div>
-                <div class="timeline-list" id="hajeraTimelineList">
-                    ${timelineHtml}
-                </div>
-            </div>
-
-            <!-- Mobile Android Touch Cards View -->
-            <div class="hajera-android-cards-list" id="hajeraCardsList">
-                ${hajeraCardsHtml}
-            </div>
-
-            <div class="hajera-filtered-empty" id="hajeraFilteredEmpty" style="display:none;">
-                <div class="filtered-empty-icon">🔍</div>
-                <h4>No matching videos found</h4>
-                <p>Try switching filters or changing your search terms.</p>
-                <button type="button" class="btn btn-ghost btn-sm" id="hajeraResetFilterBtn">Reset Filter</button>
-            </div>
-
-            <!-- Desktop View: High-density Table (>= 900px) -->
-            <div class="admin-table-wrap hajera-desktop-table">
-                <table class="admin-table hajera-activity-table" id="hajeraDesktopTable">
-                    <thead>
-                        <tr>
-                            <th style="width: 64px;">Preview</th>
-                            <th>Video Title</th>
-                            <th style="width: 140px;">Progress</th>
-                            <th style="width: 130px;">Time Spent</th>
-                            <th style="width: 130px;">Status</th>
-                            <th style="width: 110px;">Last Active</th>
-                        </tr>
-                    </thead>
-                    <tbody>${hajeraRows}</tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- Import Queue & Failed Imports Grid -->
-        <section class="admin-jobs-grid">
-            <div class="admin-section-card">
+        <!-- ================================================================= -->
+        <!-- TAB 5: UNIFIED VIDEO MANAGEMENT MASTER CENTER                    -->
+        <!-- ================================================================= -->
+        <div class="admin-tab-pane" id="tab-videos" role="tabpanel">
+            <section class="admin-section-card master-videos-section" id="masterVideosSection">
                 <div class="section-card-header">
                     <div class="card-title-group">
-                        <div class="icon-bubble icon-cyan">
+                        <div class="icon-bubble icon-amber">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                <polyline points="7 10 12 15 17 10"/>
-                                <line x1="12" y1="15" x2="12" y2="3"/>
+                                <polygon points="23 7 16 12 23 17 23 7"/>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                             </svg>
                         </div>
-                        <h2>Import Queue</h2>
-                    </div>
-                    <span class="count-pill">${h(activeJobs.length)} active</span>
-                </div>
-                <div class="jobs-list">${jobRows}</div>
-            </div>
-
-            <div class="admin-section-card">
-                <div class="section-card-header">
-                    <div class="card-title-group">
-                        <div class="icon-bubble icon-coral">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                                <circle cx="12" cy="12" r="10"/>
-                                <line x1="15" y1="9" x2="9" y2="15"/>
-                                <line x1="9" y1="9" x2="15" y2="15"/>
-                            </svg>
+                        <div>
+                            <h2>Unified Video Library Manager</h2>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; color: #888;">Complete metadata, R2 synchronization, Hajera status &amp; management</p>
                         </div>
-                        <h2>Failed Imports</h2>
                     </div>
-                    <span class="count-pill error-pill">${h(failedJobs.length)} recent</span>
+                    <span class="count-pill">${h(videoList.length)} videos • ${h(formatBytes(safeStats.videoBytes))}</span>
                 </div>
-                <div class="jobs-list">${failedRows}</div>
-            </div>
-        </section>
 
-        <!-- Recent Uploaded Videos Section -->
-        <section class="admin-section-card">
-            <div class="section-card-header">
-                <div class="card-title-group">
-                    <div class="icon-bubble icon-amber">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
-                            <line x1="7" y1="2" x2="7" y2="22"/>
-                            <line x1="17" y1="2" x2="17" y2="22"/>
-                            <line x1="2" y1="12" x2="22" y2="12"/>
-                            <line x1="2" y1="7" x2="7" y2="7"/>
-                            <line x1="2" y1="17" x2="7" y2="17"/>
-                            <line x1="17" y1="17" x2="22" y2="17"/>
-                            <line x1="17" y1="7" x2="22" y2="7"/>
+                <!-- Video Search Filter Bar -->
+                <div class="hajera-search-bar" style="margin-bottom: 14px;">
+                    <div class="hajera-search-input-wrap">
+                        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <circle cx="11" cy="11" r="8"/>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
                         </svg>
+                        <input type="text" id="adminVideoSearchInput" class="hajera-search-input" placeholder="Search videos by title..." aria-label="Search videos" autocomplete="off" />
                     </div>
-                    <h2>Recent Videos</h2>
                 </div>
-                <span class="count-pill">${h(formatBytes(safeStats.videoBytes))} stored</span>
-            </div>
 
-            <!-- Desktop Table -->
-            <div class="admin-table-wrap admin-desktop-videos-table">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th>Title</th>
-                            <th>Uploader</th>
-                            <th>Size</th>
-                            <th>Duration</th>
-                            <th>Quality</th>
-                            <th>Added</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>${videoRows}</tbody>
-                </table>
-            </div>
+                <!-- Desktop Master Table -->
+                <div class="admin-table-wrap admin-desktop-master-table">
+                    <table class="admin-table" id="adminMasterVideosTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 44px;">Preview</th>
+                                <th>Title &amp; Info</th>
+                                <th style="width: 110px;">Uploader</th>
+                                <th style="width: 100px;">Size</th>
+                                <th style="width: 120px;">Edge CDN</th>
+                                <th style="width: 110px;">Hajera Status</th>
+                                <th style="width: 90px; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>${masterVideoRows}</tbody>
+                    </table>
+                </div>
 
-            <!-- Mobile Android Video Cards -->
-            <div class="admin-android-videos-list">
-                ${videoCardsHtml}
-            </div>
-        </section>
+                <!-- Mobile Master Cards -->
+                <div class="admin-master-videos-list" id="adminMasterVideosList">
+                    ${masterVideoCardsHtml}
+                </div>
+            </section>
+        </div>
     </main>
 
     <!-- Mobile Bottom Navigation Bar -->
@@ -1660,4 +1853,3 @@ const videoRows = recentVideos.length === 0
     </nav>
 </div>
 ` }) %>
-

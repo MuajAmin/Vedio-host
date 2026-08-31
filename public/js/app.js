@@ -3990,6 +3990,74 @@ document.addEventListener('DOMContentLoaded', () => {
     initPresenceTracker();
 
     // ========================================
+    // Admin Control Center Tabs & Navigation
+    // ========================================
+    function initAdminTabs() {
+        const tabNav = document.getElementById('adminNavTabs');
+        if (!tabNav) return;
+
+        const tabBtns = tabNav.querySelectorAll('.admin-tab-btn');
+        const tabPanes = document.querySelectorAll('.admin-tab-pane');
+        if (!tabBtns.length || !tabPanes.length) return;
+
+        function switchAdminTab(tabKey) {
+            if (!tabKey) return;
+            tabBtns.forEach(btn => {
+                const isActive = (btn.getAttribute('data-tab') === tabKey);
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            });
+            tabPanes.forEach(pane => {
+                const isTarget = (pane.id === 'tab-' + tabKey);
+                pane.classList.toggle('active', isTarget);
+            });
+            try {
+                history.replaceState(null, '', '#' + tabKey);
+                sessionStorage.setItem('activeAdminTab', tabKey);
+            } catch(e) {}
+        }
+        window.switchAdminTab = switchAdminTab;
+
+        tabNav.addEventListener('click', (e) => {
+            const btn = e.target.closest('.admin-tab-btn');
+            if (!btn) return;
+            const tabKey = btn.getAttribute('data-tab');
+            if (tabKey) switchAdminTab(tabKey);
+        });
+
+        // Initialize from URL hash or stored session
+        const initialHash = (window.location.hash || '').replace('#', '');
+        const savedTab = sessionStorage.getItem('activeAdminTab');
+        const validTabs = ['overview', 'hajera', 'storage', 'sessions', 'videos'];
+        
+        if (initialHash && validTabs.includes(initialHash)) {
+            switchAdminTab(initialHash);
+        } else if (savedTab && validTabs.includes(savedTab)) {
+            switchAdminTab(savedTab);
+        }
+    }
+    initAdminTabs();
+
+    // Master Video Library Search Filter
+    const adminVideoSearchInput = document.getElementById('adminVideoSearchInput');
+    if (adminVideoSearchInput) {
+        adminVideoSearchInput.addEventListener('input', (e) => {
+            const q = e.target.value.trim().toLowerCase();
+            const rows = document.querySelectorAll('#adminMasterVideosTable tbody tr');
+            const cards = document.querySelectorAll('#adminMasterVideosList .admin-master-video-card');
+
+            rows.forEach(r => {
+                const title = (r.getAttribute('data-title') || '').toLowerCase();
+                r.style.display = (!q || title.includes(q)) ? '' : 'none';
+            });
+            cards.forEach(c => {
+                const title = (c.getAttribute('data-title') || '').toLowerCase();
+                c.style.display = (!q || title.includes(q)) ? '' : 'none';
+            });
+        });
+    }
+
+    // ========================================
     // Admin Control Center Interactivity & Live Sync
     // ========================================
     const hajeraFilterChips = document.getElementById('hajeraFilterChips');

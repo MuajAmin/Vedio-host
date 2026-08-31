@@ -7160,6 +7160,394 @@ kbd {
     text-align: center;
 }
 
+/* ========================================
+   ADMIN SEGMENTED TAB SYSTEM & COMPACT UI
+   ======================================== */
+.admin-tab-pane {
+    display: none;
+    animation: adminTabFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-tab-pane.active {
+    display: block;
+}
+
+@keyframes adminTabFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.admin-nav-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 2px 14px 2px;
+    margin-bottom: 8px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.admin-nav-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.admin-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 15px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.admin-tab-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.admin-tab-btn.active {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(99, 102, 241, 0.18));
+    border-color: rgba(56, 189, 248, 0.45);
+    color: #ffffff;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.18);
+}
+
+.admin-tab-btn:active {
+    transform: scale(0.96);
+}
+
+.tab-badge-live {
+    background: #f43f5e;
+    color: #fff;
+    font-size: 0.58rem;
+    font-weight: 800;
+    padding: 2px 5px;
+    border-radius: 6px;
+    letter-spacing: 0.04em;
+}
+
+.tab-badge-warn {
+    background: #f59e0b;
+    color: #000;
+    font-size: 0.6rem;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 6px;
+}
+
+.tab-badge-count {
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 0.64rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+}
+
+.admin-tab-btn.active .tab-badge-count {
+    background: rgba(56, 189, 248, 0.3);
+    color: #fff;
+}
+
+/* Quick Status Toolbar Banner */
+.admin-quick-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    margin-bottom: 14px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.quick-toolbar-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.live-dot-indicator {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+    animation: livePulse 2s infinite;
+}
+
+.btn-cleanup-compact {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-cleanup-compact:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* R2 All-Synced Hero Banner */
+.r2-all-synced-card {
+    text-align: center;
+    padding: 28px 18px;
+    background: linear-gradient(180deg, rgba(34, 197, 94, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    border-radius: 14px;
+    margin: 8px 16px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.r2-synced-hero-icon {
+    font-size: 2rem;
+    line-height: 1;
+    color: #4ade80;
+    text-shadow: 0 0 16px rgba(74, 222, 128, 0.5);
+}
+
+.r2-synced-hero-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.r2-synced-hero-desc {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    max-width: 480px;
+    margin: 0 0 8px 0;
+    line-height: 1.45;
+}
+
+/* Micro Thumb & Compact Data Rows */
+.admin-micro-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.admin-micro-thumb-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #11121c;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.compact-thumb-wrap {
+    position: relative;
+    width: 60px;
+    min-width: 60px;
+    aspect-ratio: 16 / 9;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #11121c;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.compact-micro-dur {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    font-size: 0.56rem;
+    font-weight: 700;
+    padding: 1px 3px;
+    border-radius: 3px;
+}
+
+.admin-compact-data-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-compact-data-row:hover {
+    background: rgba(255, 255, 255, 0.045);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.compact-data-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+}
+
+.compact-text-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.compact-row-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.compact-row-title:hover {
+    color: #38bdf8;
+}
+
+.compact-chips-line {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.compact-chip {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+}
+
+.compact-data-right {
+    flex-shrink: 0;
+}
+
+.btn-compact-sync {
+    padding: 5px 10px;
+    font-size: 0.72rem;
+    border-radius: 8px;
+}
+
+/* Master Video Mobile Cards */
+.admin-master-videos-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-master-video-card {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.master-card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.master-card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.master-card-title {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.master-card-meta {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.master-card-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 6px;
+}
+
+.master-card-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.master-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.video-meta-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+}
+
+.meta-tag-mini {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+.admin-row-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: flex-end;
+}
+
 /* High-Density Desktop Tables (>= 900px) */
 .admin-table-wrap {
     overflow-x: auto;
@@ -7376,11 +7764,15 @@ kbd {
 
 /* Default Mobile/Desktop View Switching */
 .admin-desktop-videos-table,
+.admin-desktop-master-table,
+.sessions-desktop-table,
 .hajera-desktop-table {
     display: none;
 }
 
 .admin-android-videos-list,
+.admin-master-videos-list,
+.sessions-mobile-list,
 .hajera-android-cards-list {
     display: flex;
 }
@@ -7754,11 +8146,15 @@ kbd {
     }
 
     .admin-desktop-videos-table,
+    .admin-desktop-master-table,
+    .sessions-desktop-table,
     .hajera-desktop-table {
         display: block !important;
     }
 
     .admin-android-videos-list,
+    .admin-master-videos-list,
+    .sessions-mobile-list,
     .hajera-android-cards-list {
         display: none !important;
     }

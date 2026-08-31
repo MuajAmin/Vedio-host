@@ -99,10 +99,29 @@ function broadcastToAll(event, data) {
     }
 }
 
+/**
+ * Get list of usernames that currently have active SSE connections
+ * @returns {string[]}
+ */
+function getConnectedUsers() {
+    return Array.from(sseClients.keys());
+}
+
+/**
+ * Check if a specific user has at least one active SSE connection
+ * @param {string} username
+ * @returns {boolean}
+ */
+function isUserConnected(username) {
+    return sseClients.has(username) && sseClients.get(username).size > 0;
+}
+
 module.exports = {
     addSseClient,
     removeSseClient,
     broadcastToUser,
     broadcastToBoth,
-    broadcastToAll
+    broadcastToAll,
+    getConnectedUsers,
+    isUserConnected
 };

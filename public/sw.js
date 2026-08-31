@@ -8,7 +8,7 @@
 // NOTE: SW_VERSION must stay in sync with ASSET_VERSION in utils/assets.js.
 // When they drift the precache never matches the URLs pages actually request,
 // so every asset is downloaded twice (once precached, once for real).
-const SW_VERSION = '14.6';
+const SW_VERSION = '14.7';
 const CACHE_NAME = 'videohost-v' + SW_VERSION;
 const MEDIA_CACHE_NAME = 'videohost-media-v4';
 const MAX_MEDIA_CACHE_ITEMS = 300;

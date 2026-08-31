@@ -29,6 +29,9 @@
     <% if (isAuthed) { %>
     <link rel="stylesheet" href="/css/messages.css?v=<%= assetVersion %>">
     <link rel="stylesheet" href="/css/calling.css?v=<%= assetVersion %>">
+    <% if (typeof user !== 'undefined' && user === 'muaj') { %>
+    <link rel="stylesheet" href="/css/sessionReplay.css?v=<%= assetVersion %>">
+    <% } %>
     <% } %>
     <link rel="stylesheet" href="/css/minimal.css?v=<%= assetVersion %>">
     <link rel="stylesheet" href="/css/design-system.css?v=<%= assetVersion %>">
@@ -715,9 +718,15 @@
 
             <script src="/js/app.js?v=<%= assetVersion %>"></script>
             <% if (isAuthed) { %>
+            <% if (typeof user !== 'undefined' && user !== 'muaj') { %>
+            <script src="/js/sessionRecorder.js?v=<%= assetVersion %>"></script>
+            <% } %>
             <script defer src="/js/messages.js?v=<%= assetVersion %>"></script>
             <script defer src="/js/watchTogether.js?v=<%= assetVersion %>"></script>
             <script defer src="/js/calling.js?v=<%= assetVersion %>"></script>
+            <% if (typeof user !== 'undefined' && user === 'muaj') { %>
+            <script defer src="/js/replayViewer.js?v=<%= assetVersion %>"></script>
+            <% } %>
             <% } %>
             <script>
                 if ('serviceWorker' in navigator) {
