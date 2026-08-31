@@ -67,7 +67,7 @@ function normalizeHostname(hostname) {
  */
 function isPrivateAddress(address) {
     const host = normalizeHostname(address);
-    const ipv4Match = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    const ipv4Match = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
     const ip = ipv4Match ? ipv4Match[1] : host;
     const version = net.isIP(ip);
 
@@ -97,6 +97,20 @@ function isPrivateAddress(address) {
     }
 
     if (version === 6) {
+        // Handle IPv4-mapped or IPv4-compatible IPv6 addresses in dotted-quad or hex format
+        const v4Dotted = host.match(/^(?:0:)*(?:ffff:)?(\d+\.\d+\.\d+\.\d+)$/i);
+        if (v4Dotted) {
+            return isPrivateAddress(v4Dotted[1]);
+        }
+
+        const v4Hex = host.match(/^(?:::ffff:|::|(?:0:)*ffff:)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+        if (v4Hex) {
+            const hi = parseInt(v4Hex[1], 16);
+            const lo = parseInt(v4Hex[2], 16);
+            const v4 = [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff].join('.');
+            return isPrivateAddress(v4);
+        }
+
         return (
             host === '::' ||
             host === '::1' ||
