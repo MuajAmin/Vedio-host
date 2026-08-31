@@ -5,6 +5,12 @@ const db = require('../database');
 
 const MAX_COMMENT_LENGTH = 2000;
 
+// Precompiled SQL statements to eliminate query compilation overhead on every request
+const stmtGetVideoWithTitle = db.prepare('SELECT id, title FROM videos WHERE id = ?');
+const stmtInsertComment = db.prepare('INSERT INTO comments (video_id, user, text) VALUES (?, ?, ?)');
+const stmtGetCommentById = db.prepare('SELECT * FROM comments WHERE id = ?');
+const stmtDeleteComment = db.prepare('DELETE FROM comments WHERE id = ?');
+
 // POST /comment/:videoId — Add comment
 router.post('/comment/:videoId', isAuthenticated, (req, res) => {
     const { text } = req.body;
@@ -25,8 +31,8 @@ router.post('/comment/:videoId', isAuthenticated, (req, res) => {
         return res.redirect(`/watch/${videoId}`);
     }
 
-    // Verify video exists
-    const video = db.prepare('SELECT id FROM videos WHERE id = ?').get(videoId);
+    // Verify video exists (select title directly to avoid secondary query in logActivity)
+    const video = stmtGetVideoWithTitle.get(videoId);
     if (!video) {
         if (isAjax) return res.status(404).json({ error: 'Video not found.' });
         return res.status(404).redirect('/dashboard');
@@ -34,9 +40,7 @@ router.post('/comment/:videoId', isAuthenticated, (req, res) => {
 
     const truncated = commentText.slice(0, MAX_COMMENT_LENGTH);
 
-    db.prepare(
-        'INSERT INTO comments (video_id, user, text) VALUES (?, ?, ?)'
-    ).run(videoId, user, truncated);
+    stmtInsertComment.run(videoId, user, truncated);
 
     db.logActivity(user, 'comment_added', {
         videoId,
@@ -63,10 +67,10 @@ router.post('/comment/:videoId', isAuthenticated, (req, res) => {
 
 // POST /comment/delete/:id — Delete comment (only comment owner or Muaj)
 router.post('/comment/delete/:id', isAuthenticated, (req, res) => {
-    const comment = db.prepare('SELECT * FROM comments WHERE id = ?').get(req.params.id);
+    const comment = stmtGetCommentById.get(req.params.id);
 
     if (comment && (req.session.user === 'muaj' || req.session.user === comment.user)) {
-        db.prepare('DELETE FROM comments WHERE id = ?').run(req.params.id);
+        stmtDeleteComment.run(req.params.id);
         return res.redirect(`/watch/${encodeURIComponent(comment.video_id)}`);
     }
 
