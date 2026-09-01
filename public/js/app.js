@@ -503,11 +503,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const passwordInput = document.getElementById('password');
     if (toggleBtn && passwordInput) {
         toggleBtn.addEventListener('click', () => {
-            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordInput.setAttribute('type', type);
+            const isVisible = passwordInput.getAttribute('type') === 'text';
+            const newType = isVisible ? 'password' : 'text';
+            passwordInput.setAttribute('type', newType);
+            toggleBtn.setAttribute('aria-label', isVisible ? 'Show password' : 'Hide password');
+            toggleBtn.setAttribute('aria-pressed', isVisible ? 'false' : 'true');
             const eyeOpen = toggleBtn.querySelector('.eye-open');
             const eyeClosed = toggleBtn.querySelector('.eye-closed');
-            if (type === 'text') {
+            if (newType === 'text') {
                 if (eyeOpen) eyeOpen.style.display = 'none';
                 if (eyeClosed) eyeClosed.style.display = 'block';
             } else {
