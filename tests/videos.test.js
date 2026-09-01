@@ -198,4 +198,65 @@ describe('Video Deletion & CSRF Token Validation', () => {
         const dbVideo = db.prepare('SELECT * FROM videos WHERE id = ?').get(missingFileId);
         expect(dbVideo == null).toBe(true);
     }, 30000);
+
+    test('Non-owner non-admin user is rejected from renaming or deleting video', async () => {
+        const authTestId = 'test-auth-video-id';
+        const authFilename = 'test-auth-video.mp4';
+
+        db.prepare('DELETE FROM videos WHERE id = ? OR filename = ?').run(authTestId, authFilename);
+        db.prepare(`
+            INSERT INTO videos (id, title, filename, original_name, size, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(authTestId, 'Muaj Video Title', authFilename, 'test.mp4', 1000, 'muaj');
+
+        const express = require('express');
+        const videosRouter = require('../routes/videos');
+        const app = express();
+        app.use(express.urlencoded({ extended: true }));
+        app.use(express.json());
+        // Mock session as non-admin user 'hajera'
+        app.use((req, res, next) => {
+            req.session = { user: 'hajera', csrfToken: 'test-csrf-token' };
+            next();
+        });
+        app.use('/', videosRouter);
+
+        const server = app.listen(0);
+        const port = server.address().port;
+
+        // Try renaming video uploaded by 'muaj' as user 'hajera'
+        const renameRes = await fetch(`http://localhost:${port}/rename/${authTestId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title: 'Hacked Title' })
+        });
+
+        expect(renameRes.status).toBe(403);
+        const renameData = await renameRes.json();
+        expect(renameData.error).toBe('Not permitted.');
+
+        // Try deleting video uploaded by 'muaj' as user 'hajera'
+        const deleteRes = await fetch(`http://localhost:${port}/delete/${authTestId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'x-csrf-token': 'test-csrf-token',
+                'Accept': 'application/json'
+            }
+        });
+
+        expect(deleteRes.status).toBe(403);
+        const deleteData = await deleteRes.json();
+        expect(deleteData.error).toBe('Not permitted.');
+
+        // Verify title unchanged and video still exists in DB
+        const dbVideo = db.prepare('SELECT * FROM videos WHERE id = ?').get(authTestId);
+        expect(dbVideo).not.toBeNull();
+        expect(dbVideo.title).toBe('Muaj Video Title');
+
+        server.close();
+        db.prepare('DELETE FROM videos WHERE id = ?').run(authTestId);
+    }, 30000);
 });
