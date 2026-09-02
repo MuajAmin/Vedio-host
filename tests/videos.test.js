@@ -198,4 +198,60 @@ describe('Video Deletion & CSRF Token Validation', () => {
         const dbVideo = db.prepare('SELECT * FROM videos WHERE id = ?').get(missingFileId);
         expect(dbVideo == null).toBe(true);
     }, 30000);
+
+    test('Non-owner non-admin user cannot rename or delete another user video', async () => {
+        const protectedId = 'test-protected-auth-id';
+        const protectedFilename = 'test-protected-video.mp4';
+
+        db.prepare('DELETE FROM videos WHERE id = ? OR filename = ?').run(protectedId, protectedFilename);
+        db.prepare(`
+            INSERT INTO videos (id, title, filename, original_name, size, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(protectedId, 'Protected Admin Video', protectedFilename, 'protected.mp4', 1000, 'muaj');
+
+        const express = require('express');
+        const videosRouter = require('../routes/videos');
+        const app = express();
+        app.use(express.urlencoded({ extended: true }));
+        app.use(express.json());
+
+        // Session for non-admin viewer 'hajera'
+        app.use((req, res, next) => {
+            req.session = { user: 'hajera', csrfToken: 'test-csrf-token' };
+            next();
+        });
+        app.use('/', videosRouter);
+
+        const server = app.listen(0);
+        const port = server.address().port;
+
+        // Attempt rename as hajera
+        const renameRes = await fetch(`http://localhost:${port}/rename/${protectedId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: 'Hacked Title' })
+        });
+        expect(renameRes.status).toBe(403);
+
+        // Attempt delete as hajera
+        const deleteRes = await fetch(`http://localhost:${port}/delete/${protectedId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-csrf-token': 'test-csrf-token',
+                'Accept': 'application/json'
+            }
+        });
+        expect(deleteRes.status).toBe(403);
+
+        server.close();
+
+        // Verify title and record remain intact
+        const dbVideo = db.prepare('SELECT * FROM videos WHERE id = ?').get(protectedId);
+        expect(dbVideo).not.toBeNull();
+        expect(dbVideo.title).toBe('Protected Admin Video');
+
+        // Cleanup
+        db.prepare('DELETE FROM videos WHERE id = ?').run(protectedId);
+    }, 30000);
 });

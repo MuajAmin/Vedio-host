@@ -641,20 +641,25 @@ router.get('/watch/:id', isAuthenticated, async (req, res) => {
     });
 });
 
-// POST /rename/:id — Rename video title (any authenticated user)
+// POST /rename/:id — Rename video title (Admin or uploader only)
 router.post('/rename/:id', isAuthenticated, (req, res) => {
+    const video = db.prepare('SELECT uploaded_by FROM videos WHERE id = ?').get(req.params.id);
+    if (!video) {
+        return res.status(404).json({ error: 'Video not found.' });
+    }
+    if (req.session.user !== 'muaj' && video.uploaded_by !== req.session.user) {
+        return res.status(403).json({ error: 'Not permitted to rename this video.' });
+    }
+
     const newTitle = String(req.body.title || '').trim().slice(0, 180);
     if (!newTitle) {
         return res.status(400).json({ error: 'Title cannot be empty.' });
     }
-    const result = db.prepare('UPDATE videos SET title = ? WHERE id = ?').run(newTitle, req.params.id);
-    if (result.changes === 0) {
-        return res.status(404).json({ error: 'Video not found.' });
-    }
+    db.prepare('UPDATE videos SET title = ? WHERE id = ?').run(newTitle, req.params.id);
     res.json({ success: true, title: newTitle });
 });
 
-// POST /delete/:id — Delete video (any authenticated user)
+// POST /delete/:id — Delete video (Admin or uploader only)
 router.post('/delete/:id', isAuthenticated, requireCsrf, async (req, res) => {
     const videoId = String(req.params.id || '').trim();
     if (!videoId) {
@@ -677,6 +682,15 @@ router.post('/delete/:id', isAuthenticated, requireCsrf, async (req, res) => {
         const video = db.prepare('SELECT * FROM videos WHERE id = ? OR filename = ?').get(videoId, videoId);
 
         if (video) {
+            // Security: Only admin (muaj) or the video uploader can delete
+            if (req.session.user !== 'muaj' && video.uploaded_by !== req.session.user) {
+                const isAjax = req.xhr ||
+                    (req.headers.accept && req.headers.accept.includes('application/json')) ||
+                    (req.headers['content-type'] && req.headers['content-type'].includes('application/json'));
+                if (isAjax) return res.status(403).json({ error: 'Not permitted to delete this video.' });
+                return res.status(403).redirect('/dashboard');
+            }
+
             console.log(`[delete] Start: video=${video.id} file=${video.filename} by=${req.session.user}`);
 
             // Invalidate stream cache
