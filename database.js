@@ -647,6 +647,27 @@ const stmtMessagesUnreadCount = db.prepare(`
 const stmtMessageDelete = db.prepare('DELETE FROM messages WHERE id = ?');
 const stmtMessageGetForDelete = db.prepare('SELECT id, sender, voice_url FROM messages WHERE id = ?');
 
+const stmtUserSettingsGet = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?');
+
+const stmtUserSettingsUpsertUiMode = db.prepare(`
+    INSERT INTO user_settings (username, ui_mode, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET ui_mode = excluded.ui_mode, updated_at = excluded.updated_at
+`);
+
+const stmtUserSettingsUpsertTheme = db.prepare(`
+    INSERT INTO user_settings (username, theme, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
+`);
+
+// In-memory cache for user settings to convert middleware DB reads on every request into O(1) lookups
+const userSettingsCache = new Map();
+
+function resetUserSettingsCache() {
+    userSettingsCache.clear();
+}
+
 const stmtMessageStats = db.prepare(`
     SELECT COUNT(*) AS total,
            SUM(CASE WHEN video_id IS NOT NULL THEN 1 ELSE 0 END) AS videos_count,
@@ -1311,19 +1332,24 @@ function getRecentCallLogs(user1, user2, limit = 30) {
 
 function getUserSettings(username) {
     if (!username) return { ui_mode: 'standard', theme: 'cinematic' };
+    if (userSettingsCache.has(username)) {
+        return userSettingsCache.get(username);
+    }
+    const defaultTheme = (username === 'hajera') ? 'sunset' : 'cinematic';
     try {
-        const row = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?').get(username);
-        const defaultTheme = (username === 'hajera') ? 'sunset' : 'cinematic';
-        if (!row) {
-            return { ui_mode: 'standard', theme: defaultTheme };
-        }
-        return {
+        const row = stmtUserSettingsGet.get(username);
+        const settings = !row ? {
+            ui_mode: 'standard',
+            theme: defaultTheme
+        } : {
             ui_mode: row.ui_mode || 'standard',
             theme: row.theme || defaultTheme
         };
+        userSettingsCache.set(username, settings);
+        return settings;
     } catch (err) {
         console.error('[db] Error getting user settings:', err.message);
-        return { ui_mode: 'standard', theme: (username === 'hajera') ? 'sunset' : 'cinematic' };
+        return { ui_mode: 'standard', theme: defaultTheme };
     }
 }
 
@@ -1331,22 +1357,21 @@ function setUserSetting(username, key, value) {
     if (!username || !key) return false;
     try {
         const now = new Date().toISOString();
+        const currentSettings = getUserSettings(username);
+        const updatedSettings = { ...currentSettings };
+
         if (key === 'ui_mode') {
             const cleanVal = String(value);
-            db.prepare(`
-                INSERT INTO user_settings (username, ui_mode, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET ui_mode = excluded.ui_mode, updated_at = excluded.updated_at
-            `).run(username, cleanVal, now);
+            stmtUserSettingsUpsertUiMode.run(username, cleanVal, now);
+            updatedSettings.ui_mode = cleanVal;
+            userSettingsCache.set(username, updatedSettings);
             return true;
         }
         if (key === 'theme') {
             const cleanVal = String(value);
-            db.prepare(`
-                INSERT INTO user_settings (username, theme, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
-            `).run(username, cleanVal, now);
+            stmtUserSettingsUpsertTheme.run(username, cleanVal, now);
+            updatedSettings.theme = cleanVal;
+            userSettingsCache.set(username, updatedSettings);
             return true;
         }
         return false;
@@ -1362,6 +1387,7 @@ db.setUserAvatar = setUserAvatar;
 db.deleteUserAvatar = deleteUserAvatar;
 db.getUserSettings = getUserSettings;
 db.setUserSetting = setUserSetting;
+db.resetUserSettingsCache = resetUserSettingsCache;
 db.isUserBlocked = isUserBlocked;
 db.blockUser = blockUser;
 db.unblockUser = unblockUser;
