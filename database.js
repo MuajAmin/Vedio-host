@@ -268,7 +268,7 @@ try {
 function getUserAvatar(username) {
     if (!username) return null;
     try {
-        const row = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?').get(username);
+        const row = stmtGetUserAvatar.get(username);
         return row ? row.avatar : null;
     } catch {
         return null;
@@ -277,7 +277,7 @@ function getUserAvatar(username) {
 
 function getAllUserAvatars() {
     try {
-        const rows = db.prepare('SELECT username, avatar FROM user_profiles').all();
+        const rows = stmtGetAllUserAvatars.all();
         const map = {};
         rows.forEach(r => { if (r.avatar) map[r.username] = r.avatar; });
         return map;
@@ -287,15 +287,11 @@ function getAllUserAvatars() {
 }
 
 function setUserAvatar(username, avatarFilename) {
-    db.prepare(`
-        INSERT INTO user_profiles (username, avatar, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(username) DO UPDATE SET avatar = excluded.avatar, updated_at = CURRENT_TIMESTAMP
-    `).run(username, avatarFilename);
+    stmtSetUserAvatar.run(username, avatarFilename);
 }
 
 function deleteUserAvatar(username) {
-    db.prepare('DELETE FROM user_profiles WHERE username = ?').run(username);
+    stmtDeleteUserAvatar.run(username);
 }
 
 // --- In-memory cache for blocked users set ---
@@ -646,6 +642,27 @@ const stmtMessagesUnreadCount = db.prepare(`
 
 const stmtMessageDelete = db.prepare('DELETE FROM messages WHERE id = ?');
 const stmtMessageGetForDelete = db.prepare('SELECT id, sender, voice_url FROM messages WHERE id = ?');
+
+const stmtGetUserAvatar = db.prepare('SELECT avatar FROM user_profiles WHERE username = ?');
+const stmtGetAllUserAvatars = db.prepare('SELECT username, avatar FROM user_profiles');
+const stmtSetUserAvatar = db.prepare(`
+    INSERT INTO user_profiles (username, avatar, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(username) DO UPDATE SET avatar = excluded.avatar, updated_at = CURRENT_TIMESTAMP
+`);
+const stmtDeleteUserAvatar = db.prepare('DELETE FROM user_profiles WHERE username = ?');
+
+const stmtGetUserSettings = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?');
+const stmtSetUserSettingUiMode = db.prepare(`
+    INSERT INTO user_settings (username, ui_mode, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET ui_mode = excluded.ui_mode, updated_at = excluded.updated_at
+`);
+const stmtSetUserSettingTheme = db.prepare(`
+    INSERT INTO user_settings (username, theme, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
+`);
 
 const stmtMessageStats = db.prepare(`
     SELECT COUNT(*) AS total,
@@ -1312,7 +1329,7 @@ function getRecentCallLogs(user1, user2, limit = 30) {
 function getUserSettings(username) {
     if (!username) return { ui_mode: 'standard', theme: 'cinematic' };
     try {
-        const row = db.prepare('SELECT ui_mode, theme FROM user_settings WHERE username = ?').get(username);
+        const row = stmtGetUserSettings.get(username);
         const defaultTheme = (username === 'hajera') ? 'sunset' : 'cinematic';
         if (!row) {
             return { ui_mode: 'standard', theme: defaultTheme };
@@ -1333,20 +1350,12 @@ function setUserSetting(username, key, value) {
         const now = new Date().toISOString();
         if (key === 'ui_mode') {
             const cleanVal = String(value);
-            db.prepare(`
-                INSERT INTO user_settings (username, ui_mode, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET ui_mode = excluded.ui_mode, updated_at = excluded.updated_at
-            `).run(username, cleanVal, now);
+            stmtSetUserSettingUiMode.run(username, cleanVal, now);
             return true;
         }
         if (key === 'theme') {
             const cleanVal = String(value);
-            db.prepare(`
-                INSERT INTO user_settings (username, theme, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
-            `).run(username, cleanVal, now);
+            stmtSetUserSettingTheme.run(username, cleanVal, now);
             return true;
         }
         return false;
