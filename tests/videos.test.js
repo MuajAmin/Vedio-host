@@ -198,4 +198,57 @@ describe('Video Deletion & CSRF Token Validation', () => {
         const dbVideo = db.prepare('SELECT * FROM videos WHERE id = ?').get(missingFileId);
         expect(dbVideo == null).toBe(true);
     }, 30000);
+
+    test('Non-admin user cannot rename or delete another user\'s video', async () => {
+        const authVideoId = 'test-auth-video-id';
+        const authFilename = 'auth-test-video.mp4';
+
+        db.prepare('DELETE FROM videos WHERE id = ? OR filename = ?').run(authVideoId, authFilename);
+        db.prepare(`
+            INSERT INTO videos (id, title, filename, original_name, size, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(authVideoId, 'Muaj Video', authFilename, 'test.mp4', 1000, 'muaj');
+
+        const express = require('express');
+        const videosRouter = require('../routes/videos');
+        const app = express();
+        app.use(express.urlencoded({ extended: true }));
+        app.use(express.json());
+        // Mock session as 'hajera' (non-admin, not uploader)
+        app.use((req, res, next) => {
+            req.session = { user: 'hajera', csrfToken: 'test-csrf-token' };
+            next();
+        });
+        app.use('/', videosRouter);
+
+        const server = app.listen(0);
+        const port = server.address().port;
+
+        // Attempt rename
+        const renameRes = await fetch(`http://localhost:${port}/rename/${authVideoId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ title: 'Hacked Title' })
+        });
+        expect(renameRes.status).toBe(403);
+
+        // Attempt delete
+        const deleteRes = await fetch(`http://localhost:${port}/delete/${authVideoId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'x-csrf-token': 'test-csrf-token',
+                'Accept': 'application/json'
+            }
+        });
+        expect(deleteRes.status).toBe(403);
+
+        server.close();
+
+        // Cleanup
+        db.prepare('DELETE FROM videos WHERE id = ?').run(authVideoId);
+    }, 30000);
 });
