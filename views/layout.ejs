@@ -84,12 +84,12 @@
                         </div>
                     </a>
                     <div class="msg-header-actions">
-                        <a href="/messages" class="msg-hdr-btn" title="Expand to Full Page">
+                        <a href="/messages" class="msg-hdr-btn" title="Expand to Full Page" aria-label="Expand to Full Page">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                 <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
                             </svg>
                         </a>
-                        <button type="button" class="msg-hdr-btn" id="msgDrawerCloseBtn" title="Close">
+                        <button type="button" class="msg-hdr-btn" id="msgDrawerCloseBtn" title="Close" aria-label="Close message drawer">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
                                 <line x1="18" y1="6" x2="6" y2="18"/>
                                 <line x1="6" y1="6" x2="18" y2="18"/>
@@ -148,7 +148,7 @@
                         <div class="msg-input-wrap">
                             <textarea class="msg-textarea" placeholder="Message <%= partnerName %>..." rows="1"></textarea>
                         </div>
-                        <button type="button" class="msg-composer-btn msg-mic-btn" title="Record Voice">
+                        <button type="button" class="msg-composer-btn msg-mic-btn" title="Record Voice" aria-label="Record Voice">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                                 <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                                 <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
@@ -156,7 +156,7 @@
                                 <line x1="8" y1="23" x2="16" y2="23"/>
                             </svg>
                         </button>
-                        <button type="button" class="msg-send-btn" title="Send">
+                        <button type="button" class="msg-send-btn" title="Send" aria-label="Send message">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
                                 <line x1="22" y1="2" x2="11" y2="13"/>
                                 <polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -236,7 +236,7 @@
                 <div class="theme-modal profile-modal-card">
                     <div class="theme-modal-header">
                         <h3>👤 Profile Picture</h3>
-                        <button type="button" class="theme-close-btn" id="profileCloseBtn">&times;</button>
+                        <button type="button" class="theme-close-btn" id="profileCloseBtn" aria-label="Close profile picture modal">&times;</button>
                     </div>
                     <div class="profile-modal-body">
                         <div class="profile-avatar-preview-wrap">
@@ -314,14 +314,14 @@
                                 <button type="button" class="btn btn-ghost btn-sm open-settings-trigger" style="font-size: 11px; padding: 3px 8px;">⚙️ All Settings</button>
                             </div>
                             <div class="ui-mode-options-grid" style="grid-template-columns: 1fr 1fr; gap: 8px;">
-                                <button type="button" class="ui-mode-card-option" data-set-ui-mode="standard" style="min-height: auto; padding: 8px 10px;">
+                                <button type="button" class="ui-mode-card-option" data-set-ui-mode="standard" style="min-height: auto; padding: 8px 10px;" aria-label="Standard UI">
                                     <div class="ui-mode-card-top">
                                         <div class="ui-mode-radio-circle"><span class="ui-mode-radio-dot"></span></div>
                                         <span class="ui-mode-pill pill-standard" style="font-size: 9px;">Standard</span>
                                     </div>
                                     <div class="ui-mode-name" style="font-size: 12px; margin-top: 4px;">Standard UI</div>
                                 </button>
-                                <button type="button" class="ui-mode-card-option" data-set-ui-mode="minimal" style="min-height: auto; padding: 8px 10px;">
+                                <button type="button" class="ui-mode-card-option" data-set-ui-mode="minimal" style="min-height: auto; padding: 8px 10px;" aria-label="Minimal UI">
                                     <div class="ui-mode-card-top">
                                         <div class="ui-mode-radio-circle"><span class="ui-mode-radio-dot"></span></div>
                                         <span class="ui-mode-pill pill-minimal" style="font-size: 9px;">⚡ Fast</span>

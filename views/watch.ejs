@@ -94,7 +94,7 @@ const posterAttr = video.thumbnail ? `poster="/thumbnails/${h(video.thumbnail)}"
 const savedProgress = progress || {};
 const savedPosition = Number(savedProgress.position_seconds || 0);
 const thumbMessage = typeof thumbnail !== 'undefined' ? thumbnail : '';
-const deleteForm = `<button type="button" class="btn btn-danger btn-sm" id="btnDeleteVideo" title="Delete Video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span class="btn-text">Delete</span></button>`;
+const deleteForm = `<button type="button" class="btn btn-danger btn-sm" id="btnDeleteVideo" title="Delete Video" aria-label="Delete Video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span class="btn-text">Delete</span></button>`;
 
 const suggestions = Array.isArray(suggestedVideos) ? suggestedVideos : [];
 
@@ -239,13 +239,13 @@ const extraHeadTags = [
                 </svg>
                 <span class="nav-btn-text">Back</span>
             </a>
-            <button type="button" class="btn btn-ghost btn-icon nav-theme-toggle" id="themeSwitcherNavBtn" title="Change Theme & Appearance">
+            <button type="button" class="btn btn-ghost btn-icon nav-theme-toggle" id="themeSwitcherNavBtn" title="Change Theme & Appearance" aria-label="Change Theme & Appearance">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                     <circle cx="12" cy="12" r="10"/>
                     <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" opacity="0.4"/>
                 </svg>
             </button>
-            <div class="user-badge ${isAdmin ? 'badge-admin' : 'badge-viewer'} user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture">
+            <div class="user-badge ${isAdmin ? 'badge-admin' : 'badge-viewer'} user-profile-trigger" id="profileBadgeBtn" role="button" tabindex="0" title="Click to change profile picture" aria-label="User profile and settings">
                 <div class="badge-avatar-wrap">
                     <div class="badge-avatar">${renderAvatar(user, 'nav-avatar')}</div>
                     <span class="badge-status-dot"></span>
