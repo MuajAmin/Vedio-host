@@ -547,7 +547,7 @@ router.get('/api/r2-progress/:filename', isAuthenticated, (req, res) => {
     res.on('error', cleanup);
 });
 
-// Compiled prepared statements for high-speed watch page rendering
+// Compiled prepared statements for high-speed watch page rendering & progress tracking
 const stmtWatchVideo = db.prepare('SELECT * FROM videos WHERE id = ?');
 const stmtWatchComments = db.prepare('SELECT * FROM comments WHERE video_id = ? ORDER BY created_at DESC');
 const stmtWatchProgress = db.prepare('SELECT position_seconds, duration_seconds, updated_at FROM watch_progress WHERE video_id = ? AND user = ?');
@@ -576,6 +576,18 @@ const stmtWatchMarkSeen = db.prepare(`
     VALUES (?, ?, 1, 0, CURRENT_TIMESTAMP)
     ON CONFLICT(video_id, user) DO NOTHING
 `);
+const stmtWatchProgressUpsert = db.prepare(`
+    INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(video_id, user) DO UPDATE SET
+        position_seconds = excluded.position_seconds,
+        duration_seconds = excluded.duration_seconds,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE watch_progress.position_seconds != excluded.position_seconds
+       OR watch_progress.duration_seconds != excluded.duration_seconds
+`);
+const stmtVideoTitle = db.prepare('SELECT title FROM videos WHERE id = ?');
+const stmtGetStreamVideo = db.prepare('SELECT filename, cdn_status FROM videos WHERE id = ? OR filename = ?');
 
 // GET /watch/:id — Video player page (Ultra-fast cached execution)
 router.get('/watch/:id', isAuthenticated, async (req, res) => {
@@ -868,23 +880,16 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
     const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
     const nearEnd = safeDuration > 0 && position >= safeDuration - 10;
     const user = req.session.user;
-    const video = db.prepare('SELECT title FROM videos WHERE id = ?').get(req.params.id);
+    const video = stmtVideoTitle.get(req.params.id);
     const videoTitle = video ? video.title : null;
     const deviceInfo = parseUserAgent(req.headers['user-agent']);
     const ipAddress = getClientIp(req);
 
     if (ended || nearEnd) {
         // Video finished — keep progress record with safeDuration so it does NOT appear in "Continue Watching" but also never reverts to "NEW"
-        const progressWrite = db.prepare(
-            `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
-             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-             ON CONFLICT(video_id, user) DO UPDATE SET
-                position_seconds = excluded.position_seconds,
-                duration_seconds = excluded.duration_seconds,
-                updated_at = CURRENT_TIMESTAMP
-             WHERE watch_progress.position_seconds != excluded.position_seconds
-                OR watch_progress.duration_seconds != excluded.duration_seconds`
-        ).run(req.params.id, user, Math.floor(safeDuration || position), Math.floor(safeDuration));
+        const progressWrite = stmtWatchProgressUpsert.run(
+            req.params.id, user, Math.floor(safeDuration || position), Math.floor(safeDuration)
+        );
 
         if (progressWrite.changes) {
             db.recordWatchPulse(user, req.params.id, safeDuration || position, safeDuration, true, 5);
@@ -905,16 +910,7 @@ router.post('/watch-progress/:id', isAuthenticated, (req, res) => {
     // For very short watches (< 5s), save position as 1 so the video is marked "seen"
     const savePosition = position < 5 ? 1 : Math.floor(position);
 
-    db.prepare(
-        `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
-         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-         ON CONFLICT(video_id, user) DO UPDATE SET
-            position_seconds = excluded.position_seconds,
-            duration_seconds = excluded.duration_seconds,
-            updated_at = CURRENT_TIMESTAMP
-         WHERE watch_progress.position_seconds != excluded.position_seconds
-            OR watch_progress.duration_seconds != excluded.duration_seconds`
-    ).run(req.params.id, user, savePosition, Math.floor(safeDuration));
+    stmtWatchProgressUpsert.run(req.params.id, user, savePosition, Math.floor(safeDuration));
 
     // Note: recordWatchPulse is only called on watch_complete (above) to reduce DB writes.
     // Normal progress saves only update watch_progress, not the watch_time_ledger.
@@ -950,23 +946,14 @@ function handleInternalPresenceSync(req, res) {
     const nearEnd = durNum > 0 && posNum >= durNum - 10;
     const isCompleted = ended === true || nearEnd;
 
-    const v = videoTitle ? { title: videoTitle } : db.prepare('SELECT title FROM videos WHERE id = ?').get(videoId);
+    const v = videoTitle ? { title: videoTitle } : stmtVideoTitle.get(videoId);
     const title = v ? v.title : (videoTitle || null);
     const deviceInfo = parseUserAgent(req.headers['user-agent'] || 'Cloudflare-Edge-Worker');
     const ipAddress = getClientIp(req);
 
     try {
         if (isCompleted) {
-            const progressWrite = db.prepare(
-                `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
-                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                 ON CONFLICT(video_id, user) DO UPDATE SET
-                    position_seconds = excluded.position_seconds,
-                    duration_seconds = excluded.duration_seconds,
-                    updated_at = CURRENT_TIMESTAMP
-                 WHERE watch_progress.position_seconds != excluded.position_seconds
-                    OR watch_progress.duration_seconds != excluded.duration_seconds`
-            ).run(videoId, user, Math.floor(durNum || posNum), Math.floor(durNum));
+            const progressWrite = stmtWatchProgressUpsert.run(videoId, user, Math.floor(durNum || posNum), Math.floor(durNum));
 
             if (progressWrite.changes) {
                 db.recordWatchPulse(user, videoId, durNum || posNum, durNum, true, 5);
@@ -982,16 +969,7 @@ function handleInternalPresenceSync(req, res) {
             }
         } else {
             const savePos = posNum < 5 ? 1 : Math.floor(posNum);
-            db.prepare(
-                `INSERT INTO watch_progress (video_id, user, position_seconds, duration_seconds, updated_at)
-                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                 ON CONFLICT(video_id, user) DO UPDATE SET
-                    position_seconds = excluded.position_seconds,
-                    duration_seconds = excluded.duration_seconds,
-                    updated_at = CURRENT_TIMESTAMP
-                 WHERE watch_progress.position_seconds != excluded.position_seconds
-                    OR watch_progress.duration_seconds != excluded.duration_seconds`
-            ).run(videoId, user, savePos, Math.floor(durNum));
+            stmtWatchProgressUpsert.run(videoId, user, savePos, Math.floor(durNum));
 
             if (playing && posNum >= 5) {
                 db.recordWatchPulse(user, videoId, savePos, Math.floor(durNum), false, 4);
@@ -1384,7 +1362,7 @@ async function handleStream(req, res) {
         }
     }
     if (!filename) {
-        const video = db.prepare('SELECT filename, cdn_status FROM videos WHERE id = ? OR filename = ?').get(videoKey, videoKey);
+        const video = stmtGetStreamVideo.get(videoKey, videoKey);
         if (!video) {
             return res.status(404).send('File not found');
         }

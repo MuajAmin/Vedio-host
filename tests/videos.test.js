@@ -198,4 +198,55 @@ describe('Video Deletion & CSRF Token Validation', () => {
         const dbVideo = db.prepare('SELECT * FROM videos WHERE id = ?').get(missingFileId);
         expect(dbVideo == null).toBe(true);
     }, 30000);
+
+    test('Watch progress update correctly saves progress using precompiled statements', async () => {
+        const progressVideoId = 'test-progress-video-id';
+        const progressFilename = 'test-progress-video.mp4';
+
+        db.prepare('DELETE FROM videos WHERE id = ?').run(progressVideoId);
+        db.prepare(`
+            INSERT INTO videos (id, title, filename, original_name, size, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(progressVideoId, 'Progress Test Video', progressFilename, 'test.mp4', 1000, 'muaj');
+
+        const express = require('express');
+        const videosRouter = require('../routes/videos');
+        const app = express();
+        app.use(express.urlencoded({ extended: true }));
+        app.use(express.json());
+        app.use((req, res, next) => {
+            req.session = { user: 'muaj', csrfToken: 'test-csrf-token' };
+            next();
+        });
+        app.use('/', videosRouter);
+
+        const server = app.listen(0);
+        const port = server.address().port;
+
+        const res = await fetch(`http://localhost:${port}/watch-progress/${progressVideoId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                position: 42,
+                duration: 120
+            })
+        });
+
+        server.close();
+
+        expect(res.status).toBe(200);
+        const data = await res.json();
+        expect(data.success).toBe(true);
+
+        // Verify progress record in DB
+        const wp = db.prepare('SELECT * FROM watch_progress WHERE video_id = ? AND user = ?').get(progressVideoId, 'muaj');
+        expect(wp).not.toBeNull();
+        expect(wp.position_seconds).toBe(42);
+        expect(wp.duration_seconds).toBe(120);
+
+        db.prepare('DELETE FROM watch_progress WHERE video_id = ?').run(progressVideoId);
+        db.prepare('DELETE FROM videos WHERE id = ?').run(progressVideoId);
+    }, 30000);
 });
